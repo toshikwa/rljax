@@ -1,0 +1,9 @@
+pyyaml==5.3.1
+tqdm==4.48.2
+numpy==1.19.2
+jax==0.2.0
+jaxlib==0.1.55
+flax==0.2.1
+gym[atari]==0.17.2
+tensorboardX==2.1
+git+https://github.com/deepmind/dm-haiku
