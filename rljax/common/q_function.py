@@ -29,7 +29,7 @@ class DiscreteQFunction(nn.Module):
     Critic for DQN.
     """
 
-    def apply(self, x, action_dim, hidden_units=(256, 256), hidden_activation=nn.relu, dueling_net=False):
+    def apply(self, x, action_dim, hidden_units=(512,), hidden_activation=nn.relu, dueling_net=False):
         a = x
         for unit in hidden_units:
             a = nn.Dense(a, features=unit)
