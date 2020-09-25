@@ -1,6 +1,7 @@
 from .ddpg import DDPG
 from .dqn import DQN
 from .sac import SAC
+from .sac_discrete import SACDiscrete
 from .td3 import TD3
 
 CONTINUOUS_ALGOS = {
@@ -10,4 +11,5 @@ CONTINUOUS_ALGOS = {
 }
 DISCRETE_ALGOS = {
     "dqn": DQN,
+    "sac_discrete": SACDiscrete,
 }

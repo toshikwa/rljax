@@ -94,8 +94,6 @@ class DiscreteOffPolicyAlgorithm(Algorithm):
         buffer_size,
         batch_size,
         start_steps,
-        eps,
-        eps_eval,
         update_interval,
         update_interval_target,
     ):
@@ -103,28 +101,8 @@ class DiscreteOffPolicyAlgorithm(Algorithm):
 
         self.batch_size = batch_size
         self.start_steps = start_steps
-        self.eps = eps
-        self.eps_eval = eps_eval
         self.update_interval = update_interval
         self.update_interval_target = update_interval_target
 
     def is_update(self, step):
         return step % self.update_interval == 0 and step >= self.start_steps
-
-    def step(self, env, state, t, step):
-        t += 1
-
-        if np.random.rand() < self.eps:
-            action = env.action_space.sample()
-        else:
-            action = self.select_action(state)
-
-        next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state)
-
-        if done:
-            t = 0
-            next_state = env.reset()
-
-        return next_state, t

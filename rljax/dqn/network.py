@@ -9,6 +9,7 @@ def build_dqn(state_dim, action_dim, rng_init, hidden_units=(512,), dueling_net=
     """
     dqn = DiscreteQFunction.partial(
         action_dim=action_dim,
+        num_critics=1,
         hidden_units=hidden_units,
         hidden_activation=nn.relu,
         dueling_net=dueling_net,

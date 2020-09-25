@@ -74,8 +74,6 @@ class DQN(DiscreteOffPolicyAlgorithm):
             buffer_size=buffer_size,
             batch_size=batch_size,
             start_steps=start_steps,
-            eps=eps,
-            eps_eval=eps_eval,
             update_interval=update_interval,
             update_interval_target=update_interval_target,
         )
@@ -105,6 +103,10 @@ class DQN(DiscreteOffPolicyAlgorithm):
         # Compile function.
         self.grad_fn = jax.jit(partial(grad_fn, gamma=gamma, double_q=double_q))
 
+        # Other parameters.
+        self.eps = eps
+        self.eps_eval = eps_eval
+
     def select_action(self, state):
         if np.random.rand() < self.eps_eval:
             action = self.action_space.sample()
@@ -113,6 +115,24 @@ class DQN(DiscreteOffPolicyAlgorithm):
             action = self.dqn(state)
             action = np.argmax(action[0])
         return action
+
+    def step(self, env, state, t, step):
+        t += 1
+
+        if np.random.rand() < self.eps:
+            action = env.action_space.sample()
+        else:
+            action = self.select_action(state)
+
+        next_state, reward, done, _ = env.step(action)
+        mask = False if t == env._max_episode_steps else done
+        self.buffer.append(state, action, reward, mask, next_state)
+
+        if done:
+            t = 0
+            next_state = env.reset()
+
+        return next_state, t
 
     def update(self):
         self.learning_steps += 1

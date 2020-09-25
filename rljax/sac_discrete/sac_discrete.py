@@ -6,13 +6,13 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from flax import nn, optim
-from rljax.common.base_class import ContinuousOffPolicyAlgorithm
+from rljax.common.base_class import DiscreteOffPolicyAlgorithm
 from rljax.common.utils import soft_update, update_network
-from rljax.sac.network import build_sac_actor, build_sac_critic, build_sac_log_alpha
+from rljax.sac.network import build_sac_log_alpha
+from rljax.sac_discrete.network import build_sac_discrete_actor, build_sac_discrete_critic
 
 
 def critic_grad_fn(
-    rng: np.ndarray,
     actor: nn.Model,
     critic: nn.Model,
     critic_target: nn.Model,
@@ -25,22 +25,23 @@ def critic_grad_fn(
     next_state: jnp.ndarray,
 ) -> nn.Model:
     alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
-    next_action, next_log_pi = actor(next_state, key=rng, deterministic=False)
-    next_q1, next_q2 = critic_target(next_state, next_action)
-    next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
+    pi, log_pi = actor(next_state)
+    next_q1, next_q2 = critic_target(next_state)
+    next_q = (pi * (jnp.minimum(next_q1, next_q2) - alpha * log_pi)).sum(axis=1, keepdims=True)
     target_q = jax.lax.stop_gradient(reward + (1.0 - done) * gamma * next_q)
 
+    def _loss(action, curr_q1, curr_q2, target_q):
+        return jnp.square(target_q - curr_q1[action]) + jnp.square(target_q - curr_q2[action])
+
     def critic_loss_fn(critic):
-        curr_q1, curr_q2 = critic(state, action)
-        loss_critic = jnp.square(target_q - curr_q1).mean() + jnp.square(target_q - curr_q2).mean()
-        return loss_critic
+        curr_q1, curr_q2 = critic(state)
+        return jax.vmap(_loss)(action, curr_q1, curr_q2, target_q).mean()
 
     grad_critic = jax.grad(critic_loss_fn)(critic)
     return grad_critic
 
 
 def actor_and_alpha_grad_fn(
-    rng: np.ndarray,
     actor: nn.Model,
     critic: nn.Model,
     log_alpha: nn.Model,
@@ -48,12 +49,14 @@ def actor_and_alpha_grad_fn(
     state: jnp.ndarray,
 ) -> Tuple[nn.Model, nn.Model]:
     alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
+    curr_q1, curr_q2 = critic(state)
+    curr_q = jax.lax.stop_gradient(jnp.minimum(curr_q1, curr_q2))
 
     def actor_loss_fn(actor):
-        action, log_pi = actor(state, key=rng, deterministic=False)
-        q1, q2 = critic(state, action)
-        mean_log_pi = log_pi.mean()
-        loss_actor = alpha * mean_log_pi - jnp.minimum(q1, q2).mean()
+        pi, log_pi = actor(state)
+        mean_log_pi = (pi * log_pi).sum(axis=1).mean()
+        mean_q = (pi * curr_q).sum(axis=1).mean()
+        loss_actor = alpha * mean_log_pi - mean_q
         return loss_actor, mean_log_pi
 
     grad_actor, mean_log_pi = jax.grad(actor_loss_fn, has_aux=True)(actor)
@@ -67,7 +70,7 @@ def actor_and_alpha_grad_fn(
     return grad_actor, grad_alpha
 
 
-class SAC(ContinuousOffPolicyAlgorithm):
+class SACDiscrete(DiscreteOffPolicyAlgorithm):
     def __init__(
         self,
         state_space,
@@ -76,15 +79,16 @@ class SAC(ContinuousOffPolicyAlgorithm):
         gamma=0.99,
         buffer_size=10 ** 6,
         batch_size=256,
-        start_steps=10000,
-        tau=5e-3,
+        start_steps=1000,
+        update_interval=1,
+        update_interval_target=1000,
         lr_actor=3e-4,
         lr_critic=3e-4,
         lr_alpha=3e-4,
-        units_actor=(256, 256),
-        units_critic=(256, 256),
+        units_actor=(512,),
+        units_critic=(512,),
     ):
-        super(SAC, self).__init__(
+        super(SACDiscrete, self).__init__(
             state_space=state_space,
             action_space=action_space,
             seed=seed,
@@ -92,13 +96,14 @@ class SAC(ContinuousOffPolicyAlgorithm):
             buffer_size=buffer_size,
             batch_size=batch_size,
             start_steps=start_steps,
-            tau=tau,
+            update_interval=update_interval,
+            update_interval_target=update_interval_target,
         )
 
         # Actor.
-        actor = build_sac_actor(
+        actor = build_sac_discrete_actor(
             state_dim=state_space.shape[0],
-            action_dim=action_space.shape[0],
+            action_dim=action_space.n,
             rng_init=next(self.rng),
             hidden_units=units_actor,
         )
@@ -106,9 +111,9 @@ class SAC(ContinuousOffPolicyAlgorithm):
 
         # Critic.
         rng_critic = next(self.rng)
-        critic = build_sac_critic(
+        critic = build_sac_discrete_critic(
             state_dim=state_space.shape[0],
-            action_dim=action_space.shape[0],
+            action_dim=action_space.n,
             rng_init=rng_critic,
             hidden_units=units_critic,
         )
@@ -116,16 +121,16 @@ class SAC(ContinuousOffPolicyAlgorithm):
 
         # Target network.
         self.critic_target = jax.device_put(
-            build_sac_critic(
+            build_sac_discrete_critic(
                 state_dim=state_space.shape[0],
-                action_dim=action_space.shape[0],
+                action_dim=action_space.n,
                 rng_init=rng_critic,
                 hidden_units=units_critic,
             )
         )
 
         # Entropy coefficient.
-        target_entropy = -float(action_space.shape[0])
+        target_entropy = -np.log(1.0 / action_space.n) * 0.98
         log_alpha = build_sac_log_alpha(next(self.rng))
         self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
 
@@ -135,13 +140,32 @@ class SAC(ContinuousOffPolicyAlgorithm):
 
     def select_action(self, state):
         state = jax.device_put(state[None, ...])
-        action = self.actor(state, deterministic=True)
-        return np.array(action[0])
+        pi, _ = self.actor(state)
+        return np.argmax(pi)
 
     def explore(self, state):
         state = jax.device_put(state[None, ...])
-        action, _ = self.actor(state, key=next(self.rng), deterministic=False)
+        pi, _ = self.actor(state)
+        action = jax.random.categorical(next(self.rng), pi)
         return np.array(action[0])
+
+    def step(self, env, state, t, step):
+        t += 1
+
+        if step <= self.start_steps:
+            action = env.action_space.sample()
+        else:
+            action = self.explore(state)
+
+        next_state, reward, done, _ = env.step(action)
+        mask = False if t == env._max_episode_steps else done
+        self.buffer.append(state, action, reward, mask, next_state)
+
+        if done:
+            t = 0
+            next_state = env.reset()
+
+        return next_state, t
 
     def update(self):
         self.learning_steps += 1
@@ -149,7 +173,6 @@ class SAC(ContinuousOffPolicyAlgorithm):
 
         # Update critic.
         grad_critic = self.critic_grad_fn(
-            rng=next(self.rng),
             actor=self.actor,
             critic=self.critic,
             critic_target=self.critic_target,
@@ -164,7 +187,6 @@ class SAC(ContinuousOffPolicyAlgorithm):
 
         # Update actor and log alpha.
         grad_actor, grad_alpha = self.actor_and_alpha_grad_fn(
-            rng=next(self.rng),
             actor=self.actor,
             critic=self.critic,
             log_alpha=self.log_alpha,
@@ -174,7 +196,8 @@ class SAC(ContinuousOffPolicyAlgorithm):
         self.optim_alpha = update_network(self.optim_alpha, grad_alpha)
 
         # Update target network.
-        self.critic_target = soft_update(self.critic_target, self.critic, self.tau)
+        if (self.learning_steps * self.update_interval) % self.update_interval_target == 0:
+            self.critic_target = soft_update(self.critic_target, self.critic, 1.0)
 
     @property
     def actor(self):

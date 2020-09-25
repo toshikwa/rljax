@@ -17,7 +17,7 @@ class ContinuousQFunction(nn.Module):
             return nn.Dense(x, features=1)
 
         x1 = q_func(x)
-        if q1:
+        if q1 or num_critics == 1:
             return x1
 
         xs = [x1] + [q_func(x) for _ in range(num_critics - 1)]
@@ -26,21 +26,28 @@ class ContinuousQFunction(nn.Module):
 
 class DiscreteQFunction(nn.Module):
     """
-    Critic for DQN.
+    Critic for DQN and SAC-Discrete.
     """
 
-    def apply(self, x, action_dim, hidden_units=(512,), hidden_activation=nn.relu, dueling_net=False):
-        a = x
-        for unit in hidden_units:
-            a = nn.Dense(a, features=unit)
-            a = nn.relu(a)
-        a = nn.Dense(a, features=action_dim)
-        if not dueling_net:
-            return a
+    def apply(self, x, action_dim, num_critics=1, hidden_units=(512,), hidden_activation=nn.relu, dueling_net=False):
+        def q_func(x):
+            a = x
+            for unit in hidden_units:
+                a = nn.Dense(a, features=unit)
+                a = nn.relu(a)
+            a = nn.Dense(a, features=action_dim)
+            if not dueling_net:
+                return a
 
-        v = x
-        for unit in hidden_units:
-            v = nn.Dense(v, features=unit)
-            v = nn.relu(v)
-        v = nn.Dense(v, features=1)
-        return a + v - a.mean(axis=1, keepdims=True)
+            v = x
+            for unit in hidden_units:
+                v = nn.Dense(v, features=unit)
+                v = nn.relu(v)
+            v = nn.Dense(v, features=1)
+            return a + v - a.mean(axis=1, keepdims=True)
+
+        if num_critics == 1:
+            return q_func(x)
+
+        xs = [q_func(x) for _ in range(num_critics)]
+        return xs

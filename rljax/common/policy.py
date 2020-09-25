@@ -32,10 +32,23 @@ class StateDependentGaussianPolicy(nn.Module):
         if deterministic:
             return jnp.tanh(mean)
 
-        else:
-            log_std = jnp.clip(log_std, -20, 2)
-            std = jnp.exp(log_std)
-            noise = jax.random.normal(key, std.shape)
-            action = jnp.tanh(mean + noise * std)
-            log_pi = calculate_log_pi(log_std, noise, action)
-            return action, log_pi
+        log_std = jnp.clip(log_std, -20, 2)
+        std = jnp.exp(log_std)
+        noise = jax.random.normal(key, std.shape)
+        action = jnp.tanh(mean + noise * std)
+        log_pi = calculate_log_pi(log_std, noise, action)
+        return action, log_pi
+
+
+class CategoricalPolicy(nn.Module):
+    """
+    Policy for SAC-Discrete.
+    """
+
+    def apply(self, x, action_dim, hidden_units=(256, 256), hidden_activation=nn.relu):
+        for unit in hidden_units:
+            x = nn.Dense(x, features=unit)
+            x = hidden_activation(x)
+        x = nn.Dense(x, features=action_dim)
+        pi = nn.softmax(x, axis=1)
+        return pi, jnp.log(pi + 1e-6)
