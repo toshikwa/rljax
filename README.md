@@ -6,10 +6,11 @@ Currently, following algorithms have been implemented.
 - [x] Deep Deterministic Policy Gradient(DDPG)
 - [x] Twin Delayed DDPG(TD3)
 - [x] Soft Actor-Critic(SAC)
+- [x] Deep Q Network(DQN) with Dueling Network and Double Q-Learning.
 
-We are planning to implement more algorithms.
+We plan to implement the following algorithms in the future.
 
-- [ ] Deep Q Network(DQN) and extensions
+- [ ] Proximal Policy Optimization(PPO)
 - [ ] Quantile Regression DQN(QR-DQN)
 - [ ] Implicit Quantile Network(IQN)
 - [ ] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
