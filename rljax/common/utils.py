@@ -24,3 +24,8 @@ def soft_update(target: flax.nn.Model, source: flax.nn.Model, tau: float) -> fla
 @jax.jit
 def update_network(optim: flax.optim.Optimizer, grad: flax.nn.Model) -> flax.optim.Optimizer:
     return optim.apply_gradient(grad)
+
+
+@jax.jit
+def add_noise(x: jnp.ndarray, key, std: float, x_min: float, x_max: float):
+    return jnp.clip(x + jax.random.normal(key, x.shape), x_min, x_max)

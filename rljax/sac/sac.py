@@ -3,8 +3,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from flax import optim
-from rljax.common.base_class import Algorithm
-from rljax.common.buffer import ReplayBuffer
+from rljax.common.base_class import ContinuousOffPolicyAlgorithm
 from rljax.common.utils import soft_update, update_network
 from rljax.sac.network import build_sac_actor, build_sac_critic, build_sac_log_alpha
 
@@ -47,27 +46,24 @@ def actor_and_alpha_grad_fn(rng, actor, critic, log_alpha, target_entropy, state
     return grad_actor, grad_alpha
 
 
-class SAC(Algorithm):
+class SAC(ContinuousOffPolicyAlgorithm):
     def __init__(
         self,
         state_shape,
         action_shape,
         seed,
         gamma=0.99,
-        batch_size=256,
         buffer_size=10 ** 6,
+        batch_size=256,
+        start_steps=10000,
+        tau=5e-3,
         lr_actor=3e-4,
         lr_critic=3e-4,
         lr_alpha=3e-4,
         units_actor=(256, 256),
         units_critic=(256, 256),
-        start_steps=10000,
-        tau=5e-3,
     ):
-        super(SAC, self).__init__(state_shape, action_shape, seed, gamma)
-
-        # Replay buffer.
-        self.buffer = ReplayBuffer(buffer_size=buffer_size, state_shape=state_shape, action_shape=action_shape)
+        super(SAC, self).__init__(state_shape, action_shape, seed, gamma, buffer_size, start_steps, tau)
 
         # Actor.
         actor = build_sac_actor(
@@ -103,13 +99,6 @@ class SAC(Algorithm):
         self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
         self.target_entropy = -float(action_shape[0])
 
-        self.batch_size = batch_size
-        self.start_steps = start_steps
-        self.tau = tau
-
-    def is_update(self, step):
-        return step >= max(self.start_steps, self.batch_size)
-
     def select_action(self, state):
         state = jax.device_put(state[None, ...])
         action = self.actor(state, deterministic=True)
@@ -119,24 +108,6 @@ class SAC(Algorithm):
         state = jax.device_put(state[None, ...])
         action, _ = self.actor(state, key=next(self.rng), deterministic=False)
         return np.array(action[0])
-
-    def step(self, env, state, t, step):
-        t += 1
-
-        if step <= self.start_steps:
-            action = env.action_space.sample()
-        else:
-            action = self.explore(state)
-
-        next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state)
-
-        if done:
-            t = 0
-            next_state = env.reset()
-
-        return next_state, t
 
     def update(self):
         self.learning_steps += 1
