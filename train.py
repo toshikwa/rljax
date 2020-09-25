@@ -4,15 +4,15 @@ from datetime import datetime
 
 import gym
 
+from rljax.algo import CONTINUOUS_ALGOS
 from rljax.common.trainer import Trainer
-from rljax.sac import SAC
 
 
 def run(args):
     env = gym.make(args.env_id)
     env_test = gym.make(args.env_id)
 
-    algo = SAC(
+    algo = CONTINUOUS_ALGOS[args.algo](
         state_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         seed=args.seed,
@@ -35,6 +35,7 @@ def run(args):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
+    p.add_argument("--algo", type=str, default='sac')
     p.add_argument("--num_steps", type=int, default=10 ** 6)
     p.add_argument("--eval_interval", type=int, default=10 ** 4)
     p.add_argument("--env_id", type=str, default="Hopper-v2")
