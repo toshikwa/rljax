@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from time import sleep, time
 
+import numpy as np
 import pandas as pd
 
 from tensorboardX import SummaryWriter
@@ -25,12 +26,13 @@ class Trainer:
     ):
         super().__init__()
 
-        # Env to collect samples.
+        # Envs.
         self.env = env
-        self.env.seed(seed)
-
-        # Env for evaluation.
         self.env_test = env_test
+
+        # Set seeds.
+        np.random.seed(seed)
+        self.env.seed(seed)
         self.env_test.seed(2 ** 31 - seed)
 
         # Algorithm.
