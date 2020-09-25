@@ -17,12 +17,11 @@ class SACActor(nn.Module):
         mean, log_std = jnp.split(x, 2, axis=1)
 
         if deterministic:
-            return nn.tanh(mean)
+            return jnp.tanh(mean)
 
         else:
             log_std = jnp.clip(log_std, -20, 2)
             std = jnp.exp(log_std)
-
             noise = jax.random.normal(key, std.shape)
             action = jnp.tanh(mean + noise * std)
             log_pi = calculate_log_pi(log_std, noise, action)

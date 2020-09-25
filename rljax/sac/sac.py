@@ -3,39 +3,14 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from flax import optim
-from haiku import PRNGSequence
+from rljax.common.base_class import Algorithm
 from rljax.common.buffer import ReplayBuffer
-from rljax.common.utils import soft_update
+from rljax.common.utils import soft_update, update_network
 from rljax.sac.network import build_sac_actor, build_sac_critic, build_sac_log_alpha
 
 
 @jax.jit
-def update_actor_and_alpha(rng, optim_actor, optim_alpha, critic, state, target_entropy):
-    actor, log_alpha = optim_actor.target, optim_alpha.target
-
-    def actor_loss_fn(actor):
-        action, log_pi = actor(state, key=rng, deterministic=False)
-        q1, q2 = critic(state, action)
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
-        mean_log_pi = log_pi.mean()
-        loss_actor = alpha * mean_log_pi - jnp.minimum(q1, q2).mean()
-        return loss_actor, mean_log_pi
-
-    grad_actor, mean_log_pi = jax.grad(actor_loss_fn, has_aux=True)(actor)
-
-    def alpha_loss_fn(log_alpha):
-        loss_alpha = -log_alpha() * (target_entropy + jax.lax.stop_gradient(mean_log_pi))
-        return loss_alpha
-
-    grad_alpha = jax.grad(alpha_loss_fn)(log_alpha)
-
-    return optim_actor.apply_gradient(grad_actor), optim_alpha.apply_gradient(grad_alpha)
-
-
-@jax.jit
-def update_critic(rng, optim_critic, actor, critic_target, log_alpha, gamma, state, action, reward, done, next_state):
-    critic = optim_critic.target
-
+def critic_grad_fn(rng, actor, critic, critic_target, log_alpha, gamma, state, action, reward, done, next_state):
     next_action, next_log_pi = actor(next_state, key=rng, deterministic=False)
     next_q1, next_q2 = critic_target(next_state, next_action)
     next_q = jnp.minimum(next_q1, next_q2) - jnp.exp(log_alpha()) * next_log_pi
@@ -47,10 +22,32 @@ def update_critic(rng, optim_critic, actor, critic_target, log_alpha, gamma, sta
         return loss_critic
 
     grad_critic = jax.grad(critic_loss_fn)(critic)
-    return optim_critic.apply_gradient(grad_critic)
+    return grad_critic
 
 
-class SAC:
+@jax.jit
+def actor_and_alpha_grad_fn(rng, actor, critic, log_alpha, target_entropy, state):
+    alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
+
+    def actor_loss_fn(actor):
+        action, log_pi = actor(state, key=rng, deterministic=False)
+        q1, q2 = critic(state, action)
+        mean_log_pi = log_pi.mean()
+        loss_actor = alpha * mean_log_pi - jnp.minimum(q1, q2).mean()
+        return loss_actor, mean_log_pi
+
+    grad_actor, mean_log_pi = jax.grad(actor_loss_fn, has_aux=True)(actor)
+    mean_log_pi = jax.lax.stop_gradient(mean_log_pi)
+
+    def alpha_loss_fn(log_alpha):
+        loss_alpha = -log_alpha() * (target_entropy + mean_log_pi)
+        return loss_alpha
+
+    grad_alpha = jax.grad(alpha_loss_fn)(log_alpha)
+    return grad_actor, grad_alpha
+
+
+class SAC(Algorithm):
     def __init__(
         self,
         state_shape,
@@ -67,8 +64,7 @@ class SAC:
         start_steps=10000,
         tau=5e-3,
     ):
-        # Initialize the sequence of random keys.
-        self.rng = PRNGSequence(seed)
+        super(SAC, self).__init__(state_shape, action_shape, seed, gamma)
 
         # Replay buffer.
         self.buffer = ReplayBuffer(buffer_size=buffer_size, state_shape=state_shape, action_shape=action_shape)
@@ -80,40 +76,39 @@ class SAC:
             rng_init=next(self.rng),
             hidden_units=units_actor,
         )
-        self.optim_actor = jax.device_put(optim.Adam(lr_actor).create(actor))
+        self.optim_actor = jax.device_put(optim.Adam(learning_rate=lr_actor).create(actor))
 
         # Critic.
+        rng_critic = next(self.rng)
         critic = build_sac_critic(
             state_shape=state_shape,
             action_shape=action_shape,
-            rng_init=next(self.rng),
+            rng_init=rng_critic,
             hidden_units=units_critic,
         )
-        self.optim_critic = jax.device_put(optim.Adam(lr_critic).create(critic))
+        self.optim_critic = jax.device_put(optim.Adam(learning_rate=lr_critic).create(critic))
 
         # Target network.
-        self.critic_target = build_sac_critic(
-            state_shape=state_shape,
-            action_shape=action_shape,
-            rng_init=next(self.rng),
-            hidden_units=units_critic,
+        self.critic_target = jax.device_put(
+            build_sac_critic(
+                state_shape=state_shape,
+                action_shape=action_shape,
+                rng_init=rng_critic,
+                hidden_units=units_critic,
+            )
         )
 
         # Entropy coefficient.
         log_alpha = build_sac_log_alpha(next(self.rng))
-        self.optim_alpha = jax.device_put(optim.Adam(lr_alpha).create(log_alpha))
+        self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
         self.target_entropy = -float(action_shape[0])
 
-        self.learning_steps = 0
-        self.state_shape = state_shape
-        self.action_shape = action_shape
-        self.gamma = gamma
         self.batch_size = batch_size
         self.start_steps = start_steps
         self.tau = tau
 
-    def is_update(self, steps):
-        return steps >= max(self.start_steps, self.batch_size)
+    def is_update(self, step):
+        return step >= max(self.start_steps, self.batch_size)
 
     def select_action(self, state):
         state = jax.device_put(state[None, ...])
@@ -131,7 +126,7 @@ class SAC:
         if step <= self.start_steps:
             action = env.action_space.sample()
         else:
-            action = self.explore(state)[0]
+            action = self.explore(state)
 
         next_state, reward, done, _ = env.step(action)
         mask = False if t == env._max_episode_steps else done
@@ -147,18 +142,11 @@ class SAC:
         self.learning_steps += 1
         state, action, reward, done, next_state = self.buffer.sample(self.batch_size)
 
-        self.optim_actor, self.optim_alpha = update_actor_and_alpha(
+        # Update critic.
+        grad_critic = critic_grad_fn(
             rng=next(self.rng),
-            optim_actor=self.optim_actor,
-            optim_alpha=self.optim_alpha,
-            critic=self.critic,
-            state=state,
-            target_entropy=self.target_entropy,
-        )
-        self.optim_critic = update_critic(
-            rng=next(self.rng),
-            optim_critic=self.optim_critic,
             actor=self.actor,
+            critic=self.critic,
             critic_target=self.critic_target,
             log_alpha=self.log_alpha,
             gamma=self.gamma,
@@ -168,6 +156,21 @@ class SAC:
             done=done,
             next_state=next_state,
         )
+        self.optim_critic = update_network(self.optim_critic, grad_critic)
+
+        # Update actor and log alpha.
+        grad_actor, grad_alpha = actor_and_alpha_grad_fn(
+            rng=next(self.rng),
+            actor=self.actor,
+            critic=self.critic,
+            log_alpha=self.log_alpha,
+            target_entropy=self.target_entropy,
+            state=state,
+        )
+        self.optim_actor = update_network(self.optim_actor, grad_actor)
+        self.optim_alpha = update_network(self.optim_alpha, grad_alpha)
+
+        # Update target network.
         self.critic_target = soft_update(self.critic_target, self.critic, self.tau)
 
     @property

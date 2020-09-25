@@ -33,8 +33,8 @@ class Trainer:
         self.env_test = env_test
         self.env_test.seed(2 ** 31 - seed)
 
+        # Algorithm.
         self.algo = algo
-        self.log_dir = log_dir
 
         # Log setting.
         self.log = {"step": [], "return": []}

@@ -37,7 +37,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--num_steps", type=int, default=10 ** 6)
     p.add_argument("--eval_interval", type=int, default=10 ** 4)
-    p.add_argument("--env_id", type=str, default="Hopper-v3")
+    p.add_argument("--env_id", type=str, default="Hopper-v2")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
     run(args)
