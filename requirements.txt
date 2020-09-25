@@ -3,8 +3,7 @@ tqdm==4.48.2
 numpy==1.19.2
 pandas==1.1.2
 flax==0.2.1
-gym[mujoco]==0.17.2
-mujoco_py==2.0.2.11
+gym==0.17.2
 pybullet==3.0.4
 tensorboardX==2.1
 git+https://github.com/deepmind/dm-haiku
