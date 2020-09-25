@@ -2,14 +2,24 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
-from flax import optim
+from flax import nn, optim
 from rljax.common.base_class import ContinuousOffPolicyAlgorithm
 from rljax.common.utils import add_noise, soft_update, update_network
 from rljax.ddpg.network import build_ddpg_actor, build_ddpg_critic
 
 
 @jax.jit
-def critic_grad_fn(critic, actor_target, critic_target, gamma, state, action, reward, done, next_state):
+def critic_grad_fn(
+    critic: nn.Model,
+    actor_target: nn.Model,
+    critic_target: nn.Model,
+    gamma: float,
+    state: jnp.ndarray,
+    action: jnp.ndarray,
+    reward: jnp.ndarray,
+    done: jnp.ndarray,
+    next_state: jnp.ndarray,
+) -> nn.Model:
     next_action = actor_target(next_state)
     next_q = critic_target(next_state, next_action)
     target_q = jax.lax.stop_gradient(reward + (1.0 - done) * gamma * next_q)
@@ -24,7 +34,11 @@ def critic_grad_fn(critic, actor_target, critic_target, gamma, state, action, re
 
 
 @jax.jit
-def actor_grad_fn(actor, critic, state):
+def actor_grad_fn(
+    actor: nn.Model,
+    critic: nn.Model,
+    state: jnp.ndarray,
+) -> nn.Model:
     def actor_loss_fn(actor):
         loss_actor = -critic(state, actor(state)).mean()
         return loss_actor

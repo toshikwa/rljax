@@ -1,15 +1,29 @@
+from typing import Tuple
+
 import numpy as np
 
 import jax
 import jax.numpy as jnp
-from flax import optim
+from flax import nn, optim
 from rljax.common.base_class import ContinuousOffPolicyAlgorithm
 from rljax.common.utils import soft_update, update_network
 from rljax.sac.network import build_sac_actor, build_sac_critic, build_sac_log_alpha
 
 
 @jax.jit
-def critic_grad_fn(rng, actor, critic, critic_target, log_alpha, gamma, state, action, reward, done, next_state):
+def critic_grad_fn(
+    rng: np.ndarray,
+    actor: nn.Model,
+    critic: nn.Model,
+    critic_target: nn.Model,
+    log_alpha: nn.Model,
+    gamma: float,
+    state: jnp.ndarray,
+    action: jnp.ndarray,
+    reward: jnp.ndarray,
+    done: jnp.ndarray,
+    next_state: jnp.ndarray,
+) -> nn.Model:
     next_action, next_log_pi = actor(next_state, key=rng, deterministic=False)
     next_q1, next_q2 = critic_target(next_state, next_action)
     next_q = jnp.minimum(next_q1, next_q2) - jnp.exp(log_alpha()) * next_log_pi
@@ -25,7 +39,14 @@ def critic_grad_fn(rng, actor, critic, critic_target, log_alpha, gamma, state, a
 
 
 @jax.jit
-def actor_and_alpha_grad_fn(rng, actor, critic, log_alpha, target_entropy, state):
+def actor_and_alpha_grad_fn(
+    rng: np.ndarray,
+    actor: nn.Model,
+    critic: nn.Model,
+    log_alpha: nn.Model,
+    target_entropy: float,
+    state: jnp.ndarray,
+) -> Tuple[nn.Model, nn.Model]:
     alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
 
     def actor_loss_fn(actor):
