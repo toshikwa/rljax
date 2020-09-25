@@ -14,7 +14,7 @@ def critic_grad_fn(
     critic: nn.Model,
     actor_target: nn.Model,
     critic_target: nn.Model,
-    gamma: float,
+    discount: float,
     state: jnp.ndarray,
     action: jnp.ndarray,
     reward: jnp.ndarray,
@@ -23,7 +23,7 @@ def critic_grad_fn(
 ) -> nn.Model:
     next_action = actor_target(next_state)
     next_q = critic_target(next_state, next_action)
-    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * gamma * next_q)
+    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * discount * next_q)
 
     def critic_loss_fn(critic):
         curr_q = critic(state, action)
@@ -54,6 +54,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         action_space,
         seed,
         gamma=0.99,
+        nstep=1,
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
@@ -69,6 +70,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
             action_space=action_space,
             seed=seed,
             gamma=gamma,
+            nstep=nstep,
             buffer_size=buffer_size,
             batch_size=batch_size,
             start_steps=start_steps,
@@ -114,7 +116,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         )
 
         # Compile functions.
-        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, gamma=gamma))
+        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, discount=self.discount))
         self.actor_grad_fn = jax.jit(actor_grad_fn)
 
         # Other parameters.

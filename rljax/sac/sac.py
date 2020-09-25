@@ -17,7 +17,7 @@ def critic_grad_fn(
     critic: nn.Model,
     critic_target: nn.Model,
     log_alpha: nn.Model,
-    gamma: float,
+    discount: float,
     state: jnp.ndarray,
     action: jnp.ndarray,
     reward: jnp.ndarray,
@@ -28,7 +28,7 @@ def critic_grad_fn(
     next_action, next_log_pi = actor(next_state, key=rng, deterministic=False)
     next_q1, next_q2 = critic_target(next_state, next_action)
     next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
-    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * gamma * next_q)
+    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * discount * next_q)
 
     def critic_loss_fn(critic):
         curr_q1, curr_q2 = critic(state, action)
@@ -74,6 +74,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
         action_space,
         seed,
         gamma=0.99,
+        nstep=1,
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
@@ -89,6 +90,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
             action_space=action_space,
             seed=seed,
             gamma=gamma,
+            nstep=nstep,
             buffer_size=buffer_size,
             batch_size=batch_size,
             start_steps=start_steps,
@@ -130,7 +132,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
         self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
 
         # Compile functions.
-        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, gamma=gamma))
+        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, discount=self.discount))
         self.actor_and_alpha_grad_fn = jax.jit(partial(actor_and_alpha_grad_fn, target_entropy=target_entropy))
 
     def select_action(self, state):

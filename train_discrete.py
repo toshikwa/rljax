@@ -4,7 +4,7 @@ from datetime import datetime
 
 import gym
 
-from rljax.algo import DISCRETE_ALGOS
+from rljax import DISCRETE_ALGOS
 from rljax.common.trainer import Trainer
 
 

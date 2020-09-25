@@ -15,7 +15,7 @@ def critic_grad_fn(
     critic: nn.Model,
     actor_target: nn.Model,
     critic_target: nn.Model,
-    gamma: float,
+    discount: float,
     std_target: float,
     clip_noise: float,
     state: jnp.ndarray,
@@ -28,7 +28,7 @@ def critic_grad_fn(
     noises = jax.random.normal(rng, next_action.shape) * std_target
     next_action = jnp.clip(next_action + jnp.clip(noises, -clip_noise, clip_noise), -1.0, 1.0)
     next_q1, next_q2 = critic_target(next_state, next_action)
-    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * gamma * jnp.minimum(next_q1, next_q2))
+    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * discount * jnp.minimum(next_q1, next_q2))
 
     def critic_loss_fn(critic):
         curr_q1, curr_q2 = critic(state, action)
@@ -59,6 +59,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
         action_space,
         seed,
         gamma=0.99,
+        nstep=1,
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
@@ -77,6 +78,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
             action_space=action_space,
             seed=seed,
             gamma=gamma,
+            nstep=nstep,
             buffer_size=buffer_size,
             batch_size=batch_size,
             start_steps=start_steps,
@@ -122,7 +124,8 @@ class TD3(ContinuousOffPolicyAlgorithm):
         )
 
         # Compile functions.
-        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, gamma=gamma, std_target=std_target, clip_noise=clip_noise))
+        _critic_grad_fn = partial(critic_grad_fn, discount=self.discount, std_target=std_target, clip_noise=clip_noise)
+        self.critic_grad_fn = jax.jit(_critic_grad_fn)
         self.actor_grad_fn = jax.jit(actor_grad_fn)
 
         # Other parameters.

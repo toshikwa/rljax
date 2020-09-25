@@ -22,7 +22,7 @@ def _calculate_double_q(
 def grad_fn(
     dqn: nn.Model,
     dqn_target: nn.Model,
-    gamma: float,
+    discount: float,
     double_q: bool,
     state: jnp.ndarray,
     action: jnp.ndarray,
@@ -34,7 +34,7 @@ def grad_fn(
         next_q = jax.vmap(_calculate_double_q)(dqn(next_state), dqn_target(next_state))
     else:
         next_q = jnp.max(dqn_target(next_state), axis=1, keepdims=True)
-    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * gamma * next_q)
+    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * discount * next_q)
 
     def _loss(action, curr_q, target_q):
         return jnp.square(target_q - curr_q[action])
@@ -54,6 +54,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
         action_space,
         seed,
         gamma=0.99,
+        nstep=1,
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=1000,
@@ -71,6 +72,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
             action_space=action_space,
             seed=seed,
             gamma=gamma,
+            nstep=nstep,
             buffer_size=buffer_size,
             batch_size=batch_size,
             start_steps=start_steps,
@@ -101,7 +103,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
         )
 
         # Compile function.
-        self.grad_fn = jax.jit(partial(grad_fn, gamma=gamma, double_q=double_q))
+        self.grad_fn = jax.jit(partial(grad_fn, discount=self.discount, double_q=double_q))
 
         # Other parameters.
         self.eps = eps
@@ -126,7 +128,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
 
         next_state, reward, done, _ = env.step(action)
         mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state)
+        self.buffer.append(state, action, reward, mask, next_state, done)
 
         if done:
             t = 0

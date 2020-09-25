@@ -17,7 +17,7 @@ def critic_grad_fn(
     critic: nn.Model,
     critic_target: nn.Model,
     log_alpha: nn.Model,
-    gamma: float,
+    discount: float,
     state: jnp.ndarray,
     action: jnp.ndarray,
     reward: jnp.ndarray,
@@ -28,7 +28,7 @@ def critic_grad_fn(
     pi, log_pi = actor(next_state)
     next_q1, next_q2 = critic_target(next_state)
     next_q = (pi * (jnp.minimum(next_q1, next_q2) - alpha * log_pi)).sum(axis=1, keepdims=True)
-    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * gamma * next_q)
+    target_q = jax.lax.stop_gradient(reward + (1.0 - done) * discount * next_q)
 
     def _loss(action, curr_q1, curr_q2, target_q):
         return jnp.square(target_q - curr_q1[action]) + jnp.square(target_q - curr_q2[action])
@@ -77,6 +77,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         action_space,
         seed,
         gamma=0.99,
+        nstep=1,
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=1000,
@@ -93,6 +94,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
             action_space=action_space,
             seed=seed,
             gamma=gamma,
+            nstep=nstep,
             buffer_size=buffer_size,
             batch_size=batch_size,
             start_steps=start_steps,
@@ -135,7 +137,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
 
         # Compile functions.
-        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, gamma=gamma))
+        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, discount=self.discount))
         self.actor_and_alpha_grad_fn = jax.jit(partial(actor_and_alpha_grad_fn, target_entropy=target_entropy))
 
     def select_action(self, state):
@@ -159,7 +161,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
 
         next_state, reward, done, _ = env.step(action)
         mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state)
+        self.buffer.append(state, action, reward, mask, next_state, done)
 
         if done:
             t = 0

@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-import numpy as np
-
 from haiku import PRNGSequence
 from rljax.common.buffer import ReplayBuffer
 
@@ -11,9 +9,8 @@ class Algorithm(ABC):
     Base class for algorithms.
     """
 
-    def __init__(self, state_space, action_space, seed, gamma, buffer_size):
+    def __init__(self, state_space, action_space, seed, gamma):
         self.rng = PRNGSequence(seed)
-        self.buffer = ReplayBuffer(buffer_size=buffer_size, state_space=state_space, action_space=action_space)
         self.learning_steps = 0
         self.state_space = state_space
         self.action_space = action_space
@@ -36,7 +33,25 @@ class Algorithm(ABC):
         pass
 
 
-class ContinuousOffPolicyAlgorithm(Algorithm):
+class OffPolicyAlgorithm(Algorithm):
+    """
+    Base class for off-policy algorithms.
+    """
+
+    def __init__(self, state_space, action_space, seed, gamma, nstep, buffer_size):
+        super(OffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma)
+
+        self.discount = gamma ** nstep
+        self.buffer = ReplayBuffer(
+            buffer_size=buffer_size,
+            state_space=state_space,
+            action_space=action_space,
+            gamma=gamma,
+            nstep=nstep,
+        )
+
+
+class ContinuousOffPolicyAlgorithm(OffPolicyAlgorithm):
     """
     Base class for continuous off-policy algorithms.
     """
@@ -47,12 +62,13 @@ class ContinuousOffPolicyAlgorithm(Algorithm):
         action_space,
         seed,
         gamma,
+        nstep,
         buffer_size,
         batch_size,
         start_steps,
         tau,
     ):
-        super(ContinuousOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, buffer_size)
+        super(ContinuousOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size)
 
         self.batch_size = batch_size
         self.start_steps = start_steps
@@ -71,7 +87,7 @@ class ContinuousOffPolicyAlgorithm(Algorithm):
 
         next_state, reward, done, _ = env.step(action)
         mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state)
+        self.buffer.append(state, action, reward, mask, next_state, done)
 
         if done:
             t = 0
@@ -80,7 +96,7 @@ class ContinuousOffPolicyAlgorithm(Algorithm):
         return next_state, t
 
 
-class DiscreteOffPolicyAlgorithm(Algorithm):
+class DiscreteOffPolicyAlgorithm(OffPolicyAlgorithm):
     """
     Base class for discrete off-policy algorithms.
     """
@@ -91,13 +107,14 @@ class DiscreteOffPolicyAlgorithm(Algorithm):
         action_space,
         seed,
         gamma,
+        nstep,
         buffer_size,
         batch_size,
         start_steps,
         update_interval,
         update_interval_target,
     ):
-        super(DiscreteOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, buffer_size)
+        super(DiscreteOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size)
 
         self.batch_size = batch_size
         self.start_steps = start_steps
