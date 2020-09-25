@@ -1,4 +1,5 @@
 import numpy as np
+from gym.spaces import Box, Discrete
 
 import jax
 
@@ -8,16 +9,22 @@ class ReplayBuffer:
     Replay Buffer.
     """
 
-    def __init__(self, buffer_size, state_shape, action_shape):
+    def __init__(self, buffer_size, state_space, action_space):
         self._n = 0
         self._p = 0
         self.buffer_size = buffer_size
 
-        self.state = np.empty((buffer_size, *state_shape), dtype=np.float32)
-        self.action = np.empty((buffer_size, *action_shape), dtype=np.float32)
+        self.state = np.empty((buffer_size, *state_space.shape), dtype=np.float32)
         self.reward = np.empty((buffer_size, 1), dtype=np.float32)
         self.done = np.empty((buffer_size, 1), dtype=np.float32)
-        self.next_state = np.empty((buffer_size, *state_shape), dtype=np.float32)
+        self.next_state = np.empty((buffer_size, *state_space.shape), dtype=np.float32)
+
+        if type(action_space) == Box:
+            self.action = np.empty((buffer_size, *action_space.shape), dtype=np.float32)
+        elif type(action_space) == Discrete:
+            self.action = np.empty((buffer_size, 1), dtype=np.int64)
+        else:
+            NotImplementedError
 
     def append(self, state, action, reward, done, next_state):
         self.state[self._p] = state

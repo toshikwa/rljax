@@ -9,11 +9,11 @@ class Algorithm(ABC):
     Base class for algorithms.
     """
 
-    def __init__(self, state_shape, action_shape, seed, gamma):
+    def __init__(self, state_space, action_space, seed, gamma):
         self.rng = PRNGSequence(seed)
         self.learning_steps = 0
-        self.state_shape = state_shape
-        self.action_shape = action_shape
+        self.state_space = state_space
+        self.action_space = action_space
         self.gamma = gamma
 
     @abstractmethod
@@ -42,10 +42,10 @@ class ContinuousOffPolicyAlgorithm(Algorithm):
     Base class for continuous off-policy algorithms.
     """
 
-    def __init__(self, state_shape, action_shape, seed, gamma, buffer_size, batch_size, start_steps, tau):
-        super(ContinuousOffPolicyAlgorithm, self).__init__(state_shape, action_shape, seed, gamma)
+    def __init__(self, state_space, action_space, seed, gamma, buffer_size, batch_size, start_steps, tau):
+        super(ContinuousOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma)
 
-        self.buffer = ReplayBuffer(buffer_size=buffer_size, state_shape=state_shape, action_shape=action_shape)
+        self.buffer = ReplayBuffer(buffer_size=buffer_size, state_space=state_space, action_space=action_space)
         self.batch_size = batch_size
         self.start_steps = start_steps
         self.tau = tau

@@ -22,3 +22,25 @@ class ContinuousQFunction(nn.Module):
 
         xs = [x1] + [q_func(x) for _ in range(num_critics - 1)]
         return xs
+
+
+class DiscreteQFunction(nn.Module):
+    """
+    Critic for DQN.
+    """
+
+    def apply(self, x, action_dim, hidden_units=(256, 256), hidden_activation=nn.relu, dueling_net=False):
+        a = x
+        for unit in hidden_units:
+            a = nn.Dense(a, features=unit)
+            a = nn.relu(a)
+        a = nn.Dense(a, features=action_dim)
+        if not dueling_net:
+            return a
+
+        v = x
+        for unit in hidden_units:
+            v = nn.Dense(v, features=unit)
+            v = nn.relu(v)
+        v = nn.Dense(v, features=1)
+        return a + v - a.mean(axis=1, keepdims=True)

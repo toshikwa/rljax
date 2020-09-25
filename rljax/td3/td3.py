@@ -55,8 +55,8 @@ def actor_grad_fn(
 class TD3(ContinuousOffPolicyAlgorithm):
     def __init__(
         self,
-        state_shape,
-        action_shape,
+        state_space,
+        action_space,
         seed,
         gamma=0.99,
         buffer_size=10 ** 6,
@@ -73,8 +73,8 @@ class TD3(ContinuousOffPolicyAlgorithm):
         update_interval_policy=2,
     ):
         super(TD3, self).__init__(
-            state_shape=state_shape,
-            action_shape=action_shape,
+            state_space=state_space,
+            action_space=action_space,
             seed=seed,
             gamma=gamma,
             buffer_size=buffer_size,
@@ -86,8 +86,8 @@ class TD3(ContinuousOffPolicyAlgorithm):
         # Actor.
         rng_actor = next(self.rng)
         actor = build_td3_actor(
-            state_shape=state_shape,
-            action_shape=action_shape,
+            state_dim=state_space.shape[0],
+            action_dim=action_space.shape[0],
             rng_init=rng_actor,
             hidden_units=units_actor,
         )
@@ -96,8 +96,8 @@ class TD3(ContinuousOffPolicyAlgorithm):
         # Critic.
         rng_critic = next(self.rng)
         critic = build_td3_critic(
-            state_shape=state_shape,
-            action_shape=action_shape,
+            state_dim=state_space.shape[0],
+            action_dim=action_space.shape[0],
             rng_init=rng_critic,
             hidden_units=units_critic,
         )
@@ -106,16 +106,16 @@ class TD3(ContinuousOffPolicyAlgorithm):
         # Target networks.
         self.actor_target = jax.device_put(
             build_td3_actor(
-                state_shape=state_shape,
-                action_shape=action_shape,
+                state_dim=state_space.shape[0],
+                action_dim=action_space.shape[0],
                 rng_init=rng_actor,
                 hidden_units=units_critic,
             )
         )
         self.critic_target = jax.device_put(
             build_td3_critic(
-                state_shape=state_shape,
-                action_shape=action_shape,
+                state_dim=state_space.shape[0],
+                action_dim=action_space.shape[0],
                 rng_init=rng_critic,
                 hidden_units=units_critic,
             )

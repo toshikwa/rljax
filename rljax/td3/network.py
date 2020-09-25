@@ -4,21 +4,21 @@ from rljax.common.policy import DeterministicPolicy
 from rljax.common.q_function import ContinuousQFunction
 
 
-def build_td3_actor(state_shape, action_shape, rng_init, hidden_units=(400, 300)):
+def build_td3_actor(state_dim, action_dim, rng_init, hidden_units=(400, 300)):
     """
     Build actor for TD3.
     """
     actor = DeterministicPolicy.partial(
-        action_dim=action_shape[0],
+        action_dim=action_dim,
         hidden_units=hidden_units,
         hidden_activation=nn.relu,
     )
-    input_spec = [((1, state_shape[0]), jnp.float32)]
+    input_spec = [((1, state_dim), jnp.float32)]
     _, param_init = actor.init_by_shape(rng_init, input_spec)
     return nn.Model(actor, param_init)
 
 
-def build_td3_critic(state_shape, action_shape, rng_init, hidden_units=(400, 300)):
+def build_td3_critic(state_dim, action_dim, rng_init, hidden_units=(400, 300)):
     """
     Build critic for TD3.
     """
@@ -28,8 +28,8 @@ def build_td3_critic(state_shape, action_shape, rng_init, hidden_units=(400, 300
         hidden_activation=nn.relu,
     )
     input_spec = [
-        ((1, state_shape[0]), jnp.float32),
-        ((1, action_shape[0]), jnp.float32),
+        ((1, state_dim), jnp.float32),
+        ((1, action_dim), jnp.float32),
     ]
     _, param_init = critic.init_by_shape(rng_init, input_spec)
     return nn.Model(critic, param_init)

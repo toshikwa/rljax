@@ -14,21 +14,21 @@ class LogAlpha(nn.Module):
         return jnp.asarray(log_alpha, dtype=jnp.float32)
 
 
-def build_sac_actor(state_shape, action_shape, rng_init, hidden_units=(256, 256)):
+def build_sac_actor(state_dim, action_dim, rng_init, hidden_units=(256, 256)):
     """
     Build actor for SAC.
     """
     actor = StateDependentGaussianPolicy.partial(
-        action_dim=action_shape[0],
+        action_dim=action_dim,
         hidden_units=hidden_units,
         hidden_activation=nn.relu,
     )
-    input_spec = [((1, state_shape[0]), jnp.float32)]
+    input_spec = [((1, state_dim), jnp.float32)]
     _, param_init = actor.init_by_shape(rng_init, input_spec)
     return nn.Model(actor, param_init)
 
 
-def build_sac_critic(state_shape, action_shape, rng_init, hidden_units=(256, 256)):
+def build_sac_critic(state_dim, action_dim, rng_init, hidden_units=(256, 256)):
     """
     Build critic for SAC.
     """
@@ -39,8 +39,8 @@ def build_sac_critic(state_shape, action_shape, rng_init, hidden_units=(256, 256
         hidden_activation=nn.relu,
     )
     input_spec = [
-        ((1, state_shape[0]), jnp.float32),
-        ((1, action_shape[0]), jnp.float32),
+        ((1, state_dim), jnp.float32),
+        ((1, action_dim), jnp.float32),
     ]
     _, param_init = critic.init_by_shape(rng_init, input_spec)
     return nn.Model(critic, param_init)

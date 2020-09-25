@@ -13,8 +13,8 @@ def run(args):
     env_test = gym.make(args.env_id)
 
     algo = CONTINUOUS_ALGOS[args.algo](
-        state_shape=env.observation_space.shape,
-        action_shape=env.action_space.shape,
+        state_space=env.observation_space,
+        action_space=env.action_space,
         seed=args.seed,
     )
 
