@@ -1,5 +1,5 @@
 # RL Algorithms in JAX
-Rljax is a JAX implementation of RL algorithms.
+Rljax is a collection of RL algorithms written in JAX.
 
 Currently, following algorithms have been implemented.
 
@@ -12,6 +12,7 @@ Currently, following algorithms have been implemented.
 We plan to implement the following algorithms in the future.
 
 - [ ] Proximal Policy Optimization(PPO)
+- [ ] Prioritized Experience Replay(PER)
 - [ ] Quantile Regression DQN(QR-DQN)
 - [ ] Implicit Quantile Network(IQN)
 
