@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 
 import jax
@@ -8,7 +10,6 @@ from rljax.common.utils import add_noise, soft_update, update_network
 from rljax.td3.network import build_td3_actor, build_td3_critic
 
 
-@jax.jit
 def critic_grad_fn(
     rng: np.ndarray,
     critic: nn.Model,
@@ -38,7 +39,6 @@ def critic_grad_fn(
     return grad_critic
 
 
-@jax.jit
 def actor_grad_fn(
     actor: nn.Model,
     critic: nn.Model,
@@ -121,9 +121,12 @@ class TD3(ContinuousOffPolicyAlgorithm):
             )
         )
 
+        # Compile functions.
+        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, gamma=gamma, std_target=std_target, clip_noise=clip_noise))
+        self.actor_grad_fn = jax.jit(actor_grad_fn)
+
+        # Other parameters.
         self.std = std
-        self.std_target = std_target
-        self.clip_noise = clip_noise
         self.update_interval_policy = update_interval_policy
 
     def select_action(self, state):
@@ -142,14 +145,11 @@ class TD3(ContinuousOffPolicyAlgorithm):
         state, action, reward, done, next_state = self.buffer.sample(self.batch_size)
 
         # Update critic.
-        grad_critic = critic_grad_fn(
+        grad_critic = self.critic_grad_fn(
             rng=next(self.rng),
             critic=self.critic,
             actor_target=self.actor_target,
             critic_target=self.critic_target,
-            gamma=self.gamma,
-            std_target=self.std_target,
-            clip_noise=self.clip_noise,
             state=state,
             action=action,
             reward=reward,
@@ -159,7 +159,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
         self.optim_critic = update_network(self.optim_critic, grad_critic)
 
         # Update actor.
-        grad_actor = actor_grad_fn(
+        grad_actor = self.actor_grad_fn(
             actor=self.actor,
             critic=self.critic,
             state=state,

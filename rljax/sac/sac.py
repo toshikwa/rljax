@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Tuple
 
 import numpy as np
@@ -10,7 +11,6 @@ from rljax.common.utils import soft_update, update_network
 from rljax.sac.network import build_sac_actor, build_sac_critic, build_sac_log_alpha
 
 
-@jax.jit
 def critic_grad_fn(
     rng: np.ndarray,
     actor: nn.Model,
@@ -38,7 +38,6 @@ def critic_grad_fn(
     return grad_critic
 
 
-@jax.jit
 def actor_and_alpha_grad_fn(
     rng: np.ndarray,
     actor: nn.Model,
@@ -125,9 +124,13 @@ class SAC(ContinuousOffPolicyAlgorithm):
         )
 
         # Entropy coefficient.
+        target_entropy = -float(action_space.shape[0])
         log_alpha = build_sac_log_alpha(next(self.rng))
         self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
-        self.target_entropy = -float(action_space.shape[0])
+
+        # Compile functions.
+        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, gamma=gamma))
+        self.actor_and_alpha_grad_fn = jax.jit(partial(actor_and_alpha_grad_fn, target_entropy=target_entropy))
 
     def select_action(self, state):
         state = jax.device_put(state[None, ...])
@@ -144,13 +147,12 @@ class SAC(ContinuousOffPolicyAlgorithm):
         state, action, reward, done, next_state = self.buffer.sample(self.batch_size)
 
         # Update critic.
-        grad_critic = critic_grad_fn(
+        grad_critic = self.critic_grad_fn(
             rng=next(self.rng),
             actor=self.actor,
             critic=self.critic,
             critic_target=self.critic_target,
             log_alpha=self.log_alpha,
-            gamma=self.gamma,
             state=state,
             action=action,
             reward=reward,
@@ -160,12 +162,11 @@ class SAC(ContinuousOffPolicyAlgorithm):
         self.optim_critic = update_network(self.optim_critic, grad_critic)
 
         # Update actor and log alpha.
-        grad_actor, grad_alpha = actor_and_alpha_grad_fn(
+        grad_actor, grad_alpha = self.actor_and_alpha_grad_fn(
             rng=next(self.rng),
             actor=self.actor,
             critic=self.critic,
             log_alpha=self.log_alpha,
-            target_entropy=self.target_entropy,
             state=state,
         )
         self.optim_actor = update_network(self.optim_actor, grad_actor)

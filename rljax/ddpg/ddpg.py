@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 
 import jax
@@ -8,7 +10,6 @@ from rljax.common.utils import add_noise, soft_update, update_network
 from rljax.ddpg.network import build_ddpg_actor, build_ddpg_critic
 
 
-@jax.jit
 def critic_grad_fn(
     critic: nn.Model,
     actor_target: nn.Model,
@@ -33,7 +34,6 @@ def critic_grad_fn(
     return grad_critic
 
 
-@jax.jit
 def actor_grad_fn(
     actor: nn.Model,
     critic: nn.Model,
@@ -113,6 +113,11 @@ class DDPG(ContinuousOffPolicyAlgorithm):
             )
         )
 
+        # Compile functions.
+        self.critic_grad_fn = jax.jit(partial(critic_grad_fn, gamma=gamma))
+        self.actor_grad_fn = jax.jit(actor_grad_fn)
+
+        # Other parameters.
         self.std = std
 
     def select_action(self, state):
@@ -131,11 +136,10 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         state, action, reward, done, next_state = self.buffer.sample(self.batch_size)
 
         # Update critic.
-        grad_critic = critic_grad_fn(
+        grad_critic = self.critic_grad_fn(
             critic=self.critic,
             actor_target=self.actor_target,
             critic_target=self.critic_target,
-            gamma=self.gamma,
             state=state,
             action=action,
             reward=reward,
@@ -145,7 +149,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         self.optim_critic = update_network(self.optim_critic, grad_critic)
 
         # Update actor.
-        grad_actor = actor_grad_fn(
+        grad_actor = self.actor_grad_fn(
             actor=self.actor,
             critic=self.critic,
             state=state,
