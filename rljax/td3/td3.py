@@ -64,10 +64,10 @@ class TD3(ContinuousOffPolicyAlgorithm):
         batch_size=256,
         start_steps=10000,
         tau=5e-3,
-        lr_actor=1e-3,
-        lr_critic=1e-3,
-        units_actor=(400, 300),
-        units_critic=(400, 300),
+        lr_actor=3e-4,
+        lr_critic=3e-4,
+        units_actor=(256, 256),
+        units_critic=(256, 256),
         std=0.1,
         std_target=0.2,
         clip_noise=0.5,
@@ -162,17 +162,18 @@ class TD3(ContinuousOffPolicyAlgorithm):
         )
         self.optim_critic = update_network(self.optim_critic, grad_critic)
 
-        # Update actor.
-        grad_actor = self.actor_grad_fn(
-            actor=self.actor,
-            critic=self.critic,
-            state=state,
-        )
-        self.optim_actor = update_network(self.optim_actor, grad_actor)
+        if self.learning_steps % self.update_interval_policy == 0:
+            # Update actor.
+            grad_actor = self.actor_grad_fn(
+                actor=self.actor,
+                critic=self.critic,
+                state=state,
+            )
+            self.optim_actor = update_network(self.optim_actor, grad_actor)
 
-        # Update target networks.
-        self.actor_target = soft_update(self.actor_target, self.actor, self.tau)
-        self.critic_target = soft_update(self.critic_target, self.critic, self.tau)
+            # Update target networks.
+            self.actor_target = soft_update(self.actor_target, self.actor, self.tau)
+            self.critic_target = soft_update(self.critic_target, self.critic, self.tau)
 
     @property
     def actor(self):
@@ -181,3 +182,6 @@ class TD3(ContinuousOffPolicyAlgorithm):
     @property
     def critic(self):
         return self.optim_critic.target
+
+    def __str__(self):
+        return "td3"

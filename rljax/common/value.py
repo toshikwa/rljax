@@ -8,7 +8,6 @@ class ContinuousVFunction(nn.Module):
     """
 
     def apply(self, x, num_critics=1, hidden_units=(64, 64), hidden_activation=nn.tanh):
-
         def v_func(x):
             for unit in hidden_units:
                 x = nn.Dense(x, features=unit)

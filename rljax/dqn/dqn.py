@@ -169,3 +169,6 @@ class DQN(DiscreteOffPolicyAlgorithm):
     @property
     def dqn(self):
         return self.optim.target
+
+    def __str__(self):
+        return "dqn" if not self.use_per else "dqn_per"

@@ -32,6 +32,10 @@ class Algorithm(ABC):
     def update(self):
         pass
 
+    @abstractmethod
+    def __str__(self):
+        pass
+
 
 class OffPolicyAlgorithm(Algorithm):
     """

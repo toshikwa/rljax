@@ -59,8 +59,8 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         batch_size=256,
         start_steps=10000,
         tau=5e-3,
-        lr_actor=1e-3,
-        lr_critic=1e-3,
+        lr_actor=3e-4,
+        lr_critic=3e-4,
         units_actor=(400, 300),
         units_critic=(400, 300),
         std=0.1,
@@ -170,3 +170,6 @@ class DDPG(ContinuousOffPolicyAlgorithm):
     @property
     def critic(self):
         return self.optim_critic.target
+
+    def __str__(self):
+        return "ddpg"

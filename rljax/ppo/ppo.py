@@ -170,3 +170,6 @@ class PPO(ContinuousOnPolicyAlgorithm):
     @property
     def critic(self):
         return self.optim_critic.target
+
+    def __str__(self):
+        return "ppo"

@@ -1,5 +1,4 @@
 import gym
-import pybullet_envs
 
 from rljax.ddpg import DDPG
 from rljax.dqn import DQN

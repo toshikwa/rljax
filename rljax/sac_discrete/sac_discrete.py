@@ -91,6 +91,8 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         lr_alpha=3e-4,
         units_actor=(512,),
         units_critic=(512,),
+        target_entropy_ratio=0.8,
+        dueling_net=True,
     ):
         super(SACDiscrete, self).__init__(
             state_space=state_space,
@@ -122,6 +124,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
             action_dim=action_space.n,
             rng_init=rng_critic,
             hidden_units=units_critic,
+            dueling_net=dueling_net,
         )
         self.optim_critic = jax.device_put(optim.Adam(learning_rate=lr_critic).create(critic))
 
@@ -132,11 +135,12 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
                 action_dim=action_space.n,
                 rng_init=rng_critic,
                 hidden_units=units_critic,
+                dueling_net=dueling_net,
             )
         )
 
         # Entropy coefficient.
-        target_entropy = -np.log(1.0 / action_space.n) * 0.98
+        target_entropy = -np.log(1.0 / action_space.n) * target_entropy_ratio
         log_alpha = build_sac_log_alpha(next(self.rng))
         self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
 
@@ -222,3 +226,6 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
     @property
     def log_alpha(self):
         return self.optim_alpha.target
+
+    def __str__(self):
+        return "sac_discrete" if not self.use_per else "sac_discrete_per"

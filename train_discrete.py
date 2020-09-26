@@ -16,10 +16,11 @@ def run(args):
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=args.seed,
+        use_per=args.use_per,
     )
 
     time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_dir = os.path.join("logs", args.env_id, args.algo, f"seed{args.seed}-{time}")
+    log_dir = os.path.join("logs", args.env_id, f"{str(algo)}-seed{args.seed}-{time}")
 
     trainer = Trainer(
         env=env,
@@ -36,6 +37,7 @@ def run(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--algo", type=str, default="dqn")
+    p.add_argument("--use_per", action="store_true")
     p.add_argument("--num_steps", type=int, default=50000)
     p.add_argument("--eval_interval", type=int, default=1000)
     p.add_argument("--env_id", type=str, default="CartPole-v0")

@@ -190,3 +190,6 @@ class SAC(ContinuousOffPolicyAlgorithm):
     @property
     def log_alpha(self):
         return self.optim_alpha.target
+
+    def __str__(self):
+        return "sac"
