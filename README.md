@@ -7,13 +7,13 @@ Rljax is a collection of RL algorithms written in JAX.
 You can install dependencies simply by executing the following.
 ```bash
 pip install --upgrade https://storage.googleapis.com/jax-releases/`nvcc -V | sed -En "s/.* release ([0-9]*)\.([0-9]*),.*/cuda\1\2/p"`/jaxlib-0.1.55-`python3 -V | sed -En "s/Python ([0-9]*)\.([0-9]*).*/cp\1\2/p"`-none-manylinux2010_x86_64.whl jax
-pip install -r requirements.txt
+pip install -e .
 ```
 
 If you don't have a GPU, please executing the following instead.
 ```bash
 pip install --upgrade jaxlib jax
-pip install -r requirements.txt
+pip install -e .
 ```
 
 If you want to use a [MuJoCo](http://mujoco.org/) physics engine, please install [mujoco-py](https://github.com/openai/mujoco-py).
