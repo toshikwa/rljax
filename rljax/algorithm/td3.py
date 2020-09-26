@@ -68,25 +68,17 @@ class TD3(ContinuousOffPolicyAlgorithm):
         )
 
         # Critic.
-        self.critic = build_td3_critic(
-            action_dim=action_space.shape[0],
-            hidden_units=units_actor,
-        )
+        fake_input = np.zeros((1, state_space.shape[0] + action_space.shape[0]), np.float32)
+        self.critic = build_td3_critic(action_space.shape[0], units_critic)
         opt_init_critic, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(
-            next(self.rng), np.zeros((1, state_space.shape[0] + action_space.shape[0]), np.float32)
-        )
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
         self.opt_state_critic = opt_init_critic(self.params_critic)
 
         # Actor.
-        self.actor = build_td3_actor(
-            action_dim=action_space.shape[0],
-            hidden_units=units_actor,
-        )
+        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
+        self.actor = build_td3_actor(action_space.shape[0], units_actor)
         opt_init_actor, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.params_actor_target = self.actor.init(
-            next(self.rng), np.zeros((1, *state_space.shape), np.float32)
-        )
+        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), fake_input)
         self.opt_state_actor = opt_init_actor(self.params_actor)
 
         # Other parameters.

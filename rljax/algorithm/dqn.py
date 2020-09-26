@@ -61,13 +61,10 @@ class DQN(DiscreteOffPolicyAlgorithm):
         )
 
         # DQN.
-        self.dqn = build_dqn(
-            action_dim=action_space.n,
-            hidden_units=units,
-            dueling_net=dueling_net,
-        )
+        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
+        self.dqn = build_dqn(action_space.n, units, dueling_net)
         opt_init, self.opt = optix.adam(lr)
-        self.params = self.params_target = self.dqn.init(next(self.rng), np.zeros((1, *state_space.shape), np.float32))
+        self.params = self.params_target = self.dqn.init(next(self.rng), fake_input)
         self.opt_state = opt_init(self.params)
 
         # Other parameters.

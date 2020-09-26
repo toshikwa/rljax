@@ -73,30 +73,22 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         )
 
         # Critic.
-        self.critic = build_sac_discrete_critic(
-            action_dim=action_space.n,
-            hidden_units=units_actor,
-            dueling_net=dueling_net,
-        )
+        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
+        self.critic = build_sac_discrete_critic(action_space.n, units_critic, dueling_net)
         opt_init_critic, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(
-            next(self.rng), np.zeros((1, state_space.shape[0]), np.float32)
-        )
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
         self.opt_state_critic = opt_init_critic(self.params_critic)
 
         # Actor.
-        self.actor = build_sac_discrete_actor(
-            action_dim=action_space.n,
-            hidden_units=units_actor,
-        )
+        self.actor = build_sac_discrete_actor(action_space.n, units_actor)
         opt_init_actor, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.actor.init(next(self.rng), np.zeros((1, *state_space.shape), np.float32))
+        self.params_actor = self.actor.init(next(self.rng), fake_input)
         self.opt_state_actor = opt_init_actor(self.params_actor)
 
         # Entropy coefficient.
         self.target_entropy = -np.log(1.0 / action_space.n) * target_entropy_ratio
         log_alpha = build_log_alpha(next(self.rng))
-        self.opt_alpha = flax.optim.Adam(learning_rate=lr_alpha).create(log_alpha)
+        self.opt_alpha = flax.optim.Adam(lr_alpha).create(log_alpha)
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, state[None, ...])
@@ -213,7 +205,6 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         next_state: np.ndarray,
     ) -> jnp.DeviceArray:
         alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
-
         pi, log_pi = self.actor.apply(params_actor, None, next_state)
         next_q1, next_q2 = self.critic.apply(params_critic_target, None, next_state)
         next_q = (pi * (jnp.minimum(next_q1, next_q2) - alpha * log_pi)).sum(axis=1, keepdims=True)
@@ -261,7 +252,6 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
         curr_q1, curr_q2 = self.critic.apply(params_critic, None, state)
         curr_q = jax.lax.stop_gradient(jnp.minimum(curr_q1, curr_q2))
-
         pi, log_pi = self.actor.apply(params_actor, None, state)
         mean_log_pi = (pi * log_pi).sum(axis=1).mean()
         mean_q = (pi * curr_q).sum(axis=1).mean()

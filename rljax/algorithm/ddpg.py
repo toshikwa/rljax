@@ -66,7 +66,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
 
         # Critic.
         fake_input = np.zeros((1, state_space.shape[0] + action_space.shape[0]), np.float32)
-        self.critic = build_ddpg_critic(action_space.shape[0], units_actor)
+        self.critic = build_ddpg_critic(action_space.shape[0], units_critic)
         opt_init_critic, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
         self.opt_state_critic = opt_init_critic(self.params_critic)

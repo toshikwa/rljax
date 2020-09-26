@@ -59,25 +59,16 @@ class PPO(ContinuousOnPolicyAlgorithm):
         )
 
         # Critic.
-        self.critic = build_ppo_critic(
-            action_dim=action_space.shape[0],
-            hidden_units=units_actor,
-        )
+        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
+        self.critic = build_ppo_critic(action_space.shape[0], units_critic)
         opt_init_critic, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(
-            next(self.rng), np.zeros((1, state_space.shape[0]), np.float32)
-        )
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
         self.opt_state_critic = opt_init_critic(self.params_critic)
 
         # Actor.
-        self.actor = build_ppo_actor(
-            action_dim=action_space.shape[0],
-            hidden_units=units_actor,
-        )
+        self.actor = build_ppo_actor(action_space.shape[0], units_actor)
         opt_init_actor, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.params_actor_target = self.actor.init(
-            next(self.rng), np.zeros((1, *state_space.shape), np.float32)
-        )
+        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), fake_input)
         self.opt_state_actor = opt_init_actor(self.params_actor)
 
         # Other parameters.
@@ -194,7 +185,6 @@ class PPO(ContinuousOnPolicyAlgorithm):
         log_pi_old: np.ndarray,
         gae: np.ndarray,
     ) -> jnp.DeviceArray:
-
         mean, log_pi = self.actor.apply(params_actor, None, state)
         log_pi = evaluate_lop_pi(mean, log_pi, action)
         ratio = jnp.exp(log_pi - log_pi_old)
@@ -212,18 +202,16 @@ class PPO(ContinuousOnPolicyAlgorithm):
         done: np.ndarray,
         next_state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        # Current and next value estimates.
         value = jax.lax.stop_gradient(self.critic.apply(params_critic, None, state))
         next_value = jax.lax.stop_gradient(self.critic.apply(params_critic, None, next_state))
-
         # Calculate TD errors.
         delta = reward + self.gamma * next_value * (1.0 - done) - value
-
         # Calculate gae recursively from behind.
         gae = [delta[-1]]
         for t in jnp.arange(reward.shape[0] - 2, -1, -1):
             gae.insert(0, delta[t] + self.gamma * self.lambd * (1 - done[t]) * gae[0])
         gae = jnp.array(gae)
-
         return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
 
     def __str__(self):
