@@ -3,10 +3,14 @@ line-length = 127
 target-version = ['py36', 'py37', 'py38']
 exclude = '''
 /(
-    .vscode
+    __pycache__
+  | build
+  | dist
+  | .vscode
   | .git
-  | .__pycache__
+  | .ipynb_checkpoints
   | .tox
   | .pytest_cache
+  | rljax.egg-info
 )/
 '''

@@ -76,7 +76,7 @@ class ReplayBuffer:
         if type(action_space) == Box:
             self.action = np.empty((buffer_size, *action_space.shape), dtype=np.float32)
         elif type(action_space) == Discrete:
-            self.action = np.empty((buffer_size, 1), dtype=np.int64)
+            self.action = np.empty((buffer_size, 1), dtype=np.int32)
         else:
             NotImplementedError
 

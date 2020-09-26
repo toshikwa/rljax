@@ -16,7 +16,7 @@ def _test_algorithm(env, state, ALGO):
     _state, _ = algo.step(env, state, 1000000, 1000000)
     assert env.observation_space.contains(_state)
 
-    # Test step() method.
+    # Test select_action() method.
     action = algo.select_action(state)
     assert env.action_space.contains(action)
 

@@ -94,7 +94,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
             rng_init=rng_actor,
             hidden_units=units_actor,
         )
-        self.optim_actor = jax.device_put(optim.Adam(learning_rate=lr_actor).create(actor))
+        self.optim_actor = optim.Adam(learning_rate=lr_actor).create(actor)
 
         # Critic.
         rng_critic = next(self.rng)
@@ -104,24 +104,21 @@ class TD3(ContinuousOffPolicyAlgorithm):
             rng_init=rng_critic,
             hidden_units=units_critic,
         )
-        self.optim_critic = jax.device_put(optim.Adam(learning_rate=lr_critic).create(critic))
+        self.optim_critic = optim.Adam(learning_rate=lr_critic).create(critic)
 
         # Target networks.
-        self.actor_target = jax.device_put(
-            build_td3_actor(
-                state_dim=state_space.shape[0],
-                action_dim=action_space.shape[0],
-                rng_init=rng_actor,
-                hidden_units=units_critic,
-            )
+        self.actor_target = build_td3_actor(
+            state_dim=state_space.shape[0],
+            action_dim=action_space.shape[0],
+            rng_init=rng_actor,
+            hidden_units=units_critic,
         )
-        self.critic_target = jax.device_put(
-            build_td3_critic(
-                state_dim=state_space.shape[0],
-                action_dim=action_space.shape[0],
-                rng_init=rng_critic,
-                hidden_units=units_critic,
-            )
+
+        self.critic_target = build_td3_critic(
+            state_dim=state_space.shape[0],
+            action_dim=action_space.shape[0],
+            rng_init=rng_critic,
+            hidden_units=units_critic,
         )
 
         # Compile functions.

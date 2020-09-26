@@ -102,7 +102,7 @@ class PPO(ContinuousOnPolicyAlgorithm):
             rng_init=next(self.rng),
             hidden_units=units_actor,
         )
-        self.optim_actor = jax.device_put(optim.Adam(learning_rate=lr_actor).create(actor))
+        self.optim_actor = optim.Adam(learning_rate=lr_actor).create(actor)
 
         # Critic.
         critic = build_ppo_critic(
@@ -110,7 +110,7 @@ class PPO(ContinuousOnPolicyAlgorithm):
             rng_init=next(self.rng),
             hidden_units=units_critic,
         )
-        self.optim_critic = jax.device_put(optim.Adam(learning_rate=lr_critic).create(critic))
+        self.optim_critic = optim.Adam(learning_rate=lr_critic).create(critic)
 
         # Compile functions.
         self.calculate_gae = jax.jit(partial(calculate_gae, gamma=gamma, lambd=lambd))

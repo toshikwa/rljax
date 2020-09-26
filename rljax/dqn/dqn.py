@@ -93,17 +93,15 @@ class DQN(DiscreteOffPolicyAlgorithm):
             hidden_units=units,
             dueling_net=dueling_net,
         )
-        self.optim = jax.device_put(optim.Adam(learning_rate=lr).create(dqn))
+        self.optim = optim.Adam(learning_rate=lr).create(dqn)
 
         # Target network.
-        self.dqn_target = jax.device_put(
-            build_dqn(
-                state_dim=state_space.shape[0],
-                action_dim=action_space.n,
-                rng_init=rng,
-                hidden_units=units,
-                dueling_net=dueling_net,
-            )
+        self.dqn_target = build_dqn(
+            state_dim=state_space.shape[0],
+            action_dim=action_space.n,
+            rng_init=rng,
+            hidden_units=units,
+            dueling_net=dueling_net,
         )
 
         # Compile function.

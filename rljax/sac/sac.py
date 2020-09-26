@@ -105,7 +105,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
             rng_init=next(self.rng),
             hidden_units=units_actor,
         )
-        self.optim_actor = jax.device_put(optim.Adam(learning_rate=lr_actor).create(actor))
+        self.optim_actor = optim.Adam(learning_rate=lr_actor).create(actor)
 
         # Critic.
         rng_critic = next(self.rng)
@@ -115,22 +115,20 @@ class SAC(ContinuousOffPolicyAlgorithm):
             rng_init=rng_critic,
             hidden_units=units_critic,
         )
-        self.optim_critic = jax.device_put(optim.Adam(learning_rate=lr_critic).create(critic))
+        self.optim_critic = optim.Adam(learning_rate=lr_critic).create(critic)
 
         # Target network.
-        self.critic_target = jax.device_put(
-            build_sac_critic(
-                state_dim=state_space.shape[0],
-                action_dim=action_space.shape[0],
-                rng_init=rng_critic,
-                hidden_units=units_critic,
-            )
+        self.critic_target = build_sac_critic(
+            state_dim=state_space.shape[0],
+            action_dim=action_space.shape[0],
+            rng_init=rng_critic,
+            hidden_units=units_critic,
         )
 
         # Entropy coefficient.
         target_entropy = -float(action_space.shape[0])
         log_alpha = build_sac_log_alpha(next(self.rng))
-        self.optim_alpha = jax.device_put(optim.Adam(learning_rate=lr_alpha).create(log_alpha))
+        self.optim_alpha = optim.Adam(learning_rate=lr_alpha).create(log_alpha)
 
         # Compile functions.
         self.critic_grad_fn = jax.jit(partial(critic_grad_fn, discount=self.discount))
