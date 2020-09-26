@@ -11,7 +11,7 @@ from rljax.td3.network import build_td3_actor, build_td3_critic
 
 
 def critic_grad_fn(
-    rng: np.ndarray,
+    rng: jnp.ndarray,
     critic: nn.Model,
     actor_target: nn.Model,
     critic_target: nn.Model,

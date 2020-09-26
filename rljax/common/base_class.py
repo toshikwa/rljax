@@ -9,7 +9,13 @@ class Algorithm(ABC):
     Base class for algorithms.
     """
 
-    def __init__(self, state_space, action_space, seed, gamma):
+    def __init__(
+        self,
+        state_space,
+        action_space,
+        seed,
+        gamma,
+    ):
         self.rng = PRNGSequence(seed)
         self.learning_steps = 0
         self.state_space = state_space
@@ -42,8 +48,22 @@ class OffPolicyAlgorithm(Algorithm):
     Base class for off-policy algorithms.
     """
 
-    def __init__(self, state_space, action_space, seed, gamma, nstep, buffer_size, use_per):
-        super(OffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma)
+    def __init__(
+        self,
+        state_space,
+        action_space,
+        seed,
+        gamma,
+        nstep,
+        buffer_size,
+        use_per,
+    ):
+        super(OffPolicyAlgorithm, self).__init__(
+            state_space=state_space,
+            action_space=action_space,
+            seed=seed,
+            gamma=gamma,
+        )
 
         self.discount = gamma ** nstep
         self.use_per = use_per
@@ -61,8 +81,20 @@ class OnPolicyAlgorithm(Algorithm):
     Base class for on-policy algorithms.
     """
 
-    def __init__(self, state_space, action_space, seed, gamma, buffer_size):
-        super(OnPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma)
+    def __init__(
+        self,
+        state_space,
+        action_space,
+        seed,
+        gamma,
+        buffer_size,
+    ):
+        super(OnPolicyAlgorithm, self).__init__(
+            state_space=state_space,
+            action_space=action_space,
+            seed=seed,
+            gamma=gamma,
+        )
 
         self.discount = gamma
         self.buffer_size = buffer_size
@@ -91,7 +123,15 @@ class ContinuousOffPolicyAlgorithm(OffPolicyAlgorithm):
         start_steps,
         tau,
     ):
-        super(ContinuousOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size, use_per)
+        super(ContinuousOffPolicyAlgorithm, self).__init__(
+            state_space=state_space,
+            action_space=action_space,
+            seed=seed,
+            gamma=gamma,
+            nstep=nstep,
+            buffer_size=buffer_size,
+            use_per=use_per,
+        )
 
         self.batch_size = batch_size
         self.start_steps = start_steps
@@ -138,7 +178,15 @@ class DiscreteOffPolicyAlgorithm(OffPolicyAlgorithm):
         update_interval,
         update_interval_target,
     ):
-        super(DiscreteOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size, use_per)
+        super(DiscreteOffPolicyAlgorithm, self).__init__(
+            state_space=state_space,
+            action_space=action_space,
+            seed=seed,
+            gamma=gamma,
+            nstep=nstep,
+            buffer_size=buffer_size,
+            use_per=use_per,
+        )
 
         self.batch_size = batch_size
         self.start_steps = start_steps

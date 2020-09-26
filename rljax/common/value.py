@@ -7,7 +7,13 @@ class ContinuousVFunction(nn.Module):
     Critic for PPO.
     """
 
-    def apply(self, x, num_critics=1, hidden_units=(64, 64), hidden_activation=nn.tanh):
+    def apply(
+        self,
+        x,
+        num_critics=1,
+        hidden_units=(64, 64),
+        hidden_activation=nn.tanh,
+    ):
         def v_func(x):
             for unit in hidden_units:
                 x = nn.Dense(x, features=unit)
@@ -25,7 +31,15 @@ class ContinuousQFunction(nn.Module):
     Critic for DDPG, TD3 and SAC.
     """
 
-    def apply(self, state, action, q1=False, num_critics=2, hidden_units=(400, 300), hidden_activation=nn.relu):
+    def apply(
+        self,
+        state,
+        action,
+        q1=False,
+        num_critics=2,
+        hidden_units=(400, 300),
+        hidden_activation=nn.relu,
+    ):
         x = jnp.concatenate([state, action], axis=1)
 
         def q_func(x):
@@ -47,7 +61,15 @@ class DiscreteQFunction(nn.Module):
     Critic for DQN and SAC-Discrete.
     """
 
-    def apply(self, x, action_dim, num_critics=1, hidden_units=(512,), hidden_activation=nn.relu, dueling_net=False):
+    def apply(
+        self,
+        x,
+        action_dim,
+        num_critics=1,
+        hidden_units=(512,),
+        hidden_activation=nn.relu,
+        dueling_net=False,
+    ):
         def q_func(x):
             a = x
             for unit in hidden_units:

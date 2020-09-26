@@ -9,7 +9,12 @@ class RolloutBuffer:
     Rollout Buffer.
     """
 
-    def __init__(self, buffer_size, state_space, action_space):
+    def __init__(
+        self,
+        buffer_size,
+        state_space,
+        action_space,
+    ):
         self._n = 0
         self._p = 0
         self.buffer_size = buffer_size

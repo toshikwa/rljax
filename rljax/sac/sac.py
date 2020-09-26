@@ -12,7 +12,7 @@ from rljax.sac.network import build_sac_actor, build_sac_critic, build_sac_log_a
 
 
 def critic_grad_fn(
-    rng: np.ndarray,
+    rng: jnp.ndarray,
     actor: nn.Model,
     critic: nn.Model,
     critic_target: nn.Model,
@@ -40,7 +40,7 @@ def critic_grad_fn(
 
 
 def actor_and_alpha_grad_fn(
-    rng: np.ndarray,
+    rng: jnp.ndarray,
     actor: nn.Model,
     critic: nn.Model,
     log_alpha: nn.Model,

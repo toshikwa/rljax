@@ -6,7 +6,12 @@ class SegmentTree:
     Segment tree.
     """
 
-    def __init__(self, size, op, value_init):
+    def __init__(
+        self,
+        size,
+        op,
+        value_init,
+    ):
         assert size > 0 and size & (size - 1) == 0
         self._size = size
         self._op = op

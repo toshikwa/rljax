@@ -10,6 +10,6 @@ install:
   - pip install --upgrade jaxlib jax
   - pip install -r requirements.txt
 script:
-  - export PYTHONPATH="$PYTHONPATH:$PWD"
+  - pip install -e .
   - black rljax --check
   - pytest --black tests

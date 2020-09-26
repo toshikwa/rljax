@@ -11,7 +11,11 @@ class NStepBuffer:
     Buffer for calculating n-step returns.
     """
 
-    def __init__(self, gamma=0.99, nstep=3):
+    def __init__(
+        self,
+        gamma=0.99,
+        nstep=3,
+    ):
         self.discounts = [gamma ** i for i in range(nstep)]
         self.nstep = nstep
         self.state = deque(maxlen=self.nstep)
@@ -51,7 +55,14 @@ class ReplayBuffer:
     Replay Buffer.
     """
 
-    def __init__(self, buffer_size, state_space, action_space, gamma, nstep):
+    def __init__(
+        self,
+        buffer_size,
+        state_space,
+        action_space,
+        gamma,
+        nstep,
+    ):
         self._n = 0
         self._p = 0
         self.buffer_size = buffer_size
