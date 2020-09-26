@@ -1,11 +1,6 @@
 import gym
 
-from rljax.ddpg import DDPG
-from rljax.dqn import DQN
-from rljax.ppo import PPO
-from rljax.sac import SAC
-from rljax.sac_discrete import SACDiscrete
-from rljax.td3 import TD3
+from rljax.algorithm import DDPG, DQN, PPO, SAC, TD3, SACDiscrete
 
 gym.logger.set_level(40)
 

@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+from functools import partial
 
+import jax
 from haiku import PRNGSequence
 from rljax.common.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
+from rljax.common.utils import soft_update
 
 
 class Algorithm(ABC):
@@ -135,7 +138,7 @@ class ContinuousOffPolicyAlgorithm(OffPolicyAlgorithm):
 
         self.batch_size = batch_size
         self.start_steps = start_steps
-        self.tau = tau
+        self._update_target = jax.jit(partial(soft_update, tau=tau))
 
     def is_update(self, step):
         return step >= self.start_steps
@@ -192,6 +195,7 @@ class DiscreteOffPolicyAlgorithm(OffPolicyAlgorithm):
         self.start_steps = start_steps
         self.update_interval = update_interval
         self.update_interval_target = update_interval_target
+        self._update_target = jax.jit(partial(soft_update, tau=1.0))
 
     def is_update(self, step):
         return step % self.update_interval == 0 and step >= self.start_steps

@@ -1,6 +1,7 @@
 import math
+from typing import Tuple
 
-import flax
+import haiku as hk
 import jax
 import jax.numpy as jnp
 
@@ -42,39 +43,35 @@ def evaluate_lop_pi(
 
 
 @jax.jit
+def reparameterize(
+    mean: jnp.ndarray,
+    log_std: jnp.ndarray,
+    key: jnp.ndarray,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    std = jnp.exp(log_std)
+    noise = jax.random.normal(key, std.shape)
+    action = jnp.tanh(mean + noise * std)
+    return action, calculate_log_pi(log_std, noise, action)
+
+
+@jax.jit
 def clip_gradient(
-    grad: flax.nn.Model,
+    grad,
     max_grad_norm: float,
-) -> flax.nn.Model:
+):
     """
     Clip gradients.
     """
-    params = jax.tree_multimap(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad.params)
-    return grad.replace(params=params)
+    return jax.tree_multimap(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad)
 
 
 @jax.jit
 def soft_update(
-    target: flax.nn.Model,
-    source: flax.nn.Model,
+    target_params: hk.Params,
+    online_params: hk.Params,
     tau: float,
-) -> flax.nn.Model:
-    """
-    Update target network using Polyak-Ruppert Averaging.
-    """
-    params = jax.tree_multimap(lambda t, s: tau * s + (1 - tau) * t, target.params, source.params)
-    return target.replace(params=params)
-
-
-@jax.jit
-def update_network(
-    optim: flax.optim.Optimizer,
-    grad: flax.nn.Model,
-) -> flax.optim.Optimizer:
-    """
-    Update the network with gradient information.
-    """
-    return optim.apply_gradient(grad)
+) -> hk.Params:
+    return jax.tree_multimap(lambda t, s: (1 - tau) * t + tau * s, target_params, online_params)
 
 
 @jax.jit
