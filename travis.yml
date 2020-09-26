@@ -1,0 +1,15 @@
+language: python
+dist: xenial
+cache: pip
+python:
+  - "3.6"
+  - "3.7"
+  - "3.8"
+install:
+  - pip install --upgrade pip setuptools wheel black pytest-black
+  - pip install --upgrade jaxlib jax
+  - pip install -r requirements.txt
+script:
+  - export PYTHONPATH="$PYTHONPATH:$PWD"
+  - black rljax --check
+  - pytest --black tests

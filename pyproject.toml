@@ -1,0 +1,12 @@
+[tool.black]
+line-length = 127
+target-version = ['py36', 'py37', 'py38']
+exclude = '''
+/(
+    .vscode
+  | .git
+  | .__pycache__
+  | .tox
+  | .pytest_cache
+)/
+'''
