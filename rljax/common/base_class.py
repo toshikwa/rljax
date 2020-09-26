@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from haiku import PRNGSequence
-from rljax.common.buffer import PrioritizedReplayBuffer, ReplayBuffer
+from rljax.common.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
 
 
 class Algorithm(ABC):
@@ -49,6 +49,23 @@ class OffPolicyAlgorithm(Algorithm):
             action_space=action_space,
             gamma=gamma,
             nstep=nstep,
+        )
+
+
+class OnPolicyAlgorithm(Algorithm):
+    """
+    Base class for on-policy algorithms.
+    """
+
+    def __init__(self, state_space, action_space, seed, gamma, buffer_size):
+        super(OnPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma)
+
+        self.discount = gamma
+        self.buffer_size = buffer_size
+        self.buffer = RolloutBuffer(
+            buffer_size=buffer_size,
+            state_space=state_space,
+            action_space=action_space,
         )
 
 
@@ -126,3 +143,26 @@ class DiscreteOffPolicyAlgorithm(OffPolicyAlgorithm):
 
     def is_update(self, step):
         return step % self.update_interval == 0 and step >= self.start_steps
+
+
+class ContinuousOnPolicyAlgorithm(OnPolicyAlgorithm):
+    """
+    Base class for continuous on-policy algorithms.
+    """
+
+    def is_update(self, step):
+        return step % self.buffer_size == 0
+
+    def step(self, env, state, t, step):
+        t += 1
+
+        action, log_pi = self.explore(state)
+        next_state, reward, done, _ = env.step(action)
+        mask = False if t == env._max_episode_steps else done
+        self.buffer.append(state, action, reward, mask, log_pi, next_state)
+
+        if done:
+            t = 0
+            next_state = env.reset()
+
+        return next_state, t

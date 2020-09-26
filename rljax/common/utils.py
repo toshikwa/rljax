@@ -16,6 +16,18 @@ def calculate_log_pi(log_std: jnp.ndarray, noise: jnp.ndarray, action: jnp.ndarr
 
 
 @jax.jit
+def evaluate_lop_pi(mean, log_std, action):
+    noise = (jnp.arctanh(action) - mean) / (jnp.exp(log_std) + 1e-8)
+    return calculate_log_pi(log_std, noise, action)
+
+
+@jax.jit
+def clip_gradient(grad: flax.nn.Model, max_grad_norm: float) -> flax.nn.Model:
+    params = jax.tree_multimap(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad.params)
+    return grad.replace(params=params)
+
+
+@jax.jit
 def soft_update(target: flax.nn.Model, source: flax.nn.Model, tau: float) -> flax.nn.Model:
     params = jax.tree_multimap(lambda t, s: tau * s + (1 - tau) * t, target.params, source.params)
     return target.replace(params=params)

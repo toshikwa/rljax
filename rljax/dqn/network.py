@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from flax import nn
-from rljax.common.q_function import DiscreteQFunction
+from rljax.common.value import DiscreteQFunction
 
 
 def build_dqn(state_dim, action_dim, rng_init, hidden_units=(512,), dueling_net=True):

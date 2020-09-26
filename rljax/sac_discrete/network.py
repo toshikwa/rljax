@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from flax import nn
 from rljax.common.policy import CategoricalPolicy
-from rljax.common.q_function import DiscreteQFunction
+from rljax.common.value import DiscreteQFunction
 
 
 def build_sac_discrete_actor(state_dim, action_dim, rng_init, hidden_units=(512,)):

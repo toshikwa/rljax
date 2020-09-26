@@ -3,6 +3,7 @@ Rljax is a collection of RL algorithms written in JAX.
 
 Currently, following algorithms have been implemented.
 
+- [x] Proximal Policy Optimization(PPO)
 - [x] Deep Deterministic Policy Gradient(DDPG)
 - [x] Twin Delayed DDPG(TD3)
 - [x] Soft Actor-Critic(SAC)
@@ -15,7 +16,6 @@ Currently, following algorithms have been implemented.
 
 We plan to implement the following algorithms in the future.
 
-- [ ] Proximal Policy Optimization(PPO)
 - [ ] Quantile Regression DQN(QR-DQN)
 - [ ] Implicit Quantile Network(IQN)
 

@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from flax import nn
 from rljax.common.policy import DeterministicPolicy
-from rljax.common.q_function import ContinuousQFunction
+from rljax.common.value import ContinuousQFunction
 
 
 def build_td3_actor(state_dim, action_dim, rng_init, hidden_units=(400, 300)):

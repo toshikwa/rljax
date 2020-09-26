@@ -36,8 +36,8 @@ def run(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--algo", type=str, default="sac")
-    p.add_argument("--num_steps", type=int, default=100000)
-    p.add_argument("--eval_interval", type=int, default=2000)
+    p.add_argument("--num_steps", type=int, default=50000)
+    p.add_argument("--eval_interval", type=int, default=1000)
     p.add_argument("--env_id", type=str, default="InvertedPendulum-v2")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()

@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from flax import nn
 from rljax.common.policy import StateDependentGaussianPolicy
-from rljax.common.q_function import ContinuousQFunction
+from rljax.common.value import ContinuousQFunction
 
 
 class LogAlpha(nn.Module):
