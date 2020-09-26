@@ -1,5 +1,5 @@
 import math
-from typing import Tuple
+from typing import Any, Tuple
 
 import haiku as hk
 import jax
@@ -34,7 +34,7 @@ def evaluate_lop_pi(
     mean: jnp.ndarray,
     log_std: jnp.ndarray,
     action: jnp.ndarray,
-):
+) -> jnp.ndarray:
     """
     Calculate log probabilities of the policies given sampled actions.
     """
@@ -48,6 +48,9 @@ def reparameterize(
     log_std: jnp.ndarray,
     key: jnp.ndarray,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Calculate stochastic actions and log probabilities.
+    """
     std = jnp.exp(log_std)
     noise = jax.random.normal(key, std.shape)
     action = jnp.tanh(mean + noise * std)
@@ -56,9 +59,9 @@ def reparameterize(
 
 @jax.jit
 def clip_gradient(
-    grad,
+    grad: Any,
     max_grad_norm: float,
-):
+) -> Any:
     """
     Clip gradients.
     """
@@ -71,6 +74,9 @@ def soft_update(
     online_params: hk.Params,
     tau: float,
 ) -> hk.Params:
+    """
+    Update target network using Polyak-Ruppert Averaging.
+    """
     return jax.tree_multimap(lambda t, s: (1 - tau) * t + tau * s, target_params, online_params)
 
 

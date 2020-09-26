@@ -10,8 +10,8 @@ from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import DiscreteOffPolicyAlgorithm
 from rljax.algorithm.sac import build_log_alpha
-from rljax.common.actor import CategoricalPolicy
-from rljax.common.critic import DiscreteQFunction
+from rljax.network.actor import CategoricalPolicy
+from rljax.network.critic import DiscreteQFunction
 
 
 def build_sac_discrete_critic(action_dim, hidden_units, dueling_net):
@@ -92,7 +92,6 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         opt_init_actor, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), np.zeros((1, *state_space.shape), np.float32))
         self.opt_state_actor = opt_init_actor(self.params_actor)
-        self.forward = jax.jit(partial(self.actor.apply))
 
         # Entropy coefficient.
         self.target_entropy = -np.log(1.0 / action_space.n) * target_entropy_ratio
@@ -100,13 +99,22 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         self.opt_alpha = flax.optim.Adam(learning_rate=lr_alpha).create(log_alpha)
 
     def select_action(self, state):
-        pi, _ = self.forward(self.params_actor, None, state[None, ...])
-        return np.argmax(pi)
+        action = self._select_action(self.params_actor, state[None, ...])
+        return np.array(action[0])
 
     def explore(self, state):
-        pi, _ = self.forward(self.params_actor, None, state[None, ...])
-        action = jax.random.categorical(next(self.rng), pi)
+        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0])
+
+    @partial(jax.jit, static_argnums=0)
+    def _select_action(self, params_actor, state):
+        pi, _ = self.actor.apply(params_actor, None, state)
+        return jnp.argmax(pi, axis=1)
+
+    @partial(jax.jit, static_argnums=0)
+    def _explore(self, params_actor, rng, state):
+        pi, _ = self.actor.apply(params_actor, None, state)
+        return jax.random.categorical(rng, pi)
 
     def step(self, env, state, t, step):
         t += 1

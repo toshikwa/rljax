@@ -8,9 +8,9 @@ import jax
 import jax.numpy as jnp
 from jax.experimental import optix
 from rljax.algorithm.base import ContinuousOnPolicyAlgorithm
-from rljax.common.actor import StateIndependentGaussianPolicy
-from rljax.common.critic import ContinuousVFunction
-from rljax.common.utils import clip_gradient, evaluate_lop_pi, reparameterize
+from rljax.network.actor import StateIndependentGaussianPolicy
+from rljax.network.critic import ContinuousVFunction
+from rljax.utils import clip_gradient, evaluate_lop_pi, reparameterize
 
 
 def build_ppo_critic(action_dim, hidden_units):
@@ -79,7 +79,6 @@ class PPO(ContinuousOnPolicyAlgorithm):
             next(self.rng), np.zeros((1, *state_space.shape), np.float32)
         )
         self.opt_state_actor = opt_init_actor(self.params_actor)
-        self.forward = jax.jit(self.actor.apply)
 
         # Other parameters.
         self.epoch_ppo = epoch_ppo
@@ -88,14 +87,22 @@ class PPO(ContinuousOnPolicyAlgorithm):
         self.max_grad_norm = max_grad_norm
 
     def select_action(self, state):
-        mean, _ = self.forward(self.params_actor, None, state[None, ...])
-        action = jnp.tanh(mean)
+        action = self._select_action(self.params_actor, state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
-        mean, log_std = self.forward(self.params_actor, None, state[None, ...])
-        action, log_pi = reparameterize(mean, log_std, next(self.rng))
+        action, log_pi = self._explore(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0]), np.array(log_pi[0])
+
+    @partial(jax.jit, static_argnums=0)
+    def _select_action(self, params_actor, state):
+        mean, _ = self.actor.apply(params_actor, None, state)
+        return jnp.tanh(mean)
+
+    @partial(jax.jit, static_argnums=0)
+    def _explore(self, params_actor, rng, state):
+        mean, log_std = self.actor.apply(params_actor, None, state)
+        return reparameterize(mean, log_std, rng)
 
     def update(self):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()

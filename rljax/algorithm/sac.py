@@ -9,9 +9,9 @@ import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import ContinuousOffPolicyAlgorithm
-from rljax.common.actor import StateDependentGaussianPolicy
-from rljax.common.critic import ContinuousQFunction
-from rljax.common.utils import reparameterize
+from rljax.network.actor import StateDependentGaussianPolicy
+from rljax.network.critic import ContinuousQFunction
+from rljax.utils import reparameterize
 
 
 class LogAlpha(flax.nn.Module):
@@ -99,7 +99,6 @@ class SAC(ContinuousOffPolicyAlgorithm):
         opt_init_actor, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), np.zeros((1, *state_space.shape), np.float32))
         self.opt_state_actor = opt_init_actor(self.params_actor)
-        self.forward = jax.jit(self.actor.apply)
 
         # Entropy coefficient.
         self.target_entropy = -float(action_space.shape[0])
@@ -107,14 +106,22 @@ class SAC(ContinuousOffPolicyAlgorithm):
         self.opt_alpha = flax.optim.Adam(lr_alpha).create(log_alpha)
 
     def select_action(self, state):
-        mean, _ = self.forward(self.params_actor, None, state[None, ...])
-        action = jnp.tanh(mean)
+        action = self._select_action(self.params_actor, state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
-        mean, log_std = self.forward(self.params_actor, None, state[None, ...])
-        action, _ = reparameterize(mean, log_std, next(self.rng))
+        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0])
+
+    @partial(jax.jit, static_argnums=0)
+    def _select_action(self, params_actor, state):
+        mean, _ = self.actor.apply(params_actor, None, state)
+        return jnp.tanh(mean)
+
+    @partial(jax.jit, static_argnums=0)
+    def _explore(self, params_actor, rng, state):
+        mean, log_std = self.actor.apply(params_actor, None, state)
+        return reparameterize(mean, log_std, rng)[0]
 
     def update(self):
         self.learning_steps += 1

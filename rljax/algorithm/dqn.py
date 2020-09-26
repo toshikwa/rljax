@@ -9,8 +9,8 @@ import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import DiscreteOffPolicyAlgorithm
-from rljax.common.critic import DiscreteQFunction
-from rljax.common.utils import soft_update
+from rljax.network.critic import DiscreteQFunction
+from rljax.utils import soft_update
 
 
 def build_dqn(action_dim, hidden_units, dueling_net):
@@ -69,7 +69,6 @@ class DQN(DiscreteOffPolicyAlgorithm):
         opt_init, self.opt = optix.adam(lr)
         self.params = self.params_target = self.dqn.init(next(self.rng), np.zeros((1, *state_space.shape), np.float32))
         self.opt_state = opt_init(self.params)
-        self.forward = jax.jit(self.dqn.apply)
 
         # Other parameters.
         self.eps = eps
@@ -80,9 +79,14 @@ class DQN(DiscreteOffPolicyAlgorithm):
         if np.random.rand() < self.eps_eval:
             action = self.action_space.sample()
         else:
-            action = self.forward(self.params, None, state[None, ...])
-            action = np.argmax(action[0])
+            action = self._select_action(self.params, state[None, ...])
+            action = np.array(action[0])
         return action
+
+    @partial(jax.jit, static_argnums=0)
+    def _select_action(self, params, state):
+        q = self.dqn.apply(params, None, state)
+        return jnp.argmax(q, axis=1)
 
     def step(self, env, state, t, step):
         t += 1

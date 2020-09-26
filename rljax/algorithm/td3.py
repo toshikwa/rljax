@@ -8,9 +8,9 @@ import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import ContinuousOffPolicyAlgorithm
-from rljax.common.actor import DeterministicPolicy
-from rljax.common.critic import ContinuousQFunction
-from rljax.common.utils import add_noise
+from rljax.network.actor import DeterministicPolicy
+from rljax.network.critic import ContinuousQFunction
+from rljax.utils import add_noise
 
 
 def build_td3_critic(action_dim, hidden_units):
@@ -88,7 +88,6 @@ class TD3(ContinuousOffPolicyAlgorithm):
             next(self.rng), np.zeros((1, *state_space.shape), np.float32)
         )
         self.opt_state_actor = opt_init_actor(self.params_actor)
-        self.forward = jax.jit(self.actor.apply)
 
         # Other parameters.
         self.std = std
@@ -97,13 +96,21 @@ class TD3(ContinuousOffPolicyAlgorithm):
         self.update_interval_policy = update_interval_policy
 
     def select_action(self, state):
-        action = self.forward(self.params_actor, None, state[None, ...])
+        action = self._select_action(self.params_actor, state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
-        action = self.forward(self.params_actor, None, state[None, ...])
-        action = add_noise(action, next(self.rng), self.std, -1.0, 1.0)
+        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0])
+
+    @partial(jax.jit, static_argnums=0)
+    def _select_action(self, params_actor, state):
+        return self.actor.apply(params_actor, None, state)
+
+    @partial(jax.jit, static_argnums=0)
+    def _explore(self, params_actor, rng, state):
+        action = self.actor.apply(params_actor, None, state)
+        return add_noise(action, rng, self.std, -1.0, 1.0)
 
     def update(self):
         self.learning_steps += 1

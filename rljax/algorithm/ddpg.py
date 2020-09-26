@@ -8,9 +8,9 @@ import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import ContinuousOffPolicyAlgorithm
-from rljax.common.actor import DeterministicPolicy
-from rljax.common.critic import ContinuousQFunction
-from rljax.common.utils import add_noise
+from rljax.network.actor import DeterministicPolicy
+from rljax.network.critic import ContinuousQFunction
+from rljax.utils import add_noise
 
 
 def build_ddpg_critic(action_dim, hidden_units):
@@ -65,39 +65,38 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         )
 
         # Critic.
-        self.critic = build_ddpg_critic(
-            action_dim=action_space.shape[0],
-            hidden_units=units_actor,
-        )
+        fake_input = np.zeros((1, state_space.shape[0] + action_space.shape[0]), np.float32)
+        self.critic = build_ddpg_critic(action_space.shape[0], units_actor)
         opt_init_critic, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(
-            next(self.rng), np.zeros((1, state_space.shape[0] + action_space.shape[0]), np.float32)
-        )
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
         self.opt_state_critic = opt_init_critic(self.params_critic)
 
         # Actor.
-        self.actor = build_ddpg_actor(
-            action_dim=action_space.shape[0],
-            hidden_units=units_actor,
-        )
+        fake_input = np.zeros((1, *state_space.shape), np.float32)
+        self.actor = build_ddpg_actor(action_space.shape[0], units_actor)
         opt_init_actor, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.params_actor_target = self.actor.init(
-            next(self.rng), np.zeros((1, *state_space.shape), np.float32)
-        )
+        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), fake_input)
         self.opt_state_actor = opt_init_actor(self.params_actor)
-        self.forward = jax.jit(self.actor.apply)
 
         # Other parameters.
         self.std = std
 
     def select_action(self, state):
-        action = self.forward(self.params_actor, None, state[None, ...])
+        action = self._select_action(self.params_actor, state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
-        action = self.forward(self.params_actor, None, state[None, ...])
-        action = add_noise(action, next(self.rng), self.std, -1.0, 1.0)
+        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0])
+
+    @partial(jax.jit, static_argnums=0)
+    def _select_action(self, params_actor, state):
+        return self.actor.apply(params_actor, None, state)
+
+    @partial(jax.jit, static_argnums=0)
+    def _explore(self, params_actor, rng, state):
+        action = self.actor.apply(params_actor, None, state)
+        return add_noise(action, rng, self.std, -1.0, 1.0)
 
     def update(self):
         self.learning_steps += 1

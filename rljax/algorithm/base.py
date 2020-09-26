@@ -3,8 +3,8 @@ from functools import partial
 
 import jax
 from haiku import PRNGSequence
-from rljax.common.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
-from rljax.common.utils import soft_update
+from rljax.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
+from rljax.utils import soft_update
 
 
 class Algorithm(ABC):

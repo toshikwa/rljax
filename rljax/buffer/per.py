@@ -4,8 +4,8 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
-from rljax.common.buffer.replay_buffer import ReplayBuffer
-from rljax.common.buffer.segment_tree import MinTree, SumTree
+from rljax.buffer.replay_buffer import ReplayBuffer
+from rljax.buffer.segment_tree import MinTree, SumTree
 
 
 def calculate_pa(

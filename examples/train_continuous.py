@@ -5,7 +5,7 @@ from datetime import datetime
 import gym
 
 from rljax import CONTINUOUS_ALGOS
-from rljax.common.trainer import Trainer
+from rljax.trainer import Trainer
 
 
 def run(args):
