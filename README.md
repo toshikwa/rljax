@@ -1,3 +1,5 @@
+**WARNING: Rljax is currently in a beta version and being actively improved. Any contributions are welcome :)**
+
 # RL Algorithms in JAX
 Rljax is a collection of RL algorithms written in JAX.
 
