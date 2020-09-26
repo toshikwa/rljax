@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from haiku import PRNGSequence
-from rljax.common.buffer import ReplayBuffer
+from rljax.common.buffer import PrioritizedReplayBuffer, ReplayBuffer
 
 
 class Algorithm(ABC):
@@ -38,11 +38,12 @@ class OffPolicyAlgorithm(Algorithm):
     Base class for off-policy algorithms.
     """
 
-    def __init__(self, state_space, action_space, seed, gamma, nstep, buffer_size):
+    def __init__(self, state_space, action_space, seed, gamma, nstep, buffer_size, use_per):
         super(OffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma)
 
         self.discount = gamma ** nstep
-        self.buffer = ReplayBuffer(
+        self.use_per = use_per
+        self.buffer = (PrioritizedReplayBuffer if use_per else ReplayBuffer)(
             buffer_size=buffer_size,
             state_space=state_space,
             action_space=action_space,
@@ -64,11 +65,12 @@ class ContinuousOffPolicyAlgorithm(OffPolicyAlgorithm):
         gamma,
         nstep,
         buffer_size,
+        use_per,
         batch_size,
         start_steps,
         tau,
     ):
-        super(ContinuousOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size)
+        super(ContinuousOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size, use_per)
 
         self.batch_size = batch_size
         self.start_steps = start_steps
@@ -109,12 +111,13 @@ class DiscreteOffPolicyAlgorithm(OffPolicyAlgorithm):
         gamma,
         nstep,
         buffer_size,
+        use_per,
         batch_size,
         start_steps,
         update_interval,
         update_interval_target,
     ):
-        super(DiscreteOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size)
+        super(DiscreteOffPolicyAlgorithm, self).__init__(state_space, action_space, seed, gamma, nstep, buffer_size, use_per)
 
         self.batch_size = batch_size
         self.start_steps = start_steps

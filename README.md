@@ -6,13 +6,16 @@ Currently, following algorithms have been implemented.
 - [x] Deep Deterministic Policy Gradient(DDPG)
 - [x] Twin Delayed DDPG(TD3)
 - [x] Soft Actor-Critic(SAC)
-- [x] Deep Q Network(DQN) with Dueling Network and Double Q-Learning.
+- [x] Deep Q Network(DQN)
+- [x] N-step return
+- [x] Dueling Network
+- [x] Double Q-Learning
+- [x] Prioritized Experience Replay(PER)
 - [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
 
 We plan to implement the following algorithms in the future.
 
 - [ ] Proximal Policy Optimization(PPO)
-- [ ] Prioritized Experience Replay(PER)
 - [ ] Quantile Regression DQN(QR-DQN)
 - [ ] Implicit Quantile Network(IQN)
 

@@ -17,6 +17,7 @@ def critic_grad_fn(
     critic: nn.Model,
     critic_target: nn.Model,
     log_alpha: nn.Model,
+    weight: jnp.ndarray,
     discount: float,
     state: jnp.ndarray,
     action: jnp.ndarray,
@@ -31,14 +32,15 @@ def critic_grad_fn(
     target_q = jax.lax.stop_gradient(reward + (1.0 - done) * discount * next_q)
 
     def _loss(action, curr_q1, curr_q2, target_q):
-        return jnp.square(target_q - curr_q1[action]) + jnp.square(target_q - curr_q2[action])
+        return jnp.abs(target_q - curr_q1[action]), jnp.abs(target_q - curr_q2[action])
 
     def critic_loss_fn(critic):
         curr_q1, curr_q2 = critic(state)
-        return jax.vmap(_loss)(action, curr_q1, curr_q2, target_q).mean()
+        td_error1, td_error2 = jax.vmap(_loss)(action, curr_q1, curr_q2, target_q)
+        return jnp.mean(jnp.square(td_error1) + jnp.square(td_error2)), jax.lax.stop_gradient(td_error1)
 
-    grad_critic = jax.grad(critic_loss_fn)(critic)
-    return grad_critic
+    grad_critic, td_error = jax.grad(critic_loss_fn, has_aux=True)(critic)
+    return grad_critic, td_error
 
 
 def actor_and_alpha_grad_fn(
@@ -79,6 +81,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
+        use_per=False,
         batch_size=256,
         start_steps=1000,
         update_interval=1,
@@ -96,6 +99,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
+            use_per=use_per,
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
@@ -171,14 +175,16 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
 
     def update(self):
         self.learning_steps += 1
-        state, action, reward, done, next_state = self.buffer.sample(self.batch_size)
+        weight, batch = self.buffer.sample(self.batch_size)
+        state, action, reward, done, next_state = batch
 
         # Update critic.
-        grad_critic = self.critic_grad_fn(
+        grad_critic, td_error = self.critic_grad_fn(
             actor=self.actor,
             critic=self.critic,
             critic_target=self.critic_target,
             log_alpha=self.log_alpha,
+            weight=weight,
             state=state,
             action=action,
             reward=reward,
@@ -186,6 +192,10 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
             next_state=next_state,
         )
         self.optim_critic = update_network(self.optim_critic, grad_critic)
+
+        # Update priority.
+        if self.use_per:
+            self.buffer.update_priority(td_error)
 
         # Update actor and log alpha.
         grad_actor, grad_alpha = self.actor_and_alpha_grad_fn(

@@ -99,8 +99,10 @@ class ReplayBuffer:
         self._p = (self._p + 1) % self.buffer_size
         self._n = min(self._n + 1, self.buffer_size)
 
-    def sample(self, batch_size):
-        idxes = np.random.randint(low=0, high=self._n, size=batch_size)
+    def _sample_idx(self, batch_size):
+        return np.random.randint(low=0, high=self._n, size=batch_size)
+
+    def _sample(self, idxes):
         return (
             jax.device_put(self.state[idxes]),
             jax.device_put(self.action[idxes]),
@@ -108,3 +110,10 @@ class ReplayBuffer:
             jax.device_put(self.done[idxes]),
             jax.device_put(self.next_state[idxes]),
         )
+
+    def sample(self, batch_size):
+        idxes = self._sample_idx(batch_size)
+        batch = self._sample(idxes)
+        # Use fake weight to use the same interface with PER.
+        weight = jax.device_put(np.array([1], dtype=np.float32))
+        return weight, batch

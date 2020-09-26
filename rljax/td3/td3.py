@@ -80,6 +80,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
+            use_per=False,
             batch_size=batch_size,
             start_steps=start_steps,
             tau=tau,
@@ -145,7 +146,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
 
     def update(self):
         self.learning_steps += 1
-        state, action, reward, done, next_state = self.buffer.sample(self.batch_size)
+        _, (state, action, reward, done, next_state) = self.buffer.sample(self.batch_size)
 
         # Update critic.
         grad_critic = self.critic_grad_fn(

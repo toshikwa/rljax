@@ -22,6 +22,7 @@ def _calculate_double_q(
 def grad_fn(
     dqn: nn.Model,
     dqn_target: nn.Model,
+    weight: jnp.ndarray,
     discount: float,
     double_q: bool,
     state: jnp.ndarray,
@@ -37,14 +38,15 @@ def grad_fn(
     target_q = jax.lax.stop_gradient(reward + (1.0 - done) * discount * next_q)
 
     def _loss(action, curr_q, target_q):
-        return jnp.square(target_q - curr_q[action])
+        return jnp.abs(target_q - curr_q[action])
 
     def loss_fn(dqn):
         curr_q = dqn(state)
-        return jax.vmap(_loss)(action, curr_q, target_q).mean()
+        td_error = jax.vmap(_loss)(action, curr_q, target_q)
+        return jnp.mean(jnp.square(td_error) * weight), jax.lax.stop_gradient(td_error)
 
-    grad = jax.grad(loss_fn)(dqn)
-    return grad
+    grad, td_error = jax.grad(loss_fn, has_aux=True)(dqn)
+    return grad, td_error
 
 
 class DQN(DiscreteOffPolicyAlgorithm):
@@ -56,6 +58,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
+        use_per=False,
         batch_size=256,
         start_steps=1000,
         eps=0.01,
@@ -75,6 +78,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
             nstep=nstep,
             buffer_size=buffer_size,
             batch_size=batch_size,
+            use_per=use_per,
             start_steps=start_steps,
             update_interval=update_interval,
             update_interval_target=update_interval_target,
@@ -138,12 +142,14 @@ class DQN(DiscreteOffPolicyAlgorithm):
 
     def update(self):
         self.learning_steps += 1
-        state, action, reward, done, next_state = self.buffer.sample(self.batch_size)
+        weight, batch = self.buffer.sample(self.batch_size)
+        state, action, reward, done, next_state = batch
 
         # Update.
-        grad = self.grad_fn(
+        grad, td_error = self.grad_fn(
             dqn=self.dqn,
             dqn_target=self.dqn_target,
+            weight=weight,
             state=state,
             action=action,
             reward=reward,
@@ -151,6 +157,10 @@ class DQN(DiscreteOffPolicyAlgorithm):
             next_state=next_state,
         )
         self.optim = update_network(self.optim, grad)
+
+        # Update priority.
+        if self.use_per:
+            self.buffer.update_priority(td_error)
 
         # Update target network.
         if (self.learning_steps * self.update_interval) % self.update_interval_target == 0:
