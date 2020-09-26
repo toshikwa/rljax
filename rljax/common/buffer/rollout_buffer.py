@@ -1,8 +1,6 @@
 import numpy as np
 from gym.spaces import Box, Discrete
 
-import jax
-
 
 class RolloutBuffer:
     """
@@ -45,10 +43,10 @@ class RolloutBuffer:
 
     def get(self):
         return (
-            jax.device_put(self.state),
-            jax.device_put(self.action),
-            jax.device_put(self.reward),
-            jax.device_put(self.done),
-            jax.device_put(self.log_pi),
-            jax.device_put(self.next_state),
+            self.state,
+            self.action,
+            self.reward,
+            self.done,
+            self.log_pi,
+            self.next_state,
         )

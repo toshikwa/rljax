@@ -19,11 +19,11 @@ def critic_grad_fn(
     log_alpha: nn.Model,
     weight: jnp.ndarray,
     discount: float,
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    done: jnp.ndarray,
-    next_state: jnp.ndarray,
+    state: np.ndarray,
+    action: np.ndarray,
+    reward: np.ndarray,
+    done: np.ndarray,
+    next_state: np.ndarray,
 ) -> nn.Model:
     alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
     pi, log_pi = actor(next_state)
@@ -48,7 +48,7 @@ def actor_and_alpha_grad_fn(
     critic: nn.Model,
     log_alpha: nn.Model,
     target_entropy: float,
-    state: jnp.ndarray,
+    state: np.ndarray,
 ) -> Tuple[nn.Model, nn.Model]:
     alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
     curr_q1, curr_q2 = critic(state)
@@ -147,13 +147,11 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         self.actor_and_alpha_grad_fn = jax.jit(partial(actor_and_alpha_grad_fn, target_entropy=target_entropy))
 
     def select_action(self, state):
-        state = jax.device_put(state[None, ...])
-        pi, _ = self.actor(state)
+        pi, _ = self.actor(state[None, ...])
         return np.argmax(pi)
 
     def explore(self, state):
-        state = jax.device_put(state[None, ...])
-        pi, _ = self.actor(state)
+        pi, _ = self.actor(state[None, ...])
         action = jax.random.categorical(next(self.rng), pi)
         return np.array(action[0])
 

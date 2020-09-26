@@ -18,11 +18,11 @@ def critic_grad_fn(
     discount: float,
     std_target: float,
     clip_noise: float,
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    done: jnp.ndarray,
-    next_state: jnp.ndarray,
+    state: np.ndarray,
+    action: np.ndarray,
+    reward: np.ndarray,
+    done: np.ndarray,
+    next_state: np.ndarray,
 ) -> nn.Model:
     next_action = actor_target(next_state)
     noises = jax.random.normal(rng, next_action.shape) * std_target
@@ -42,7 +42,7 @@ def critic_grad_fn(
 def actor_grad_fn(
     actor: nn.Model,
     critic: nn.Model,
-    state: jnp.ndarray,
+    state: np.ndarray,
 ) -> nn.Model:
     def actor_loss_fn(actor):
         loss_actor = -critic(state, actor(state), q1=True).mean()
@@ -131,13 +131,11 @@ class TD3(ContinuousOffPolicyAlgorithm):
         self.update_interval_policy = update_interval_policy
 
     def select_action(self, state):
-        state = jax.device_put(state[None, ...])
-        action = self.actor(state)
+        action = self.actor(state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
-        state = jax.device_put(state[None, ...])
-        action = self.actor(state)
+        action = self.actor(state[None, ...])
         action = add_noise(action, next(self.rng), self.std, -1.0, 1.0)
         return np.array(action[0])
 

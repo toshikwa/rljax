@@ -15,11 +15,11 @@ def critic_grad_fn(
     actor_target: nn.Model,
     critic_target: nn.Model,
     discount: float,
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    done: jnp.ndarray,
-    next_state: jnp.ndarray,
+    state: np.ndarray,
+    action: np.ndarray,
+    reward: np.ndarray,
+    done: np.ndarray,
+    next_state: np.ndarray,
 ) -> nn.Model:
     next_action = actor_target(next_state)
     next_q = critic_target(next_state, next_action)
@@ -37,7 +37,7 @@ def critic_grad_fn(
 def actor_grad_fn(
     actor: nn.Model,
     critic: nn.Model,
-    state: jnp.ndarray,
+    state: np.ndarray,
 ) -> nn.Model:
     def actor_loss_fn(actor):
         loss_actor = -critic(state, actor(state)).mean()
@@ -121,13 +121,11 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         self.std = std
 
     def select_action(self, state):
-        state = jax.device_put(state[None, ...])
-        action = self.actor(state)
+        action = self.actor(state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
-        state = jax.device_put(state[None, ...])
-        action = self.actor(state)
+        action = self.actor(state[None, ...])
         action = add_noise(action, next(self.rng), self.std, -1.0, 1.0)
         return np.array(action[0])
 

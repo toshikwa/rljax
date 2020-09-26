@@ -18,11 +18,11 @@ def critic_grad_fn(
     critic_target: nn.Model,
     log_alpha: nn.Model,
     discount: float,
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    done: jnp.ndarray,
-    next_state: jnp.ndarray,
+    state: np.ndarray,
+    action: np.ndarray,
+    reward: np.ndarray,
+    done: np.ndarray,
+    next_state: np.ndarray,
 ) -> nn.Model:
     alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
     next_action, next_log_pi = actor(next_state, key=rng, deterministic=False)
@@ -45,7 +45,7 @@ def actor_and_alpha_grad_fn(
     critic: nn.Model,
     log_alpha: nn.Model,
     target_entropy: float,
-    state: jnp.ndarray,
+    state: np.ndarray,
 ) -> Tuple[nn.Model, nn.Model]:
     alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
 
@@ -135,13 +135,11 @@ class SAC(ContinuousOffPolicyAlgorithm):
         self.actor_and_alpha_grad_fn = jax.jit(partial(actor_and_alpha_grad_fn, target_entropy=target_entropy))
 
     def select_action(self, state):
-        state = jax.device_put(state[None, ...])
-        action = self.actor(state, deterministic=True)
+        action = self.actor(state[None, ...], deterministic=True)
         return np.array(action[0])
 
     def explore(self, state):
-        state = jax.device_put(state[None, ...])
-        action, _ = self.actor(state, key=next(self.rng), deterministic=False)
+        action, _ = self.actor(state[None, ...], key=next(self.rng), deterministic=False)
         return np.array(action[0])
 
     def update(self):

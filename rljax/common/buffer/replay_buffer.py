@@ -3,8 +3,6 @@ from collections import deque
 import numpy as np
 from gym.spaces import Box, Discrete
 
-import jax
-
 
 class NStepBuffer:
     """
@@ -115,16 +113,16 @@ class ReplayBuffer:
 
     def _sample(self, idxes):
         return (
-            jax.device_put(self.state[idxes]),
-            jax.device_put(self.action[idxes]),
-            jax.device_put(self.reward[idxes]),
-            jax.device_put(self.done[idxes]),
-            jax.device_put(self.next_state[idxes]),
+            self.state[idxes],
+            self.action[idxes],
+            self.reward[idxes],
+            self.done[idxes],
+            self.next_state[idxes],
         )
 
     def sample(self, batch_size):
         idxes = self._sample_idx(batch_size)
         batch = self._sample(idxes)
         # Use fake weight to use the same interface with PER.
-        weight = jax.device_put(np.array([1], dtype=np.float32))
+        weight = np.array([1], dtype=np.float32)
         return weight, batch

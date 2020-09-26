@@ -25,11 +25,11 @@ def grad_fn(
     weight: jnp.ndarray,
     discount: float,
     double_q: bool,
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    done: jnp.ndarray,
-    next_state: jnp.ndarray,
+    state: np.ndarray,
+    action: np.ndarray,
+    reward: np.ndarray,
+    done: np.ndarray,
+    next_state: np.ndarray,
 ) -> nn.Model:
     if double_q:
         next_q = jax.vmap(_calculate_double_q)(dqn(next_state), dqn_target(next_state))
@@ -115,8 +115,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
         if np.random.rand() < self.eps_eval:
             action = self.action_space.sample()
         else:
-            state = jax.device_put(state[None, ...])
-            action = self.dqn(state)
+            action = self.dqn(state[None, ...])
             action = np.argmax(action[0])
         return action
 

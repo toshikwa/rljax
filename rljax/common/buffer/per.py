@@ -8,7 +8,13 @@ from rljax.common.buffer.replay_buffer import ReplayBuffer
 from rljax.common.buffer.segment_tree import MinTree, SumTree
 
 
-def calculate_pa(error, alpha, min_pa, max_pa, eps):
+def calculate_pa(
+    error: jnp.ndarray,
+    alpha: float,
+    min_pa: float,
+    max_pa: float,
+    eps: float,
+) -> jnp.ndarray:
     return jnp.clip((error + eps) ** alpha, min_pa, max_pa)
 
 
@@ -72,13 +78,12 @@ class PrioritizedReplayBuffer(ReplayBuffer):
     def _calculate_weight(self, idxes):
         min_pa = self.tree_min.reduce()
         weight = [(self.tree_sum[i] / min_pa) ** -self.beta for i in idxes]
-        weight = jax.device_put(np.array(weight, dtype=np.float32))
-        return jnp.expand_dims(weight, axis=1)
+        weight = np.array(weight, dtype=np.float32)
+        return np.expand_dims(weight, axis=1)
 
     def update_priority(self, error):
         assert self._cached_idxes is not None, "Sample batch before updating priorities."
-
-        pa = np.array(self._calculate_pa(error)).flatten()
+        pa = np.array(self._calculate_pa(error), dtype=np.float32).flatten()
         for index, pa in zip(self._cached_idxes, pa):
             self.tree_sum[index] = pa
             self.tree_min[index] = pa

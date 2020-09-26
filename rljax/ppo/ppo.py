@@ -15,10 +15,10 @@ def calculate_gae(
     critic: nn.Model,
     gamma: float,
     lambd: float,
-    state: jnp.ndarray,
-    reward: jnp.ndarray,
-    done: jnp.ndarray,
-    next_state: jnp.ndarray,
+    state: np.ndarray,
+    reward: np.ndarray,
+    done: np.ndarray,
+    next_state: np.ndarray,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     value = jax.lax.stop_gradient(critic(state))
     next_value = jax.lax.stop_gradient(critic(next_state))
@@ -38,7 +38,7 @@ def calculate_gae(
 def critic_grad_fn(
     critic: nn.Model,
     max_grad_norm: float,
-    state: jnp.ndarray,
+    state: np.ndarray,
     target: jnp.ndarray,
 ) -> nn.Model:
     def critic_loss_fn(critic):
@@ -55,8 +55,8 @@ def actor_grad_fn(
     max_grad_norm: float,
     log_pi_old: jnp.ndarray,
     gae: jnp.ndarray,
-    state: jnp.ndarray,
-    action: jnp.ndarray,
+    state: np.ndarray,
+    action: np.ndarray,
 ) -> nn.Model:
     def actor_loss_fn(actor):
         log_pi = actor(state, action=action)
@@ -121,13 +121,11 @@ class PPO(ContinuousOnPolicyAlgorithm):
         self.epoch_ppo = epoch_ppo
 
     def select_action(self, state):
-        state = jax.device_put(state[None, ...])
-        action = self.actor(state, deterministic=True)
+        action = self.actor(state[None, ...], deterministic=True)
         return np.array(action[0])
 
     def explore(self, state):
-        state = jax.device_put(state[None, ...])
-        action, log_pi = self.actor(state, key=next(self.rng), deterministic=False)
+        action, log_pi = self.actor(state[None, ...], key=next(self.rng), deterministic=False)
         return np.array(action[0]), np.array(log_pi[0])
 
     def update(self):
