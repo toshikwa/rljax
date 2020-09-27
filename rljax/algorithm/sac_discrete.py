@@ -47,7 +47,7 @@ class SACDiscrete(OffPolicyActorCritic):
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=256,
-        start_steps=1000,
+        start_steps=20000,
         update_interval=1,
         tau=5e-3,
         lr_actor=3e-4,
@@ -55,7 +55,7 @@ class SACDiscrete(OffPolicyActorCritic):
         lr_alpha=3e-4,
         units_actor=(512,),
         units_critic=(512,),
-        target_entropy_ratio=0.8,
+        target_entropy_ratio=0.98,
         dueling_net=True,
     ):
         super(SACDiscrete, self).__init__(

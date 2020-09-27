@@ -64,6 +64,7 @@ class OnPolicyActorCritic(Algorithm):
         seed,
         gamma,
         buffer_size,
+        batch_size,
     ):
         super(OnPolicyActorCritic, self).__init__(
             num_steps=num_steps,
@@ -72,14 +73,14 @@ class OnPolicyActorCritic(Algorithm):
             seed=seed,
             gamma=gamma,
         )
-
-        self.discount = gamma
-        self.buffer_size = buffer_size
         self.buffer = RolloutBuffer(
             buffer_size=buffer_size,
             state_space=state_space,
             action_space=action_space,
         )
+        self.discount = gamma
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, state[None, ...])

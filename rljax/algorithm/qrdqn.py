@@ -45,7 +45,7 @@ class QRDQN(QLearning):
         eps_eval=0.001,
         lr=1e-4,
         units=(512,),
-        num_quantiles=50,
+        num_quantiles=200,
         dueling_net=True,
         double_q=True,
     ):

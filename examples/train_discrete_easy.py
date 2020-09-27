@@ -7,6 +7,31 @@ import gym
 from rljax.algorithm import DISCRETE_ALGORITHM
 from rljax.trainer import Trainer
 
+config = {
+    "dqn": {
+        "use_per": False,
+        "start_steps": 1000,
+        "units": (512,),
+        "dueling_net": True,
+        "double_q": True,
+    },
+    "qrdqn": {
+        "use_per": False,
+        "start_steps": 1000,
+        "num_quantiles": 200,
+        "units": (512,),
+        "dueling_net": True,
+        "double_q": True,
+    },
+    "sac_discrete": {
+        "use_per": False,
+        "start_steps": 1000,
+        "units": (512,),
+        "target_entropy_ratio": 0.8,
+        "dueling_net": True,
+    },
+}
+
 
 def run(args):
     env = gym.make(args.env_id)

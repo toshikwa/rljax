@@ -41,16 +41,18 @@ class PPO(OnPolicyActorCritic):
         action_space,
         seed,
         gamma=0.995,
-        buffer_size=1000,
+        buffer_size=2048,
+        batch_size=64,
         lr_actor=3e-4,
         lr_critic=3e-4,
         units_actor=(64, 64),
         units_critic=(64, 64),
-        epoch_ppo=32,
+        epoch_ppo=10,
         clip_eps=0.2,
         lambd=0.97,
         max_grad_norm=10.0,
     ):
+        assert buffer_size % batch_size == 0
         super(PPO, self).__init__(
             num_steps=num_steps,
             state_space=state_space,
@@ -58,6 +60,7 @@ class PPO(OnPolicyActorCritic):
             seed=seed,
             gamma=gamma,
             buffer_size=buffer_size,
+            batch_size=batch_size,
         )
 
         # Critic.
@@ -78,6 +81,7 @@ class PPO(OnPolicyActorCritic):
         self.clip_eps = clip_eps
         self.lambd = lambd
         self.max_grad_norm = max_grad_norm
+        self.idxes = np.arange(buffer_size)
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(
@@ -111,26 +115,30 @@ class PPO(OnPolicyActorCritic):
         )
 
         for _ in range(self.epoch_ppo):
-            self.learning_step += 1
-            # Update critic.
-            self.opt_state_critic, self.params_critic, loss_critic = self._update_critic(
-                opt_state_critic=self.opt_state_critic,
-                params_critic=self.params_critic,
-                state=state,
-                target=target,
-            )
+            np.random.shuffle(self.idxes)
+            for start in range(0, self.buffer_size, self.batch_size):
+                self.learning_step += 1
+                idx = self.idxes[start : start + self.batch_size]
 
-            # Update actor.
-            self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
-                opt_state_actor=self.opt_state_actor,
-                params_actor=self.params_actor,
-                state=state,
-                action=action,
-                log_pi_old=log_pi_old,
-                gae=gae,
-            )
+                # Update critic.
+                self.opt_state_critic, self.params_critic, loss_critic = self._update_critic(
+                    opt_state_critic=self.opt_state_critic,
+                    params_critic=self.params_critic,
+                    state=state[idx],
+                    target=target[idx],
+                )
 
-        writer.add_scalar('loss/critic', loss_critic, self.learning_step)
+                # Update actor.
+                self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
+                    opt_state_actor=self.opt_state_actor,
+                    params_actor=self.params_actor,
+                    state=state[idx],
+                    action=action[idx],
+                    log_pi_old=log_pi_old[idx],
+                    gae=gae[idx],
+                )
+
+        writer.add_scalar("loss/critic", loss_critic, self.learning_step)
         writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
