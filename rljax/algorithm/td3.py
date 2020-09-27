@@ -45,7 +45,7 @@ class TD3(OffPolicyActorCritic):
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=256,
-        start_steps=10000,
+        start_steps=1000,
         update_interval=1,
         tau=5e-3,
         lr_actor=3e-4,
@@ -110,13 +110,13 @@ class TD3(OffPolicyActorCritic):
         action = self.actor.apply(params_actor, None, state)
         return add_noise(action, rng, self.std, -1.0, 1.0)
 
-    def update(self):
+    def update(self, writer):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
         # Update critic.
-        self.opt_state_critic, self.params_critic, error = self._update_critic(
+        self.opt_state_critic, self.params_critic, loss_critic, error = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
             params_actor_target=self.params_actor_target,
@@ -136,7 +136,7 @@ class TD3(OffPolicyActorCritic):
 
         if self.learning_step % self.update_interval_policy == 0:
             # Update actor.
-            self.opt_state_actor, self.params_actor = self._update_actor(
+            self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
                 opt_state_actor=self.opt_state_actor,
                 params_actor=self.params_actor,
                 params_critic=self.params_critic,
@@ -146,6 +146,10 @@ class TD3(OffPolicyActorCritic):
             # Update target networks.
             self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
             self.params_actor_target = self._update_target(self.params_actor_target, self.params_actor)
+
+            if self.learning_step % 1000 == 0:
+                writer.add_scalar('loss/critic', loss_critic, self.learning_step)
+                writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
@@ -162,7 +166,7 @@ class TD3(OffPolicyActorCritic):
         weight: np.ndarray,
         rng: jnp.ndarray,
     ):
-        grad_critic, error = jax.grad(self._loss_critic, has_aux=True)(
+        (loss_critic, error), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
             params_actor_target=params_actor_target,
@@ -176,7 +180,7 @@ class TD3(OffPolicyActorCritic):
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, error
+        return opt_state_critic, params_critic, loss_critic, error
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -210,14 +214,14 @@ class TD3(OffPolicyActorCritic):
         params_critic: hk.Params,
         state: np.ndarray,
     ):
-        grad_actor = jax.grad(self._loss_actor)(
+        loss_actor, grad_actor = jax.value_and_grad(self._loss_actor)(
             params_actor,
             params_critic=params_critic,
             state=state,
         )
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
-        return opt_state_actor, params_actor
+        return opt_state_actor, params_actor, loss_actor
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(

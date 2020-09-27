@@ -43,7 +43,7 @@ class Algorithm(ABC):
         pass
 
     @abstractmethod
-    def update(self):
+    def update(self, writer):
         pass
 
     @abstractmethod
@@ -170,14 +170,14 @@ class OffPolicyAlgorithm(Algorithm):
         return self.env_step % self.update_interval == 0 and self.env_step >= self.start_steps
 
     @abstractmethod
-    def is_random(self):
+    def explore(self, state):
         pass
 
     def step(self, env, state, t):
         t += 1
         self.env_step += 1
 
-        if self.is_random():
+        if self.env_step <= self.start_steps:
             action = env.action_space.sample()
         else:
             action = self.explore(state)
@@ -244,9 +244,6 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
     def _explore(self, params_actor, rng, state):
         pass
 
-    def is_random(self):
-        return self.env_step <= self.start_steps
-
 
 class QLearning(OffPolicyAlgorithm):
     """
@@ -297,9 +294,14 @@ class QLearning(OffPolicyAlgorithm):
             action = np.array(action[0])
         return action
 
+    def explore(self, state):
+        if np.random.rand() < self.eps:
+            action = self.action_space.sample()
+        else:
+            action = self._select_action(self.params, state[None, ...])
+            action = np.array(action[0])
+        return action
+
     @abstractmethod
     def _select_action(self, params, state):
         pass
-
-    def is_random(self):
-        return self.env_step <= self.start_steps or np.random.rand() < self.eps

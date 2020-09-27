@@ -45,7 +45,7 @@ class SAC(OffPolicyActorCritic):
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=256,
-        start_steps=10000,
+        start_steps=1000,
         update_interval=1,
         tau=5e-3,
         lr_actor=3e-4,
@@ -108,13 +108,13 @@ class SAC(OffPolicyActorCritic):
         mean, log_std = self.actor.apply(params_actor, None, state)
         return reparameterize(mean, log_std, rng)[0]
 
-    def update(self):
+    def update(self, writer):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
         # Update critic.
-        self.opt_state_critic, self.params_critic, error = self._update_critic(
+        self.opt_state_critic, self.params_critic, loss_critic, error = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
             params_critic_target=self.params_critic_target,
@@ -133,10 +133,9 @@ class SAC(OffPolicyActorCritic):
         if self.use_per:
             self.buffer.update_priority(error)
 
-        # Update actor and alpha.
-        self.opt_state_actor, self.opt_state_alpha, self.params_actor, self.log_alpha = self._update_actor_and_alpha(
+        # Update actor.
+        self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = self._update_actor(
             opt_state_actor=self.opt_state_actor,
-            opt_state_alpha=self.opt_state_alpha,
             params_actor=self.params_actor,
             params_critic=self.params_critic,
             log_alpha=self.log_alpha,
@@ -144,8 +143,22 @@ class SAC(OffPolicyActorCritic):
             rng=next(self.rng),
         )
 
+        # Update alpha.
+        self.opt_state_alpha, self.log_alpha, loss_alpha = self._update_alpha(
+            opt_state_alpha=self.opt_state_alpha,
+            log_alpha=self.log_alpha,
+            mean_log_pi=mean_log_pi,
+        )
+
         # Update target network.
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
+
+        if self.learning_step % 1000 == 0:
+            writer.add_scalar('loss/critic', loss_critic, self.learning_step)
+            writer.add_scalar("loss/actor", loss_actor, self.learning_step)
+            writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)
+            writer.add_scalar("stat/alpha", jnp.exp(self.log_alpha), self.learning_step)
+            writer.add_scalar("stat/entropy", -mean_log_pi, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
@@ -163,7 +176,7 @@ class SAC(OffPolicyActorCritic):
         weight: np.ndarray,
         rng: jnp.ndarray,
     ):
-        grad_critic, error = jax.grad(self._loss_critic, has_aux=True)(
+        (loss_critic, error), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
             params_actor=params_actor,
@@ -178,7 +191,7 @@ class SAC(OffPolicyActorCritic):
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, error
+        return opt_state_critic, params_critic, loss_critic, error
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -207,17 +220,16 @@ class SAC(OffPolicyActorCritic):
         return loss, jax.lax.stop_gradient(error)
 
     @partial(jax.jit, static_argnums=0)
-    def _update_actor_and_alpha(
+    def _update_actor(
         self,
         opt_state_actor,
-        opt_state_alpha,
         params_actor: hk.Params,
         params_critic: hk.Params,
         log_alpha: np.ndarray,
         state: np.ndarray,
         rng: np.ndarray,
     ):
-        grad_actor, mean_log_pi = jax.grad(self._loss_actor, has_aux=True)(
+        (loss_actor, mean_log_pi), grad_actor = jax.value_and_grad(self._loss_actor, has_aux=True)(
             params_actor,
             params_critic=params_critic,
             log_alpha=log_alpha,
@@ -226,14 +238,7 @@ class SAC(OffPolicyActorCritic):
         )
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
-
-        grad_alpha = jax.grad(self._loss_alpha)(
-            log_alpha,
-            mean_log_pi=mean_log_pi,
-        )
-        update, opt_state_alpha = self.opt_alpha(grad_alpha, opt_state_alpha)
-        log_alpha = optix.apply_updates(log_alpha, update)
-        return opt_state_actor, opt_state_alpha, params_actor, log_alpha
+        return opt_state_actor, params_actor, loss_actor, mean_log_pi
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
@@ -250,6 +255,21 @@ class SAC(OffPolicyActorCritic):
         q1, q2 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))
         mean_log_pi = log_pi.mean()
         return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), mean_log_pi
+
+    @partial(jax.jit, static_argnums=0)
+    def _update_alpha(
+        self,
+        opt_state_alpha,
+        log_alpha: np.ndarray,
+        mean_log_pi: np.ndarray,
+    ):
+        loss_alpha, grad_alpha = jax.value_and_grad(self._loss_alpha)(
+            log_alpha,
+            mean_log_pi=mean_log_pi,
+        )
+        update, opt_state_alpha = self.opt_alpha(grad_alpha, opt_state_alpha)
+        log_alpha = optix.apply_updates(log_alpha, update)
+        return opt_state_alpha, log_alpha, loss_alpha
 
     @partial(jax.jit, static_argnums=0)
     def _loss_alpha(

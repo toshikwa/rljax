@@ -60,7 +60,7 @@ class Trainer:
             state, t = self.algo.step(self.env, state, t)
 
             if self.algo.is_update():
-                self.algo.update()
+                self.algo.update(self.writer)
 
             if step % self.eval_interval == 0:
                 self.evaluate(step)

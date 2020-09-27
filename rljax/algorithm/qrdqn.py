@@ -45,8 +45,8 @@ class QRDQN(QLearning):
         eps_eval=0.001,
         lr=1e-4,
         units=(512,),
-        num_quantiles=200,
-        dueling_net=False,
+        num_quantiles=50,
+        dueling_net=True,
         double_q=True,
     ):
         assert update_interval_target % update_interval == 0
@@ -87,12 +87,12 @@ class QRDQN(QLearning):
         q = self.quantile_net.apply(params, None, state).mean(axis=1)
         return jnp.argmax(q, axis=1)
 
-    def update(self):
+    def update(self, writer):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        self.opt_state, self.params, error = self._update(
+        self.opt_state, self.params, loss, error = self._update(
             opt_state=self.opt_state,
             params=self.params,
             params_target=self.params_target,
@@ -112,6 +112,9 @@ class QRDQN(QLearning):
         if self.env_step % self.update_interval_target == 0:
             self.params_target = self._update_target(self.params_target, self.params)
 
+        if self.learning_step % 1000 == 0:
+            writer.add_scalar('loss/quantile', loss, self.learning_step)
+
     @partial(jax.jit, static_argnums=0)
     def _update(
         self,
@@ -125,7 +128,7 @@ class QRDQN(QLearning):
         next_state: np.ndarray,
         weight: np.ndarray,
     ):
-        grad, error = jax.grad(self._loss, has_aux=True)(
+        (loss, error), grad = jax.value_and_grad(self._loss, has_aux=True)(
             params,
             params_target=params_target,
             state=state,
@@ -137,7 +140,7 @@ class QRDQN(QLearning):
         )
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
-        return opt_state, params, error
+        return opt_state, params, loss, error
 
     @partial(jax.jit, static_argnums=0)
     def _loss(

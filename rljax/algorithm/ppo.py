@@ -98,7 +98,7 @@ class PPO(OnPolicyActorCritic):
         mean, log_std = self.actor.apply(params_actor, None, state)
         return reparameterize(mean, log_std, rng)
 
-    def update(self):
+    def update(self, writer):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()
 
         # Calculate gamma-return and gae.
@@ -113,7 +113,7 @@ class PPO(OnPolicyActorCritic):
         for _ in range(self.epoch_ppo):
             self.learning_step += 1
             # Update critic.
-            self.opt_state_critic, self.params_critic = self._update_critic(
+            self.opt_state_critic, self.params_critic, loss_critic = self._update_critic(
                 opt_state_critic=self.opt_state_critic,
                 params_critic=self.params_critic,
                 state=state,
@@ -121,7 +121,7 @@ class PPO(OnPolicyActorCritic):
             )
 
             # Update actor.
-            self.opt_state_actor, self.params_actor = self._update_actor(
+            self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
                 opt_state_actor=self.opt_state_actor,
                 params_actor=self.params_actor,
                 state=state,
@@ -129,6 +129,9 @@ class PPO(OnPolicyActorCritic):
                 log_pi_old=log_pi_old,
                 gae=gae,
             )
+
+        writer.add_scalar('loss/critic', loss_critic, self.learning_step)
+        writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
@@ -138,7 +141,7 @@ class PPO(OnPolicyActorCritic):
         state: np.ndarray,
         target: np.ndarray,
     ):
-        grad_critic = jax.grad(self._loss_critic)(
+        loss_critic, grad_critic = jax.value_and_grad(self._loss_critic)(
             params_critic,
             state=state,
             target=target,
@@ -146,7 +149,7 @@ class PPO(OnPolicyActorCritic):
         grad_critic = clip_gradient(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic
+        return opt_state_critic, params_critic, loss_critic
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -167,7 +170,7 @@ class PPO(OnPolicyActorCritic):
         log_pi_old: np.ndarray,
         gae: np.ndarray,
     ):
-        grad_actor = jax.grad(self._loss_actor)(
+        loss_actor, grad_actor = jax.value_and_grad(self._loss_actor)(
             params_actor,
             state=state,
             action=action,
@@ -177,7 +180,7 @@ class PPO(OnPolicyActorCritic):
         grad_actor = clip_gradient(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
-        return opt_state_actor, params_actor
+        return opt_state_actor, params_actor, loss_actor
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(

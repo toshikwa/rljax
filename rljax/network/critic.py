@@ -144,7 +144,7 @@ class DiscreteQuantileFunction(hk.Module):
             for unit in self.hidden_units:
                 v = hk.Linear(unit)(v)
                 v = self.hidden_activation(v)
-            v = hk.Linear(1)(self.num_quantiles)
+            v = hk.Linear(self.num_quantiles)(v)
             v = v.reshape(-1, self.num_quantiles, 1)
             return a + v - a.mean(axis=2, keepdims=True)
 
