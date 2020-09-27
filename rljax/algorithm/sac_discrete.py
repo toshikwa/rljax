@@ -2,14 +2,12 @@ from functools import partial
 
 import numpy as np
 
-import flax
 import haiku as hk
 import jax
 import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import DiscreteOffPolicyAlgorithm
-from rljax.algorithm.sac import build_log_alpha
 from rljax.network.actor import CategoricalPolicy
 from rljax.network.critic import DiscreteQFunction
 
@@ -87,8 +85,9 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
 
         # Entropy coefficient.
         self.target_entropy = -np.log(1.0 / action_space.n) * target_entropy_ratio
-        log_alpha = build_log_alpha(next(self.rng))
-        self.opt_alpha = flax.optim.Adam(lr_alpha).create(log_alpha)
+        self.log_alpha = jnp.zeros((), dtype=jnp.float32)
+        opt_init_alpha, self.opt_alpha = optix.adam(lr_alpha)
+        self.opt_state_alpha = opt_init_alpha(self.log_alpha)
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, state[None, ...])
@@ -137,7 +136,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
             params_critic=self.params_critic,
             params_critic_target=self.params_critic_target,
             params_actor=self.params_actor,
-            log_alpha=self.opt_alpha.target,
+            log_alpha=self.log_alpha,
             state=state,
             action=action,
             reward=reward,
@@ -150,11 +149,12 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
             self.buffer.update_priority(error)
 
         # Update actor and alpha.
-        self.opt_state_actor, self.params_actor, self.opt_alpha = self._update_actor_and_alpha(
+        self.opt_state_actor, self.opt_state_alpha, self.params_actor, self.log_alpha = self._update_actor_and_alpha(
             opt_state_actor=self.opt_state_actor,
-            opt_alpha=self.opt_alpha,
+            opt_state_alpha=self.opt_state_alpha,
             params_actor=self.params_actor,
             params_critic=self.params_critic,
+            log_alpha=self.log_alpha,
             state=state,
         )
 
@@ -169,7 +169,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         params_critic: hk.Params,
         params_critic_target: hk.Params,
         params_actor: hk.Params,
-        log_alpha: flax.nn.Model,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
         action: np.ndarray,
         reward: np.ndarray,
@@ -197,14 +197,14 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         params_critic: hk.Params,
         params_critic_target: hk.Params,
         params_actor: hk.Params,
-        log_alpha: flax.nn.Model,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
         action: np.ndarray,
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
     ) -> jnp.DeviceArray:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
+        alpha = jnp.exp(log_alpha)
         pi, log_pi = self.actor.apply(params_actor, None, next_state)
         next_q1, next_q2 = self.critic.apply(params_critic_target, None, next_state)
         next_q = (pi * (jnp.minimum(next_q1, next_q2) - alpha * log_pi)).sum(axis=1, keepdims=True)
@@ -215,41 +215,44 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
 
         curr_q1, curr_q2 = self.critic.apply(params_critic, None, state)
         error1, error2 = jax.vmap(_loss)(action, curr_q1, curr_q2, target_q)
-        return jnp.square(error1).mean() + jnp.square(error2).mean(), jax.lax.stop_gradient(error1)
+        return jnp.square(error1).mean() + jnp.square(error2).mean(), error1
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor_and_alpha(
         self,
         opt_state_actor,
-        opt_alpha,
+        opt_state_alpha,
         params_actor: hk.Params,
         params_critic: hk.Params,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
     ):
         grad_actor, mean_log_pi = jax.grad(self._loss_actor, has_aux=True)(
             params_actor,
             params_critic=params_critic,
-            log_alpha=opt_alpha.target,
+            log_alpha=log_alpha,
             state=state,
         )
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
 
         grad_alpha = jax.grad(self._loss_alpha)(
-            opt_alpha.target,
+            log_alpha,
             mean_log_pi=mean_log_pi,
         )
-        return opt_state_actor, params_actor, opt_alpha.apply_gradient(grad_alpha)
+        update, opt_state_alpha = self.opt_alpha(grad_alpha, opt_state_alpha)
+        log_alpha = optix.apply_updates(log_alpha, update)
+        return opt_state_actor, opt_state_alpha, params_actor, log_alpha
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
         self,
         params_actor: hk.Params,
         params_critic: hk.Params,
-        log_alpha: flax.nn.Model,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
-    ) -> jnp.DeviceArray:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
+    ) -> jnp.ndarray:
+        alpha = jnp.exp(log_alpha)
         curr_q1, curr_q2 = self.critic.apply(params_critic, None, state)
         curr_q = jax.lax.stop_gradient(jnp.minimum(curr_q1, curr_q2))
         pi, log_pi = self.actor.apply(params_actor, None, state)
@@ -260,10 +263,10 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
     @partial(jax.jit, static_argnums=0)
     def _loss_alpha(
         self,
-        log_alpha: flax.nn.Model,
+        log_alpha: jnp.ndarray,
         mean_log_pi: np.ndarray,
-    ) -> jnp.DeviceArray:
-        return -log_alpha() * (self.target_entropy + mean_log_pi)
+    ) -> jnp.ndarray:
+        return -log_alpha * (self.target_entropy + mean_log_pi)
 
     def __str__(self):
         return "sac_discrete" if not self.use_per else "sac_discrete_per"

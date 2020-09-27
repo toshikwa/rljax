@@ -2,7 +2,6 @@ from functools import partial
 
 import numpy as np
 
-import flax
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -12,16 +11,6 @@ from rljax.algorithm.base import ContinuousOffPolicyAlgorithm
 from rljax.network.actor import StateDependentGaussianPolicy
 from rljax.network.critic import ContinuousQFunction
 from rljax.utils import reparameterize
-
-
-class LogAlpha(flax.nn.Module):
-    """
-    Log of the entropy coefficient for SAC.
-    """
-
-    def apply(self):
-        log_alpha = self.param("log_alpha", (), nn.initializers.zeros)
-        return jnp.asarray(log_alpha, dtype=jnp.float32)
 
 
 def build_sac_critic(action_dim, hidden_units):
@@ -42,11 +31,6 @@ def build_sac_actor(action_dim, hidden_units):
             hidden_activation=nn.relu,
         )(x)
     )
-
-
-def build_log_alpha(rng_init):
-    _, param_init = LogAlpha.init(rng_init)
-    return flax.nn.Model(LogAlpha, param_init)
 
 
 class SAC(ContinuousOffPolicyAlgorithm):
@@ -96,8 +80,9 @@ class SAC(ContinuousOffPolicyAlgorithm):
 
         # Entropy coefficient.
         self.target_entropy = -float(action_space.shape[0])
-        log_alpha = build_log_alpha(next(self.rng))
-        self.opt_alpha = flax.optim.Adam(lr_alpha).create(log_alpha)
+        self.log_alpha = jnp.zeros((), dtype=jnp.float32)
+        opt_init_alpha, self.opt_alpha = optix.adam(lr_alpha)
+        self.opt_state_alpha = opt_init_alpha(self.log_alpha)
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, state[None, ...])
@@ -127,7 +112,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
             params_critic=self.params_critic,
             params_critic_target=self.params_critic_target,
             params_actor=self.params_actor,
-            log_alpha=self.opt_alpha.target,
+            log_alpha=self.log_alpha,
             state=state,
             action=action,
             reward=reward,
@@ -137,11 +122,12 @@ class SAC(ContinuousOffPolicyAlgorithm):
         )
 
         # Update actor and alpha.
-        self.opt_state_actor, self.params_actor, self.opt_alpha = self._update_actor_and_alpha(
+        self.opt_state_actor, self.opt_state_alpha, self.params_actor, self.log_alpha = self._update_actor_and_alpha(
             opt_state_actor=self.opt_state_actor,
-            opt_alpha=self.opt_alpha,
+            opt_state_alpha=self.opt_state_alpha,
             params_actor=self.params_actor,
             params_critic=self.params_critic,
+            log_alpha=self.log_alpha,
             state=state,
             rng=next(self.rng),
         )
@@ -156,7 +142,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
         params_critic: hk.Params,
         params_critic_target: hk.Params,
         params_actor: hk.Params,
-        log_alpha: flax.nn.Model,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
         action: np.ndarray,
         reward: np.ndarray,
@@ -186,15 +172,15 @@ class SAC(ContinuousOffPolicyAlgorithm):
         params_critic: hk.Params,
         params_critic_target: hk.Params,
         params_actor: hk.Params,
-        log_alpha: flax.nn.Model,
+        log_alpha: np.ndarray,
         state: np.ndarray,
         action: np.ndarray,
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
         rng: jnp.ndarray,
-    ) -> jnp.DeviceArray:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
+    ) -> jnp.ndarray:
+        alpha = jnp.exp(log_alpha)
         next_mean, next_log_std = self.actor.apply(params_actor, None, next_state)
         next_action, next_log_pi = reparameterize(next_mean, next_log_std, rng)
         next_q1, next_q2 = self.critic.apply(params_critic_target, None, jnp.concatenate([next_state, next_action], axis=1))
@@ -208,16 +194,17 @@ class SAC(ContinuousOffPolicyAlgorithm):
     def _update_actor_and_alpha(
         self,
         opt_state_actor,
-        opt_alpha,
+        opt_state_alpha,
         params_actor: hk.Params,
         params_critic: hk.Params,
+        log_alpha: np.ndarray,
         state: np.ndarray,
         rng: np.ndarray,
     ):
         grad_actor, mean_log_pi = jax.grad(self._loss_actor, has_aux=True)(
             params_actor,
             params_critic=params_critic,
-            log_alpha=opt_alpha.target,
+            log_alpha=log_alpha,
             state=state,
             rng=rng,
         )
@@ -225,34 +212,36 @@ class SAC(ContinuousOffPolicyAlgorithm):
         params_actor = optix.apply_updates(params_actor, update)
 
         grad_alpha = jax.grad(self._loss_alpha)(
-            opt_alpha.target,
+            log_alpha,
             mean_log_pi=mean_log_pi,
         )
-        return opt_state_actor, params_actor, opt_alpha.apply_gradient(grad_alpha)
+        update, opt_state_alpha = self.opt_alpha(grad_alpha, opt_state_alpha)
+        log_alpha = optix.apply_updates(log_alpha, update)
+        return opt_state_actor, opt_state_alpha, params_actor, log_alpha
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
         self,
         params_actor: hk.Params,
         params_critic: hk.Params,
-        log_alpha: flax.nn.Model,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
         rng: np.ndarray,
-    ) -> jnp.DeviceArray:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha()))
+    ) -> jnp.ndarray:
+        alpha = jnp.exp(log_alpha)
         mean, log_std = self.actor.apply(params_actor, None, state)
         action, log_pi = reparameterize(mean, log_std, rng)
         q1, q2 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))
         mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), jax.lax.stop_gradient(mean_log_pi)
+        return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), mean_log_pi
 
     @partial(jax.jit, static_argnums=0)
     def _loss_alpha(
         self,
-        log_alpha: flax.nn.Model,
-        mean_log_pi: np.ndarray,
-    ) -> jnp.DeviceArray:
-        return -log_alpha() * (self.target_entropy + mean_log_pi)
+        log_alpha: jnp.ndarray,
+        mean_log_pi: jnp.ndarray,
+    ) -> jnp.ndarray:
+        return -log_alpha * (self.target_entropy + mean_log_pi)
 
     def __str__(self):
         return "sac"
