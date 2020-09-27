@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
-from rljax.algorithm.base import DiscreteOffPolicyAlgorithm
+from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import CategoricalPolicy
 from rljax.network.critic import DiscreteQFunction
 
@@ -34,7 +34,7 @@ def build_sac_discrete_actor(action_dim, hidden_units):
     )
 
 
-class SACDiscrete(DiscreteOffPolicyAlgorithm):
+class SACDiscrete(OffPolicyActorCritic):
     def __init__(
         self,
         state_space,
@@ -47,7 +47,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         batch_size=256,
         start_steps=1000,
         update_interval=1,
-        update_interval_target=1000,
+        tau=5e-3,
         lr_actor=3e-4,
         lr_critic=3e-4,
         lr_alpha=3e-4,
@@ -67,7 +67,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
-            update_interval_target=update_interval_target,
+            tau=tau,
         )
 
         # Critic.
@@ -98,35 +98,26 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         return np.array(action[0])
 
     @partial(jax.jit, static_argnums=0)
-    def _select_action(self, params_actor, state):
+    def _select_action(
+        self,
+        params_actor: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         pi, _ = self.actor.apply(params_actor, None, state)
         return jnp.argmax(pi, axis=1)
 
     @partial(jax.jit, static_argnums=0)
-    def _explore(self, params_actor, rng, state):
+    def _explore(
+        self,
+        params_actor: hk.Params,
+        rng: jnp.ndarray,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         pi, _ = self.actor.apply(params_actor, None, state)
         return jax.random.categorical(rng, pi)
 
-    def step(self, env, state, t, step):
-        t += 1
-
-        if step <= self.start_steps:
-            action = env.action_space.sample()
-        else:
-            action = self.explore(state)
-
-        next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state, done)
-
-        if done:
-            t = 0
-            next_state = env.reset()
-
-        return next_state, t
-
     def update(self):
-        self.learning_steps += 1
+        self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
@@ -159,8 +150,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         )
 
         # Update target network.
-        if (self.learning_steps * self.update_interval) % self.update_interval_target == 0:
-            self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
+        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
@@ -203,7 +193,7 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         alpha = jnp.exp(log_alpha)
         pi, log_pi = self.actor.apply(params_actor, None, next_state)
         next_q1, next_q2 = self.critic.apply(params_critic_target, None, next_state)
@@ -269,4 +259,4 @@ class SACDiscrete(DiscreteOffPolicyAlgorithm):
         return -log_alpha * (self.target_entropy + mean_log_pi)
 
     def __str__(self):
-        return "sac_discrete" if not self.use_per else "sac_discrete_per"
+        return "SAC-Discrete" if not self.use_per else "SAC-Discrete+PER"

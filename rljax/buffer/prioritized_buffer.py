@@ -8,16 +8,6 @@ from rljax.buffer.replay_buffer import ReplayBuffer
 from rljax.buffer.segment_tree import MinTree, SumTree
 
 
-def calculate_pa(
-    error: jnp.ndarray,
-    alpha: float,
-    min_pa: float,
-    max_pa: float,
-    eps: float,
-) -> jnp.ndarray:
-    return jnp.clip((error + eps) ** alpha, min_pa, max_pa)
-
-
 class PrioritizedReplayBuffer(ReplayBuffer):
     """
     Prioritized Replay Buffer.
@@ -37,7 +27,13 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         max_pa=1.0,
         eps=0.01,
     ):
-        super(PrioritizedReplayBuffer, self).__init__(buffer_size, state_space, action_space, gamma, nstep)
+        super(PrioritizedReplayBuffer, self).__init__(
+            buffer_size=buffer_size,
+            state_space=state_space,
+            action_space=action_space,
+            gamma=gamma,
+            nstep=nstep,
+        )
 
         self.alpha = alpha
         self.beta = beta
@@ -52,7 +48,6 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             tree_size *= 2
         self.tree_sum = SumTree(tree_size)
         self.tree_min = MinTree(tree_size)
-        self._calculate_pa = jax.jit(partial(calculate_pa, alpha=alpha, min_pa=min_pa, max_pa=max_pa, eps=eps))
 
     def _append(self, state, action, reward, next_state, done):
         # Assign max priority when stored for the first time.
@@ -84,7 +79,11 @@ class PrioritizedReplayBuffer(ReplayBuffer):
     def update_priority(self, error):
         assert self._cached_idxes is not None, "Sample batch before updating priorities."
         pa = np.array(self._calculate_pa(error), dtype=np.float32).flatten()
-        for index, pa in zip(self._cached_idxes, pa):
-            self.tree_sum[index] = pa
-            self.tree_min[index] = pa
+        for i, _pa in zip(self._cached_idxes, pa):
+            self.tree_sum[i] = _pa
+            self.tree_min[i] = _pa
         self._cached_idxes = None
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_pa(self, error: jnp.ndarray) -> jnp.ndarray:
+        return jnp.clip((error + self.eps) ** self.alpha, self.min_pa, self.max_pa)

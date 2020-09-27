@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
-from rljax.algorithm.base import ContinuousOffPolicyAlgorithm
+from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import DeterministicPolicy
 from rljax.network.critic import ContinuousQFunction
 from rljax.utils import add_noise
@@ -33,7 +33,7 @@ def build_ddpg_actor(action_dim, hidden_units):
     )
 
 
-class DDPG(ContinuousOffPolicyAlgorithm):
+class DDPG(OffPolicyActorCritic):
     def __init__(
         self,
         state_space,
@@ -44,6 +44,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
+        update_interval=1,
         tau=5e-3,
         lr_actor=3e-4,
         lr_critic=3e-4,
@@ -61,6 +62,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
             use_per=False,
             batch_size=batch_size,
             start_steps=start_steps,
+            update_interval=update_interval,
             tau=tau,
         )
 
@@ -81,25 +83,26 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         # Other parameters.
         self.std = std
 
-    def select_action(self, state):
-        action = self._select_action(self.params_actor, state[None, ...])
-        return np.array(action[0])
-
-    def explore(self, state):
-        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
-        return np.array(action[0])
-
     @partial(jax.jit, static_argnums=0)
-    def _select_action(self, params_actor, state):
+    def _select_action(
+        self,
+        params_actor: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         return self.actor.apply(params_actor, None, state)
 
     @partial(jax.jit, static_argnums=0)
-    def _explore(self, params_actor, rng, state):
+    def _explore(
+        self,
+        params_actor: hk.Params,
+        rng: jnp.ndarray,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, None, state)
         return add_noise(action, rng, self.std, -1.0, 1.0)
 
     def update(self):
-        self.learning_steps += 1
+        self.learning_step += 1
         _, (state, action, reward, done, next_state) = self.buffer.sample(self.batch_size)
 
         # Update critic.
@@ -165,7 +168,7 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         next_action = self.actor.apply(params_actor_target, None, next_state)
         next_q = self.critic.apply(params_critic_target, None, jnp.concatenate([next_state, next_action], axis=1))
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
@@ -195,10 +198,10 @@ class DDPG(ContinuousOffPolicyAlgorithm):
         params_actor: hk.Params,
         params_critic: hk.Params,
         state: np.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, None, state)
         q = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))
         return -q.mean()
 
     def __str__(self):
-        return "ddpg"
+        return "DDPG"

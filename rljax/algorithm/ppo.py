@@ -7,7 +7,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 from jax.experimental import optix
-from rljax.algorithm.base import ContinuousOnPolicyAlgorithm
+from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network.actor import StateIndependentGaussianPolicy
 from rljax.network.critic import ContinuousVFunction
 from rljax.utils import clip_gradient, evaluate_lop_pi, reparameterize
@@ -33,7 +33,7 @@ def build_ppo_actor(action_dim, hidden_units):
     )
 
 
-class PPO(ContinuousOnPolicyAlgorithm):
+class PPO(OnPolicyActorCritic):
     def __init__(
         self,
         state_space,
@@ -77,21 +77,22 @@ class PPO(ContinuousOnPolicyAlgorithm):
         self.lambd = lambd
         self.max_grad_norm = max_grad_norm
 
-    def select_action(self, state):
-        action = self._select_action(self.params_actor, state[None, ...])
-        return np.array(action[0])
-
-    def explore(self, state):
-        action, log_pi = self._explore(self.params_actor, next(self.rng), state[None, ...])
-        return np.array(action[0]), np.array(log_pi[0])
-
     @partial(jax.jit, static_argnums=0)
-    def _select_action(self, params_actor, state):
+    def _select_action(
+        self,
+        params_actor: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, None, state)
         return jnp.tanh(mean)
 
     @partial(jax.jit, static_argnums=0)
-    def _explore(self, params_actor, rng, state):
+    def _explore(
+        self,
+        params_actor: hk.Params,
+        rng: jnp.ndarray,
+        state: np.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, None, state)
         return reparameterize(mean, log_std, rng)
 
@@ -108,7 +109,7 @@ class PPO(ContinuousOnPolicyAlgorithm):
         )
 
         for _ in range(self.epoch_ppo):
-            self.learning_steps += 1
+            self.learning_step += 1
             # Update critic.
             self.opt_state_critic, self.params_critic = self._update_critic(
                 opt_state_critic=self.opt_state_critic,
@@ -151,7 +152,7 @@ class PPO(ContinuousOnPolicyAlgorithm):
         params_critic: hk.Params,
         state: np.ndarray,
         target: np.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         return jnp.square(target - self.critic.apply(params_critic, None, state)).mean()
 
     @partial(jax.jit, static_argnums=0)
@@ -184,7 +185,7 @@ class PPO(ContinuousOnPolicyAlgorithm):
         action: np.ndarray,
         log_pi_old: np.ndarray,
         gae: np.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         mean, log_pi = self.actor.apply(params_actor, None, state)
         log_pi = evaluate_lop_pi(mean, log_pi, action)
         ratio = jnp.exp(log_pi - log_pi_old)
@@ -215,4 +216,4 @@ class PPO(ContinuousOnPolicyAlgorithm):
         return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
 
     def __str__(self):
-        return "ppo"
+        return "PPO"

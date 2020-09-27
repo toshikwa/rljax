@@ -11,9 +11,9 @@ def _test_algorithm(env, state, ALGO):
     )
 
     # Test step() method.
-    _state, _ = algo.step(env, state, 0, 0)
+    _state, _ = algo.step(env, state, 0)
     assert env.observation_space.contains(_state)
-    _state, _ = algo.step(env, state, 1000000, 1000000)
+    _state, _ = algo.step(env, state, 1000000)
     assert env.observation_space.contains(_state)
 
     # Test select_action() method.
@@ -21,8 +21,7 @@ def _test_algorithm(env, state, ALGO):
     assert env.action_space.contains(action)
 
     # Test is_update() method.
-    assert isinstance(algo.is_update(0), bool)
-    assert isinstance(algo.is_update(1000000), bool)
+    assert isinstance(algo.is_update(), bool)
 
     # Test update() method.
     algo.update()

@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
-from rljax.algorithm.base import ContinuousOffPolicyAlgorithm
+from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import StateDependentGaussianPolicy
 from rljax.network.critic import ContinuousQFunction
 from rljax.utils import reparameterize
@@ -33,7 +33,7 @@ def build_sac_actor(action_dim, hidden_units):
     )
 
 
-class SAC(ContinuousOffPolicyAlgorithm):
+class SAC(OffPolicyActorCritic):
     def __init__(
         self,
         state_space,
@@ -44,6 +44,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
+        update_interval=1,
         tau=5e-3,
         lr_actor=3e-4,
         lr_critic=3e-4,
@@ -61,6 +62,7 @@ class SAC(ContinuousOffPolicyAlgorithm):
             use_per=False,
             batch_size=batch_size,
             start_steps=start_steps,
+            update_interval=update_interval,
             tau=tau,
         )
 
@@ -84,26 +86,27 @@ class SAC(ContinuousOffPolicyAlgorithm):
         opt_init_alpha, self.opt_alpha = optix.adam(lr_alpha)
         self.opt_state_alpha = opt_init_alpha(self.log_alpha)
 
-    def select_action(self, state):
-        action = self._select_action(self.params_actor, state[None, ...])
-        return np.array(action[0])
-
-    def explore(self, state):
-        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
-        return np.array(action[0])
-
     @partial(jax.jit, static_argnums=0)
-    def _select_action(self, params_actor, state):
+    def _select_action(
+        self,
+        params_actor: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, None, state)
         return jnp.tanh(mean)
 
     @partial(jax.jit, static_argnums=0)
-    def _explore(self, params_actor, rng, state):
+    def _explore(
+        self,
+        params_actor: hk.Params,
+        rng: jnp.ndarray,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         mean, log_std = self.actor.apply(params_actor, None, state)
         return reparameterize(mean, log_std, rng)[0]
 
     def update(self):
-        self.learning_steps += 1
+        self.learning_step += 1
         _, (state, action, reward, done, next_state) = self.buffer.sample(self.batch_size)
 
         # Update critic.
@@ -244,4 +247,4 @@ class SAC(ContinuousOffPolicyAlgorithm):
         return -log_alpha * (self.target_entropy + mean_log_pi)
 
     def __str__(self):
-        return "sac"
+        return "SAC"

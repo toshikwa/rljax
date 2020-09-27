@@ -8,9 +8,8 @@ import jax
 import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
-from rljax.algorithm.base import DiscreteOffPolicyAlgorithm
+from rljax.algorithm.base import QLearning
 from rljax.network.critic import DiscreteQFunction
-from rljax.utils import soft_update
 
 
 def build_dqn(action_dim, hidden_units, dueling_net):
@@ -25,7 +24,7 @@ def build_dqn(action_dim, hidden_units, dueling_net):
     )
 
 
-class DQN(DiscreteOffPolicyAlgorithm):
+class DQN(QLearning):
     def __init__(
         self,
         state_space,
@@ -37,15 +36,16 @@ class DQN(DiscreteOffPolicyAlgorithm):
         use_per=False,
         batch_size=256,
         start_steps=1000,
-        eps=0.01,
-        eps_eval=0.001,
         update_interval=1,
         update_interval_target=1000,
+        eps=0.01,
+        eps_eval=0.001,
         lr=1e-4,
         units=(512,),
         dueling_net=False,
         double_q=True,
     ):
+        assert update_interval_target % update_interval == 0
         super(DQN, self).__init__(
             state_space=state_space,
             action_space=action_space,
@@ -58,6 +58,8 @@ class DQN(DiscreteOffPolicyAlgorithm):
             start_steps=start_steps,
             update_interval=update_interval,
             update_interval_target=update_interval_target,
+            eps=eps,
+            eps_eval=eps_eval,
         )
 
         # DQN.
@@ -68,43 +70,15 @@ class DQN(DiscreteOffPolicyAlgorithm):
         self.opt_state = opt_init(self.params)
 
         # Other parameters.
-        self.eps = eps
-        self.eps_eval = eps_eval
         self.double_q = double_q
-
-    def select_action(self, state):
-        if np.random.rand() < self.eps_eval:
-            action = self.action_space.sample()
-        else:
-            action = self._select_action(self.params, state[None, ...])
-            action = np.array(action[0])
-        return action
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(self, params, state):
         q = self.dqn.apply(params, None, state)
         return jnp.argmax(q, axis=1)
 
-    def step(self, env, state, t, step):
-        t += 1
-
-        if np.random.rand() < self.eps:
-            action = env.action_space.sample()
-        else:
-            action = self.select_action(state)
-
-        next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state, done)
-
-        if done:
-            t = 0
-            next_state = env.reset()
-
-        return next_state, t
-
     def update(self):
-        self.learning_steps += 1
+        self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
@@ -125,8 +99,8 @@ class DQN(DiscreteOffPolicyAlgorithm):
             self.buffer.update_priority(error)
 
         # Update target network.
-        if (self.learning_steps * self.update_interval) % self.update_interval_target == 0:
-            self.params_target = soft_update(self.params_target, self.params, 1.0)
+        if self.env_step % self.update_interval_target == 0:
+            self.params_target = self._update_target(self.params_target, self.params)
 
     @partial(jax.jit, static_argnums=0)
     def _update(
@@ -166,7 +140,7 @@ class DQN(DiscreteOffPolicyAlgorithm):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         def _calculate_error(state, action, reward, done, next_state):
             if self.double_q:
                 next_action = jnp.argmax(self.dqn.apply(params, None, next_state))
@@ -181,4 +155,4 @@ class DQN(DiscreteOffPolicyAlgorithm):
         return jnp.mean(jnp.square(error) * weight), jax.lax.stop_gradient(error)
 
     def __str__(self):
-        return "dqn" if not self.use_per else "dqn_per"
+        return "DQN" if not self.use_per else "DQN+PER"

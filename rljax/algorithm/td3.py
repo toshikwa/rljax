@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
-from rljax.algorithm.base import ContinuousOffPolicyAlgorithm
+from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import DeterministicPolicy
 from rljax.network.critic import ContinuousQFunction
 from rljax.utils import add_noise
@@ -33,7 +33,7 @@ def build_td3_actor(action_dim, hidden_units):
     )
 
 
-class TD3(ContinuousOffPolicyAlgorithm):
+class TD3(OffPolicyActorCritic):
     def __init__(
         self,
         state_space,
@@ -44,6 +44,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
+        update_interval=1,
         tau=5e-3,
         lr_actor=3e-4,
         lr_critic=3e-4,
@@ -64,6 +65,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
             use_per=False,
             batch_size=batch_size,
             start_steps=start_steps,
+            update_interval=update_interval,
             tau=tau,
         )
 
@@ -87,25 +89,26 @@ class TD3(ContinuousOffPolicyAlgorithm):
         self.clip_noise = clip_noise
         self.update_interval_policy = update_interval_policy
 
-    def select_action(self, state):
-        action = self._select_action(self.params_actor, state[None, ...])
-        return np.array(action[0])
-
-    def explore(self, state):
-        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
-        return np.array(action[0])
-
     @partial(jax.jit, static_argnums=0)
-    def _select_action(self, params_actor, state):
+    def _select_action(
+        self,
+        params_actor: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         return self.actor.apply(params_actor, None, state)
 
     @partial(jax.jit, static_argnums=0)
-    def _explore(self, params_actor, rng, state):
+    def _explore(
+        self,
+        params_actor: hk.Params,
+        rng: jnp.ndarray,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, None, state)
         return add_noise(action, rng, self.std, -1.0, 1.0)
 
     def update(self):
-        self.learning_steps += 1
+        self.learning_step += 1
         _, (state, action, reward, done, next_state) = self.buffer.sample(self.batch_size)
 
         # Update critic.
@@ -122,8 +125,8 @@ class TD3(ContinuousOffPolicyAlgorithm):
             rng=next(self.rng),
         )
 
-        # Update actor.
-        if self.learning_steps % self.update_interval_policy == 0:
+        if self.learning_step % self.update_interval_policy == 0:
+            # Update actor.
             self.opt_state_actor, self.params_actor = self._update_actor(
                 opt_state_actor=self.opt_state_actor,
                 params_actor=self.params_actor,
@@ -176,7 +179,7 @@ class TD3(ContinuousOffPolicyAlgorithm):
         done: np.ndarray,
         next_state: np.ndarray,
         rng: jnp.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         next_action = self.actor.apply(params_actor_target, None, next_state)
         noise = jax.random.normal(rng, next_action.shape) * self.std_target
         next_action = jnp.clip(next_action + jnp.clip(noise, -self.clip_noise, self.clip_noise), -1.0, 1.0)
@@ -208,10 +211,10 @@ class TD3(ContinuousOffPolicyAlgorithm):
         params_actor: hk.Params,
         params_critic: hk.Params,
         state: np.ndarray,
-    ) -> jnp.DeviceArray:
+    ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, None, state)
         q1 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))[0]
         return -q1.mean()
 
     def __str__(self):
-        return "td3"
+        return "TD3"

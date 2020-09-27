@@ -57,14 +57,11 @@ class Trainer:
         state = self.env.reset()
 
         for step in range(1, self.num_steps + 1):
-            # Pass to the algorithm to update state and episode timestep.
-            state, t = self.algo.step(self.env, state, t, step)
+            state, t = self.algo.step(self.env, state, t)
 
-            # Update the algorithm whenever ready.
-            if self.algo.is_update(step):
+            if self.algo.is_update():
                 self.algo.update()
 
-            # Evaluate regularly.
             if step % self.eval_interval == 0:
                 self.evaluate(step)
 
