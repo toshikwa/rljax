@@ -30,11 +30,11 @@ Currently, following algorithms have been implemented.
 - [x] Dueling Network
 - [x] Double Q-Learning
 - [x] Prioritized Experience Replay(PER)
+- [x] Quantile Regression DQN(QR-DQN)
 - [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
 
 We plan to implement the following algorithms in the future.
 
-- [ ] Quantile Regression DQN(QR-DQN)
 - [ ] Implicit Quantile Network(IQN)
 
 Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`.

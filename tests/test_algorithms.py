@@ -1,6 +1,8 @@
+from functools import partial
+
 import gym
 
-from rljax import CONTINUOUS_ALGOS, DISCRETE_ALGOS
+from rljax.algorithm import CONTINUOUS_ALGORITHM, DISCRETE_ALGORITHM
 
 
 def _test_algorithm(env, state, ALGO):
@@ -31,7 +33,7 @@ def test_continuous_algorithms():
     env = gym.make("MountainCarContinuous-v0")
     state = env.reset()
 
-    for ALGO in CONTINUOUS_ALGOS.values():
+    for ALGO in CONTINUOUS_ALGORITHM.values():
         _test_algorithm(env, state, ALGO)
 
 
@@ -39,5 +41,6 @@ def test_discrete_algorithms():
     env = gym.make("CartPole-v0")
     state = env.reset()
 
-    for ALGO in DISCRETE_ALGOS.values():
+    for ALGO in DISCRETE_ALGORITHM.values():
         _test_algorithm(env, state, ALGO)
+        _test_algorithm(env, state, partial(ALGO, use_per=True))

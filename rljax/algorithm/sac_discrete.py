@@ -10,6 +10,7 @@ from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import CategoricalPolicy
 from rljax.network.critic import DiscreteQFunction
+from rljax.utils import get_q_at_action
 
 
 def build_sac_discrete_critic(action_dim, hidden_units, dueling_net):
@@ -199,13 +200,10 @@ class SACDiscrete(OffPolicyActorCritic):
         next_q1, next_q2 = self.critic.apply(params_critic_target, None, next_state)
         next_q = (pi * (jnp.minimum(next_q1, next_q2) - alpha * log_pi)).sum(axis=1, keepdims=True)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-
-        def _loss(action, curr_q1, curr_q2, target_q):
-            return jnp.abs(target_q - curr_q1[action]), jnp.abs(target_q - curr_q2[action])
-
-        curr_q1, curr_q2 = self.critic.apply(params_critic, None, state)
-        error1, error2 = jax.vmap(_loss)(action, curr_q1, curr_q2, target_q)
-        return jnp.square(error1).mean() + jnp.square(error2).mean(), error1
+        curr_q_s1, curr_q_s2 = self.critic.apply(params_critic, None, state)
+        curr_q1, curr_q2 = get_q_at_action(curr_q_s1, action), get_q_at_action(curr_q_s2, action)
+        error = jnp.abs(target_q - curr_q1)
+        return jnp.square(error).mean() + jnp.square(target_q - curr_q2).mean(), jax.lax.stop_gradient(error)
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor_and_alpha(

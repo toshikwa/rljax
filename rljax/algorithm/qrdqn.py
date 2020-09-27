@@ -9,14 +9,15 @@ import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import QLearning
-from rljax.network.critic import DiscreteQFunction
-from rljax.utils import get_q_at_action
+from rljax.network.critic import DiscreteQuantileFunction
+from rljax.utils import calculate_quantile_huber_loss, get_quantile_at_action
 
 
-def build_dqn(action_dim, hidden_units, dueling_net):
+def build_qrdqn(action_dim, num_quantiles, hidden_units, dueling_net):
     return hk.transform(
-        lambda x: DiscreteQFunction(
+        lambda x: DiscreteQuantileFunction(
             action_dim=action_dim,
+            num_quantiles=num_quantiles,
             num_critics=1,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
@@ -25,7 +26,7 @@ def build_dqn(action_dim, hidden_units, dueling_net):
     )
 
 
-class DQN(QLearning):
+class QRDQN(QLearning):
     def __init__(
         self,
         state_space,
@@ -43,11 +44,12 @@ class DQN(QLearning):
         eps_eval=0.001,
         lr=1e-4,
         units=(512,),
+        num_quantiles=200,
         dueling_net=False,
         double_q=True,
     ):
         assert update_interval_target % update_interval == 0
-        super(DQN, self).__init__(
+        super(QRDQN, self).__init__(
             state_space=state_space,
             action_space=action_space,
             seed=seed,
@@ -63,20 +65,25 @@ class DQN(QLearning):
             eps_eval=eps_eval,
         )
 
-        # DQN.
+        # QR-DQN.
         fake_input = np.zeros((1, state_space.shape[0]), np.float32)
-        self.q_net = build_dqn(action_space.n, units, dueling_net)
+        self.quantile_net = build_qrdqn(action_space.n, num_quantiles, units, dueling_net)
         opt_init, self.opt = optix.adam(lr)
-        self.params = self.params_target = self.q_net.init(next(self.rng), fake_input)
+        self.params = self.params_target = self.quantile_net.init(next(self.rng), fake_input)
         self.opt_state = opt_init(self.params)
+
+        # Fixed fractions.
+        tau = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
+        self.tau_hat = jnp.expand_dims((tau[1:] + tau[:-1]) / 2.0, 0)
 
         # Other parameters.
         self.double_q = double_q
+        self.num_quantiles = num_quantiles
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(self, params, state):
-        s_q = self.q_net.apply(params, None, state)
-        return jnp.argmax(s_q, axis=1)
+        q = self.quantile_net.apply(params, None, state).mean(axis=1)
+        return jnp.argmax(q, axis=1)
 
     def update(self):
         self.learning_step += 1
@@ -144,16 +151,19 @@ class DQN(QLearning):
     ) -> jnp.ndarray:
         if self.double_q:
             # calculate greedy actions with online network.
-            next_action = jnp.argmax(self.q_net.apply(params, None, next_state), axis=1)[..., None]
-            # Then calculate max q values with target network.
-            next_q = get_q_at_action(self.q_net.apply(params_target, None, next_state), next_action)
+            next_action = jnp.argmax(self.quantile_net.apply(params, None, next_state).mean(axis=1), axis=1)[..., None]
+            # Then calculate max quantile values with target network.
+            next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, None, next_state), next_action)
         else:
-            # calculate greedy actions and max q values with target network.
-            next_q = jnp.max(self.q_net.apply(params_target, None, next_state), axis=1, keepdims=True)
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        curr_q = get_q_at_action(self.q_net.apply(params, None, state), action)
-        error = jnp.abs(target_q - curr_q)
-        return jnp.mean(jnp.square(error) * weight), jax.lax.stop_gradient(error)
+            # calculate greedy actions and max quantile values with target network.
+            next_quantile = jnp.max(self.quantile_net.apply(params_target, None, next_state), axis=2, keepdims=True)
+
+        target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
+        target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
+        curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, None, state), action)
+
+        loss, error = calculate_quantile_huber_loss(target_quantile - curr_quantile, self.tau_hat, weight, 1.0)
+        return loss, jax.lax.stop_gradient(error)
 
     def __str__(self):
-        return "DQN" if not self.use_per else "DQN+PER"
+        return "QR-DQN" if not self.use_per else "QR-DQN+PER"

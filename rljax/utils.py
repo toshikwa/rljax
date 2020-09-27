@@ -87,8 +87,52 @@ def add_noise(
     std: float,
     x_min: float,
     x_max: float,
-):
+) -> jnp.ndarray:
     """
     Add noise to actions.
     """
     return jnp.clip(x + jax.random.normal(key, x.shape), x_min, x_max)
+
+
+@jax.jit
+def get_q_at_action(
+    q_s: jnp.ndarray,
+    action: jnp.ndarray,
+) -> jnp.ndarray:
+    def _get(q_s, action):
+        return q_s[action]
+
+    return jax.vmap(_get)(q_s, action)
+
+
+@jax.jit
+def get_quantile_at_action(
+    quantile_s: jnp.ndarray,
+    action: jnp.ndarray,
+) -> jnp.ndarray:
+    def _get(quantile_s, action):
+        return quantile_s[:, action]
+
+    return jax.vmap(_get)(quantile_s, action)
+
+
+@jax.jit
+def _huber_loss(
+    error: jnp.ndarray,
+    kappa: float = 1.0,
+) -> jnp.ndarray:
+    abs_error = jnp.abs(error)
+    return jnp.where(abs_error <= kappa, 0.5 * jnp.square(error), kappa * (abs_error - 0.5 * kappa))
+
+
+@jax.jit
+def calculate_quantile_huber_loss(
+    error: jnp.ndarray,
+    tau: jnp.ndarray,
+    weight: jnp.ndarray,
+    kappa: float = 1.0,
+) -> jnp.ndarray:
+    element_wise_loss = _huber_loss(error, kappa)
+    element_wise_loss *= jnp.abs(tau[..., None] - (jax.lax.stop_gradient(error) < 0)) / kappa
+    batch_loss = element_wise_loss.sum(axis=1).mean(axis=1, keepdims=True)
+    return (batch_loss * weight).mean(), batch_loss

@@ -4,7 +4,7 @@ from datetime import datetime
 
 import gym
 
-from rljax import CONTINUOUS_ALGOS
+from rljax.algorithm import CONTINUOUS_ALGORITHM
 from rljax.trainer import Trainer
 
 
@@ -12,7 +12,7 @@ def run(args):
     env = gym.make(args.env_id)
     env_test = gym.make(args.env_id)
 
-    algo = CONTINUOUS_ALGOS[args.algo](
+    algo = CONTINUOUS_ALGORITHM[args.algo](
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=args.seed,
