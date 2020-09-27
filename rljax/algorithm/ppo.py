@@ -36,6 +36,7 @@ def build_ppo_actor(action_dim, hidden_units):
 class PPO(OnPolicyActorCritic):
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -51,6 +52,7 @@ class PPO(OnPolicyActorCritic):
         max_grad_norm=10.0,
     ):
         super(PPO, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,

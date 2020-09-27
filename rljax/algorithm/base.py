@@ -16,6 +16,7 @@ class Algorithm(ABC):
 
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -24,6 +25,7 @@ class Algorithm(ABC):
         self.rng = PRNGSequence(seed)
         self.env_step = 0
         self.learning_step = 0
+        self.num_steps = num_steps
         self.state_space = state_space
         self.action_space = action_space
         self.gamma = gamma
@@ -56,6 +58,7 @@ class OnPolicyActorCritic(Algorithm):
 
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -63,6 +66,7 @@ class OnPolicyActorCritic(Algorithm):
         buffer_size,
     ):
         super(OnPolicyActorCritic, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
@@ -112,13 +116,91 @@ class OnPolicyActorCritic(Algorithm):
         return next_state, t
 
 
-class OffPolicyActorCritic(Algorithm):
+class OffPolicyAlgorithm(Algorithm):
+    """
+    Base class for off-policy algorithms.
+    """
+
+    def __init__(
+        self,
+        num_steps,
+        state_space,
+        action_space,
+        seed,
+        gamma,
+        nstep,
+        buffer_size,
+        use_per,
+        batch_size,
+        start_steps,
+        update_interval,
+    ):
+        super(OffPolicyAlgorithm, self).__init__(
+            num_steps=num_steps,
+            state_space=state_space,
+            action_space=action_space,
+            seed=seed,
+            gamma=gamma,
+        )
+        if use_per:
+            self.buffer = PrioritizedReplayBuffer(
+                buffer_size=buffer_size,
+                state_space=state_space,
+                action_space=action_space,
+                gamma=gamma,
+                nstep=nstep,
+                beta_steps=(num_steps - start_steps) / update_interval,
+            )
+        else:
+            self.buffer = ReplayBuffer(
+                buffer_size=buffer_size,
+                state_space=state_space,
+                action_space=action_space,
+                gamma=gamma,
+                nstep=nstep,
+            )
+
+        self.discount = gamma ** nstep
+        self.use_per = use_per
+        self.batch_size = batch_size
+        self.start_steps = start_steps
+        self.update_interval = update_interval
+
+    def is_update(self):
+        return self.env_step % self.update_interval == 0 and self.env_step >= self.start_steps
+
+    @abstractmethod
+    def is_random(self):
+        pass
+
+    def step(self, env, state, t):
+        t += 1
+        self.env_step += 1
+
+        if self.is_random():
+            action = env.action_space.sample()
+        else:
+            action = self.explore(state)
+
+        next_state, reward, done, _ = env.step(action)
+        mask = False if t == env._max_episode_steps else done
+        self.buffer.append(state, action, reward, mask, next_state, done)
+
+        if done:
+            t = 0
+            next_state = env.reset()
+
+        return next_state, t
+
+
+class OffPolicyActorCritic(OffPolicyAlgorithm):
     """
     Base class for off-policy Actor-Critic algorithms.
     """
 
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -132,29 +214,19 @@ class OffPolicyActorCritic(Algorithm):
         tau,
     ):
         super(OffPolicyActorCritic, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
             gamma=gamma,
-        )
-
-        self.buffer = (PrioritizedReplayBuffer if use_per else ReplayBuffer)(
-            buffer_size=buffer_size,
-            state_space=state_space,
-            action_space=action_space,
-            gamma=gamma,
             nstep=nstep,
+            buffer_size=buffer_size,
+            use_per=use_per,
+            batch_size=batch_size,
+            start_steps=start_steps,
+            update_interval=update_interval,
         )
-
-        self.use_per = use_per
-        self.batch_size = batch_size
-        self.start_steps = start_steps
-        self.discount = gamma ** nstep
-        self.update_interval = update_interval
         self._update_target = jax.jit(partial(soft_update, tau=tau))
-
-    def is_update(self):
-        return self.env_step >= self.start_steps and self.env_step % self.update_interval == 0
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, state[None, ...])
@@ -172,33 +244,18 @@ class OffPolicyActorCritic(Algorithm):
     def _explore(self, params_actor, rng, state):
         pass
 
-    def step(self, env, state, t):
-        t += 1
-        self.env_step += 1
-
-        if self.env_step <= self.start_steps:
-            action = env.action_space.sample()
-        else:
-            action = self.explore(state)
-
-        next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state, done)
-
-        if done:
-            t = 0
-            next_state = env.reset()
-
-        return next_state, t
+    def is_random(self):
+        return self.env_step <= self.start_steps
 
 
-class QLearning(Algorithm):
+class QLearning(OffPolicyAlgorithm):
     """
     Base class for discrete Q-learning algorithms.
     """
 
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -214,32 +271,23 @@ class QLearning(Algorithm):
         eps_eval,
     ):
         super(QLearning, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
             gamma=gamma,
-        )
-
-        self.buffer = (PrioritizedReplayBuffer if use_per else ReplayBuffer)(
-            buffer_size=buffer_size,
-            state_space=state_space,
-            action_space=action_space,
-            gamma=gamma,
             nstep=nstep,
+            buffer_size=buffer_size,
+            use_per=use_per,
+            batch_size=batch_size,
+            start_steps=start_steps,
+            update_interval=update_interval,
         )
 
-        self.use_per = use_per
-        self.batch_size = batch_size
-        self.start_steps = start_steps
-        self.discount = gamma ** nstep
-        self.update_interval = update_interval
         self.update_interval_target = update_interval_target
         self.eps = eps
         self.eps_eval = eps_eval
         self._update_target = jax.jit(partial(soft_update, tau=1.0))
-
-    def is_update(self):
-        return self.env_step % self.update_interval == 0 and self.env_step >= self.start_steps
 
     def select_action(self, state):
         if np.random.rand() < self.eps_eval:
@@ -253,21 +301,5 @@ class QLearning(Algorithm):
     def _select_action(self, params, state):
         pass
 
-    def step(self, env, state, t):
-        t += 1
-        self.env_step += 1
-
-        if np.random.rand() < self.eps:
-            action = env.action_space.sample()
-        else:
-            action = self.select_action(state)
-
-        next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
-        self.buffer.append(state, action, reward, mask, next_state, done)
-
-        if done:
-            t = 0
-            next_state = env.reset()
-
-        return next_state, t
+    def is_random(self):
+        return self.env_step <= self.start_steps or np.random.rand() < self.eps

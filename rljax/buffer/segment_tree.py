@@ -18,12 +18,7 @@ class SegmentTree:
         self._value_init = value_init
         self._values = [value_init for _ in range(2 * size)]
 
-    def reduce(self, start=0, end=None):
-        if end is None:
-            end = self._size
-        elif end < 0:
-            end += self._size
-
+    def reduce(self, start, end):
         start += self._size
         end += self._size
 
@@ -70,10 +65,8 @@ class SumTree(SegmentTree):
         super().__init__(size, operator.add, 0.0)
 
     def find_prefixsum_idx(self, prefixsum):
-        assert 0 <= prefixsum <= self.reduce() + 1e-5
-        idx = 1
-
         # Traverse to the leaf.
+        idx = 1
         while idx < self._size:
             left = 2 * idx
             if self._values[left] > prefixsum:

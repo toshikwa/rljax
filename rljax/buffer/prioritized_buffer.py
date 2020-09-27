@@ -71,7 +71,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         return weight, batch
 
     def _calculate_weight(self, idxes):
-        min_pa = self.tree_min.reduce()
+        min_pa = self.tree_min.reduce(0, self._n)
         weight = [(self.tree_sum[i] / min_pa) ** -self.beta for i in idxes]
         weight = np.array(weight, dtype=np.float32)
         return np.expand_dims(weight, axis=1)

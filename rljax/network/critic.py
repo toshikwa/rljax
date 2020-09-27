@@ -1,3 +1,5 @@
+import math
+
 import haiku as hk
 import jax.numpy as jnp
 from jax import nn
@@ -107,7 +109,7 @@ class DiscreteQFunction(hk.Module):
 
 class DiscreteQuantileFunction(hk.Module):
     """
-    Critic for QR-DQN.
+    Critic for QR-DQN and IQN.
     """
 
     def __init__(
@@ -151,3 +153,23 @@ class DiscreteQuantileFunction(hk.Module):
 
         xs = [quantile_func(x) for _ in range(self.num_critics)]
         return xs
+
+
+class CosineEmbeddingNetwork(hk.Module):
+    """
+    Network for calculating cosine embeddings.
+    """
+
+    def __init__(
+        self,
+        state_dim,
+        num_cosines=64,
+    ):
+        super(CosineEmbeddingNetwork, self).__init__()
+        self.state_dim = state_dim
+        self.num_cosines = num_cosines
+
+    def __call__(self, tau):
+        pi = math.pi * jnp.arange(1, self.num_cosines + 1, dtype=jnp.float32).reshape(1, 1, self.num_cosines)
+        cosine = jnp.cos(jnp.expand_dims(tau, 1) * pi).reshape(-1, self.num_cosines)
+        return nn.relu(hk.Linear(self.state_dim)(cosine))

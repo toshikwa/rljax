@@ -38,6 +38,7 @@ def build_sac_discrete_actor(action_dim, hidden_units):
 class SACDiscrete(OffPolicyActorCritic):
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -58,6 +59,7 @@ class SACDiscrete(OffPolicyActorCritic):
         dueling_net=True,
     ):
         super(SACDiscrete, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
@@ -134,6 +136,7 @@ class SACDiscrete(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
+            weight=weight,
         )
 
         # Update priority.
@@ -166,6 +169,7 @@ class SACDiscrete(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
+        weight: np.ndarray,
     ):
         grad_critic, error = jax.grad(self._loss_critic, has_aux=True)(
             params_critic,
@@ -177,6 +181,7 @@ class SACDiscrete(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
+            weight=weight,
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
@@ -194,6 +199,7 @@ class SACDiscrete(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
+        weight: np.ndarray,
     ) -> jnp.ndarray:
         alpha = jnp.exp(log_alpha)
         pi, log_pi = self.actor.apply(params_actor, None, next_state)
@@ -203,7 +209,8 @@ class SACDiscrete(OffPolicyActorCritic):
         curr_q_s1, curr_q_s2 = self.critic.apply(params_critic, None, state)
         curr_q1, curr_q2 = get_q_at_action(curr_q_s1, action), get_q_at_action(curr_q_s2, action)
         error = jnp.abs(target_q - curr_q1)
-        return jnp.square(error).mean() + jnp.square(target_q - curr_q2).mean(), jax.lax.stop_gradient(error)
+        loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
+        return loss, jax.lax.stop_gradient(error)
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor_and_alpha(

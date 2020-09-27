@@ -2,21 +2,21 @@ from functools import partial
 
 import gym
 
-from rljax.algorithm import CONTINUOUS_ALGORITHM, DISCRETE_ALGORITHM
+from rljax.algorithm import CONTINUOUS_ALGORITHM, DISCRETE_ALGORITHM, PER_ALGORITHM
 
 
 def _test_algorithm(env, state, ALGO):
     algo = ALGO(
+        num_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
     )
 
     # Test step() method.
-    _state, _ = algo.step(env, state, 0)
-    assert env.observation_space.contains(_state)
-    _state, _ = algo.step(env, state, 1000000)
-    assert env.observation_space.contains(_state)
+    for t in range(5):
+        _state, _ = algo.step(env, state, t)
+        assert env.observation_space.contains(_state)
 
     # Test select_action() method.
     action = algo.select_action(state)
@@ -35,6 +35,8 @@ def test_continuous_algorithms():
 
     for ALGO in CONTINUOUS_ALGORITHM.values():
         _test_algorithm(env, state, ALGO)
+        if ALGO in PER_ALGORITHM:
+            _test_algorithm(env, state, partial(ALGO, use_per=True))
 
 
 def test_discrete_algorithms():
@@ -43,4 +45,5 @@ def test_discrete_algorithms():
 
     for ALGO in DISCRETE_ALGORITHM.values():
         _test_algorithm(env, state, ALGO)
-        _test_algorithm(env, state, partial(ALGO, use_per=True))
+        if ALGO in PER_ALGORITHM:
+            _test_algorithm(env, state, partial(ALGO, use_per=True))

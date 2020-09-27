@@ -28,6 +28,7 @@ def build_dqn(action_dim, hidden_units, dueling_net):
 class DQN(QLearning):
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -48,6 +49,7 @@ class DQN(QLearning):
     ):
         assert update_interval_target % update_interval == 0
         super(DQN, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,

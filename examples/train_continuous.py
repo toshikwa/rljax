@@ -13,9 +13,11 @@ def run(args):
     env_test = gym.make(args.env_id)
 
     algo = CONTINUOUS_ALGORITHM[args.algo](
+        num_steps=args.num_steps,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=args.seed,
+        use_per=args.use_per,
         start_steps=args.start_steps,
     )
 
@@ -37,6 +39,7 @@ def run(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--algo", type=str, default="sac")
+    p.add_argument("--use_per", action="store_true")
     p.add_argument("--num_steps", type=int, default=50000)
     p.add_argument("--start_steps", type=int, default=1000)
     p.add_argument("--eval_interval", type=int, default=1000)

@@ -36,12 +36,14 @@ def build_sac_actor(action_dim, hidden_units):
 class SAC(OffPolicyActorCritic):
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
+        use_per=False,
         batch_size=256,
         start_steps=10000,
         update_interval=1,
@@ -53,13 +55,14 @@ class SAC(OffPolicyActorCritic):
         units_critic=(256, 256),
     ):
         super(SAC, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
-            use_per=False,
+            use_per=use_per,
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
@@ -107,10 +110,11 @@ class SAC(OffPolicyActorCritic):
 
     def update(self):
         self.learning_step += 1
-        _, (state, action, reward, done, next_state) = self.buffer.sample(self.batch_size)
+        weight, batch = self.buffer.sample(self.batch_size)
+        state, action, reward, done, next_state = batch
 
         # Update critic.
-        self.opt_state_critic, self.params_critic = self._update_critic(
+        self.opt_state_critic, self.params_critic, error = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
             params_critic_target=self.params_critic_target,
@@ -121,8 +125,13 @@ class SAC(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
+            weight=weight,
             rng=next(self.rng),
         )
+
+        # Update priority.
+        if self.use_per:
+            self.buffer.update_priority(error)
 
         # Update actor and alpha.
         self.opt_state_actor, self.opt_state_alpha, self.params_actor, self.log_alpha = self._update_actor_and_alpha(
@@ -151,9 +160,10 @@ class SAC(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
+        weight: np.ndarray,
         rng: jnp.ndarray,
     ):
-        grad_critic = jax.grad(self._loss_critic)(
+        grad_critic, error = jax.grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
             params_actor=params_actor,
@@ -163,11 +173,12 @@ class SAC(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
+            weight=weight,
             rng=rng,
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic
+        return opt_state_critic, params_critic, error
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -181,6 +192,7 @@ class SAC(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
+        weight: np.ndarray,
         rng: jnp.ndarray,
     ) -> jnp.ndarray:
         alpha = jnp.exp(log_alpha)
@@ -189,9 +201,10 @@ class SAC(OffPolicyActorCritic):
         next_q1, next_q2 = self.critic.apply(params_critic_target, None, jnp.concatenate([next_state, next_action], axis=1))
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-
         curr_q1, curr_q2 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))
-        return jnp.square(target_q - curr_q1).mean() + jnp.square(target_q - curr_q2).mean()
+        error = jnp.abs(target_q - curr_q1)
+        loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
+        return loss, jax.lax.stop_gradient(error)
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor_and_alpha(

@@ -17,3 +17,11 @@ DISCRETE_ALGORITHM = {
     "qrdqn": QRDQN,
     "sac_discrete": SACDiscrete,
 }
+PER_ALGORITHM = {
+    "ddpg": DDPG,
+    "td3": TD3,
+    "sac": SAC,
+    "dqn": DQN,
+    "qrdqn": QRDQN,
+    "sac_discrete": SACDiscrete,
+}

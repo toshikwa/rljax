@@ -29,6 +29,7 @@ def build_qrdqn(action_dim, num_quantiles, hidden_units, dueling_net):
 class QRDQN(QLearning):
     def __init__(
         self,
+        num_steps,
         state_space,
         action_space,
         seed,
@@ -50,6 +51,7 @@ class QRDQN(QLearning):
     ):
         assert update_interval_target % update_interval == 0
         super(QRDQN, self).__init__(
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
