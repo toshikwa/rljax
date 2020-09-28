@@ -23,7 +23,7 @@ def build_td3_critic(state_space, action_space, hidden_units):
         )(x)
 
     fake_input = np.concatenate([state_space.sample(), action_space.sample()], axis=-1)
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 def build_td3_actor(state_space, action_space, hidden_units):
@@ -35,7 +35,7 @@ def build_td3_actor(state_space, action_space, hidden_units):
         )(x)
 
     fake_input = state_space.sample()
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 class TD3(OffPolicyActorCritic):
@@ -101,7 +101,7 @@ class TD3(OffPolicyActorCritic):
         params_actor: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        return self.actor.apply(params_actor, None, state)
+        return self.actor.apply(params_actor, state)
 
     @partial(jax.jit, static_argnums=0)
     def _explore(
@@ -110,7 +110,7 @@ class TD3(OffPolicyActorCritic):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        action = self.actor.apply(params_actor, None, state)
+        action = self.actor.apply(params_actor, state)
         return add_noise(action, rng, self.std, -1.0, 1.0)
 
     def update(self, writer):
@@ -197,12 +197,12 @@ class TD3(OffPolicyActorCritic):
         weight: np.ndarray,
         rng: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action = self.actor.apply(params_actor_target, None, next_state)
+        next_action = self.actor.apply(params_actor_target, next_state)
         noise = jax.random.normal(rng, next_action.shape) * self.std_target
         next_action = jnp.clip(next_action + jnp.clip(noise, -self.clip_noise, self.clip_noise), -1.0, 1.0)
-        next_q1, next_q2 = self.critic.apply(params_critic_target, None, jnp.concatenate([next_state, next_action], axis=1))
+        next_q1, next_q2 = self.critic.apply(params_critic_target, jnp.concatenate([next_state, next_action], axis=1))
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.minimum(next_q1, next_q2))
-        curr_q1, curr_q2 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))
+        curr_q1, curr_q2 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))
         error = jnp.abs(target_q - curr_q1)
         loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
         return loss, jax.lax.stop_gradient(error)
@@ -231,8 +231,8 @@ class TD3(OffPolicyActorCritic):
         params_critic: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        action = self.actor.apply(params_actor, None, state)
-        q1 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))[0]
+        action = self.actor.apply(params_actor, state)
+        q1 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))[0]
         return -q1.mean()
 
     def __str__(self):

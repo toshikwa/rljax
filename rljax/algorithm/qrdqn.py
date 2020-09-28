@@ -29,7 +29,7 @@ def build_qrdqn(state_space, action_space, num_quantiles, hidden_units, dueling_
     fake_input = state_space.sample()
     if len(state_space.shape) == 1:
         fake_input = fake_input.astype(np.float32)
-    return hk.transform(_func), fake_input[None, ...]
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...]
 
 
 class QRDQN(QLearning):
@@ -93,7 +93,7 @@ class QRDQN(QLearning):
         params: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        q = self.quantile_net.apply(params, None, state).mean(axis=1)
+        q = self.quantile_net.apply(params, state).mean(axis=1)
         return jnp.argmax(q, axis=1)
 
     def update(self, writer):
@@ -165,16 +165,16 @@ class QRDQN(QLearning):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if self.double_q:
             # calculate greedy actions with online network.
-            next_action = jnp.argmax(self.quantile_net.apply(params, None, next_state).mean(axis=1), axis=1)[..., None]
+            next_action = jnp.argmax(self.quantile_net.apply(params, next_state).mean(axis=1), axis=1)[..., None]
             # Then calculate max quantile values with target network.
-            next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, None, next_state), next_action)
+            next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state), next_action)
         else:
             # calculate greedy actions and max quantile values with target network.
-            next_quantile = jnp.max(self.quantile_net.apply(params_target, None, next_state), axis=2, keepdims=True)
+            next_quantile = jnp.max(self.quantile_net.apply(params_target, next_state), axis=2, keepdims=True)
 
         target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
         target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
-        curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, None, state), action)
+        curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state), action)
 
         loss, error = calculate_quantile_huber_loss(target_quantile - curr_quantile, self.tau_hat, weight, 1.0)
         return loss, jax.lax.stop_gradient(error)

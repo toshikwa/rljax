@@ -23,7 +23,7 @@ def build_sac_critic(state_space, action_space, hidden_units):
         )(x)
 
     fake_input = np.concatenate([state_space.sample(), action_space.sample()], axis=-1)
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 def build_sac_actor(state_space, action_space, hidden_units):
@@ -35,7 +35,7 @@ def build_sac_actor(state_space, action_space, hidden_units):
         )(x)
 
     fake_input = state_space.sample()
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 class SAC(OffPolicyActorCritic):
@@ -98,7 +98,7 @@ class SAC(OffPolicyActorCritic):
         params_actor: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        mean, _ = self.actor.apply(params_actor, None, state)
+        mean, _ = self.actor.apply(params_actor, state)
         return jnp.tanh(mean)
 
     @partial(jax.jit, static_argnums=0)
@@ -108,7 +108,7 @@ class SAC(OffPolicyActorCritic):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        mean, log_std = self.actor.apply(params_actor, None, state)
+        mean, log_std = self.actor.apply(params_actor, state)
         return reparameterize(mean, log_std, rng)[0]
 
     def update(self, writer):
@@ -212,12 +212,12 @@ class SAC(OffPolicyActorCritic):
         rng: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
-        next_mean, next_log_std = self.actor.apply(params_actor, None, next_state)
+        next_mean, next_log_std = self.actor.apply(params_actor, next_state)
         next_action, next_log_pi = reparameterize(next_mean, next_log_std, rng)
-        next_q1, next_q2 = self.critic.apply(params_critic_target, None, jnp.concatenate([next_state, next_action], axis=1))
+        next_q1, next_q2 = self.critic.apply(params_critic_target, jnp.concatenate([next_state, next_action], axis=1))
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        curr_q1, curr_q2 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))
+        curr_q1, curr_q2 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))
         error = jnp.abs(target_q - curr_q1)
         loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
         return loss, jax.lax.stop_gradient(error)
@@ -253,9 +253,9 @@ class SAC(OffPolicyActorCritic):
         rng: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
-        mean, log_std = self.actor.apply(params_actor, None, state)
+        mean, log_std = self.actor.apply(params_actor, state)
         action, log_pi = reparameterize(mean, log_std, rng)
-        q1, q2 = self.critic.apply(params_critic, None, jnp.concatenate([state, action], axis=1))
+        q1, q2 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))
         mean_log_pi = log_pi.mean()
         return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), mean_log_pi
 

@@ -28,7 +28,7 @@ def build_dqn(state_space, action_space, hidden_units, dueling_net):
     fake_input = state_space.sample()
     if len(state_space.shape) == 1:
         fake_input = fake_input.astype(np.float32)
-    return hk.transform(_func), fake_input[None, ...]
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...]
 
 
 class DQN(QLearning):
@@ -86,7 +86,7 @@ class DQN(QLearning):
         params: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        s_q = self.q_net.apply(params, None, state)
+        s_q = self.q_net.apply(params, state)
         return jnp.argmax(s_q, axis=1)
 
     def update(self, writer):
@@ -158,14 +158,14 @@ class DQN(QLearning):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if self.double_q:
             # calculate greedy actions with online network.
-            next_action = jnp.argmax(self.q_net.apply(params, None, next_state), axis=1)[..., None]
+            next_action = jnp.argmax(self.q_net.apply(params, next_state), axis=1)[..., None]
             # Then calculate max q values with target network.
-            next_q = get_q_at_action(self.q_net.apply(params_target, None, next_state), next_action)
+            next_q = get_q_at_action(self.q_net.apply(params_target, next_state), next_action)
         else:
             # calculate greedy actions and max q values with target network.
-            next_q = jnp.max(self.q_net.apply(params_target, None, next_state), axis=1, keepdims=True)
+            next_q = jnp.max(self.q_net.apply(params_target, next_state), axis=1, keepdims=True)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        curr_q = get_q_at_action(self.q_net.apply(params, None, state), action)
+        curr_q = get_q_at_action(self.q_net.apply(params, state), action)
         error = jnp.abs(target_q - curr_q)
         return jnp.mean(jnp.square(error) * weight), jax.lax.stop_gradient(error)
 

@@ -39,7 +39,7 @@ def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_n
     fake_input = state_space.sample()
     if len(state_space.shape) == 1:
         fake_input = fake_input.astype(np.float32)
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 def build_sac_discrete_actor(state_space, action_space, hidden_units):
@@ -53,7 +53,7 @@ def build_sac_discrete_actor(state_space, action_space, hidden_units):
         )(x)
 
     fake_input = state_space.sample()
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 class SACDiscrete(OffPolicyActorCritic):
@@ -118,7 +118,7 @@ class SACDiscrete(OffPolicyActorCritic):
         params_actor: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        pi, _ = self.actor.apply(params_actor, None, state)
+        pi, _ = self.actor.apply(params_actor, state)
         return jnp.argmax(pi, axis=1)
 
     @partial(jax.jit, static_argnums=0)
@@ -128,7 +128,7 @@ class SACDiscrete(OffPolicyActorCritic):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        pi, _ = self.actor.apply(params_actor, None, state)
+        pi, _ = self.actor.apply(params_actor, state)
         return jax.random.categorical(rng, pi)
 
     def update(self, writer):
@@ -228,11 +228,11 @@ class SACDiscrete(OffPolicyActorCritic):
         weight: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
-        pi, log_pi = self.actor.apply(params_actor, None, next_state)
-        next_q1, next_q2 = self.critic.apply(params_critic_target, None, next_state)
+        pi, log_pi = self.actor.apply(params_actor, next_state)
+        next_q1, next_q2 = self.critic.apply(params_critic_target, next_state)
         next_q = (pi * (jnp.minimum(next_q1, next_q2) - alpha * log_pi)).sum(axis=1, keepdims=True)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        curr_q_s1, curr_q_s2 = self.critic.apply(params_critic, None, state)
+        curr_q_s1, curr_q_s2 = self.critic.apply(params_critic, state)
         curr_q1, curr_q2 = get_q_at_action(curr_q_s1, action), get_q_at_action(curr_q_s2, action)
         error = jnp.abs(target_q - curr_q1)
         loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
@@ -266,9 +266,9 @@ class SACDiscrete(OffPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
-        curr_q1, curr_q2 = self.critic.apply(params_critic, None, state)
+        curr_q1, curr_q2 = self.critic.apply(params_critic, state)
         curr_q = jax.lax.stop_gradient(jnp.minimum(curr_q1, curr_q2))
-        pi, log_pi = self.actor.apply(params_actor, None, state)
+        pi, log_pi = self.actor.apply(params_actor, state)
         mean_log_pi = (pi * log_pi).sum(axis=1).mean()
         mean_q = (pi * curr_q).sum(axis=1).mean()
         return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)

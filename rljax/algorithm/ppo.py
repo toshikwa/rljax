@@ -22,7 +22,7 @@ def build_ppo_critic(state_space, hidden_units):
         )(x)
 
     fake_input = state_space.sample()
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 def build_ppo_actor(state_space, action_space, hidden_units):
@@ -34,7 +34,7 @@ def build_ppo_actor(state_space, action_space, hidden_units):
         )(x)
 
     fake_input = state_space.sample()
-    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
 
 
 class PPO(OnPolicyActorCritic):
@@ -92,7 +92,7 @@ class PPO(OnPolicyActorCritic):
         params_actor: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        mean, _ = self.actor.apply(params_actor, None, state)
+        mean, _ = self.actor.apply(params_actor, state)
         return jnp.tanh(mean)
 
     @partial(jax.jit, static_argnums=0)
@@ -102,7 +102,7 @@ class PPO(OnPolicyActorCritic):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        mean, log_std = self.actor.apply(params_actor, None, state)
+        mean, log_std = self.actor.apply(params_actor, state)
         return reparameterize(mean, log_std, rng)
 
     def update(self, writer):
@@ -169,7 +169,7 @@ class PPO(OnPolicyActorCritic):
         state: np.ndarray,
         target: np.ndarray,
     ) -> jnp.ndarray:
-        return jnp.square(target - self.critic.apply(params_critic, None, state)).mean()
+        return jnp.square(target - self.critic.apply(params_critic, state)).mean()
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
@@ -202,7 +202,7 @@ class PPO(OnPolicyActorCritic):
         log_pi_old: np.ndarray,
         gae: jnp.ndarray,
     ) -> jnp.ndarray:
-        mean, log_pi = self.actor.apply(params_actor, None, state)
+        mean, log_pi = self.actor.apply(params_actor, state)
         log_pi = evaluate_lop_pi(mean, log_pi, action)
         ratio = jnp.exp(log_pi - log_pi_old)
         loss_actor1 = -ratio * gae
@@ -220,8 +220,8 @@ class PPO(OnPolicyActorCritic):
         next_state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Current and next value estimates.
-        value = jax.lax.stop_gradient(self.critic.apply(params_critic, None, state))
-        next_value = jax.lax.stop_gradient(self.critic.apply(params_critic, None, next_state))
+        value = jax.lax.stop_gradient(self.critic.apply(params_critic, state))
+        next_value = jax.lax.stop_gradient(self.critic.apply(params_critic, next_state))
         # Calculate TD errors.
         delta = reward + self.gamma * next_value * (1.0 - done) - value
         # Calculate gae recursively from behind.
