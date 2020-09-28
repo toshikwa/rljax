@@ -1,10 +1,7 @@
-import os
-
 import gym
 import pytest
 
 from rljax.algorithm import DDPG, DQN, PPO, QRDQN, SAC, TD3, SACDiscrete
-from tensorboardX import SummaryWriter
 
 
 def _test_algorithm(env, algo):

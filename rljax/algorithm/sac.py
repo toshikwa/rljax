@@ -156,7 +156,7 @@ class SAC(OffPolicyActorCritic):
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
         if self.learning_step % 1000 == 0:
-            writer.add_scalar('loss/critic', loss_critic, self.learning_step)
+            writer.add_scalar("loss/critic", loss_critic, self.learning_step)
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
             writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)
             writer.add_scalar("stat/alpha", jnp.exp(self.log_alpha), self.learning_step)
