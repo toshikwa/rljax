@@ -35,6 +35,8 @@ def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_n
                 hidden_activation=nn.relu,
                 dueling_net=dueling_net,
             )(state)
+        else:
+            NotImplementedError
 
     return hk.without_apply_rng(hk.transform(_func))
 
@@ -112,6 +114,7 @@ class SACDiscrete(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
+        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         pi, _ = self.actor.apply(params_actor, state)
@@ -224,10 +227,13 @@ class SACDiscrete(OffPolicyActorCritic):
         weight: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
+        # Calculate next action distribution.
         pi, log_pi = self.actor.apply(params_actor, next_state)
+        # Calculate target soft q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state)
         next_q = (pi * (jnp.minimum(next_q1, next_q2) - alpha * log_pi)).sum(axis=1, keepdims=True)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+        # Calculate current soft q values with online critic.
         curr_q_s1, curr_q_s2 = self.critic.apply(params_critic, state)
         curr_q1, curr_q2 = get_q_at_action(curr_q_s1, action), get_q_at_action(curr_q_s2, action)
         error = jnp.abs(target_q - curr_q1)
@@ -262,11 +268,14 @@ class SACDiscrete(OffPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
-        curr_q1, curr_q2 = self.critic.apply(params_critic, state)
-        curr_q = jax.lax.stop_gradient(jnp.minimum(curr_q1, curr_q2))
+        # Calculate soft q values at every actions with online critic.
+        curr_s_q1, curr_s_q2 = self.critic.apply(params_critic, state)
+        curr_s_q = jax.lax.stop_gradient(jnp.minimum(curr_s_q1, curr_s_q2))
+        # Calculate action distribution.
         pi, log_pi = self.actor.apply(params_actor, state)
-        mean_log_pi = (pi * log_pi).sum(axis=1).mean()
-        mean_q = (pi * curr_q).sum(axis=1).mean()
+        # Calculate soft q values and entropies(= -1 * E[log(\pi)]).
+        mean_q = (pi * curr_s_q).sum(axis=1).mean()
+        mean_log_pi = (pi * curr_s_q).sum(axis=1).mean()
         return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)

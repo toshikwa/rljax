@@ -97,6 +97,7 @@ class TD3(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
+        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         return self.actor.apply(params_actor, state)
@@ -195,11 +196,14 @@ class TD3(OffPolicyActorCritic):
         weight: np.ndarray,
         rng: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        # Calculate next actions and add clipped noises.
         next_action = self.actor.apply(params_actor_target, next_state)
         noise = jax.random.normal(rng, next_action.shape) * self.std_target
         next_action = jnp.clip(next_action + jnp.clip(noise, -self.clip_noise, self.clip_noise), -1.0, 1.0)
+        # Calculate target q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.minimum(next_q1, next_q2))
+        # Calculate current q values with online critic.
         curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
         error = jnp.abs(target_q - curr_q1)
         loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()

@@ -19,8 +19,8 @@ def build_qrdqn(state_space, action_space, num_quantiles, hidden_units, dueling_
             state = DQNBody()(state)
         return DiscreteQuantileFunction(
             action_dim=action_space.n,
-            num_quantiles=num_quantiles,
             num_critics=1,
+            num_quantiles=num_quantiles,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
             dueling_net=dueling_net,
@@ -88,6 +88,7 @@ class QRDQN(QLearning):
     def _select_action(
         self,
         params: hk.Params,
+        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         q = self.quantile_net.apply(params, state).mean(axis=1)
@@ -169,10 +170,11 @@ class QRDQN(QLearning):
             # calculate greedy actions and max quantile values with target network.
             next_quantile = jnp.max(self.quantile_net.apply(params_target, next_state), axis=2, keepdims=True)
 
+        # calculate target quantile values and reshape to (batch_size, 1, N).
         target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
         target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
+        # calculate current quantile values, whose shape is (batch_size, N, 1).
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state), action)
-
         loss, error = calculate_quantile_huber_loss(target_quantile - curr_quantile, self.tau_hat, weight, 1.0)
         return loss, jax.lax.stop_gradient(error)
 

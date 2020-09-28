@@ -88,6 +88,7 @@ class PPO(OnPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
+        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, state)
@@ -106,7 +107,7 @@ class PPO(OnPolicyActorCritic):
     def update(self, writer):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()
 
-        # Calculate gamma-return and gae.
+        # Calculate gamma-returns and GAEs.
         target, gae = self.calculate_gae(
             params_critic=self.params_critic,
             state=state,
@@ -200,8 +201,10 @@ class PPO(OnPolicyActorCritic):
         log_pi_old: np.ndarray,
         gae: jnp.ndarray,
     ) -> jnp.ndarray:
+        # Calculate log(\pi) at current policy.
         mean, log_pi = self.actor.apply(params_actor, state)
         log_pi = evaluate_lop_pi(mean, log_pi, action)
+        # Calculate importance ratio.
         ratio = jnp.exp(log_pi - log_pi_old)
         loss_actor1 = -ratio * gae
         loss_actor2 = -jnp.clip(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * gae

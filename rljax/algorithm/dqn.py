@@ -81,6 +81,7 @@ class DQN(QLearning):
     def _select_action(
         self,
         params: hk.Params,
+        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         s_q = self.q_net.apply(params, state)

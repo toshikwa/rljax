@@ -91,6 +91,7 @@ class DDPG(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
+        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         return self.actor.apply(params_actor, state)
@@ -186,9 +187,12 @@ class DDPG(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        # Calculate next actions.
         next_action = self.actor.apply(params_actor_target, next_state)
+        # Calculate target q values with target critic.
         next_q = self.critic.apply(params_critic_target, next_state, next_action)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+        # Calculate current q values with online critic.
         curr_q = self.critic.apply(params_critic, state, action)
         error = jnp.abs(target_q - curr_q)
         loss = (jnp.square(error) * weight).mean()

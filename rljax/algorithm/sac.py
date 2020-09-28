@@ -94,6 +94,7 @@ class SAC(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
+        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, state)
@@ -210,11 +211,14 @@ class SAC(OffPolicyActorCritic):
         rng: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
+        # Sample next actions.
         next_mean, next_log_std = self.actor.apply(params_actor, next_state)
         next_action, next_log_pi = reparameterize(next_mean, next_log_std, rng)
+        # Calculate target soft q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+        # Calculate current soft q values with online critic.
         curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
         error = jnp.abs(target_q - curr_q1)
         loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
@@ -251,8 +255,10 @@ class SAC(OffPolicyActorCritic):
         rng: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
+        # Sample actions.
         mean, log_std = self.actor.apply(params_actor, state)
         action, log_pi = reparameterize(mean, log_std, rng)
+        # Calculate soft q values with online critic.
         q1, q2 = self.critic.apply(params_critic, state, action)
         mean_log_pi = log_pi.mean()
         return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), mean_log_pi

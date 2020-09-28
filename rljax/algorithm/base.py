@@ -94,7 +94,7 @@ class OnPolicyActorCritic(Algorithm):
         self.batch_size = batch_size
 
     def select_action(self, state):
-        action = self._select_action(self.params_actor, state[None, ...])
+        action = self._select_action(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
@@ -102,7 +102,7 @@ class OnPolicyActorCritic(Algorithm):
         return np.array(action[0]), np.array(log_pi[0])
 
     @abstractmethod
-    def _select_action(self, params_actor, state):
+    def _select_action(self, params_actor, rng, state):
         pass
 
     @abstractmethod
@@ -247,7 +247,7 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
             self._update_target = jax.jit(partial(soft_update, tau=tau))
 
     def select_action(self, state):
-        action = self._select_action(self.params_actor, state[None, ...])
+        action = self._select_action(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
@@ -255,7 +255,7 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         return np.array(action[0])
 
     @abstractmethod
-    def _select_action(self, params_actor, state):
+    def _select_action(self, params_actor, rng, state):
         pass
 
     @abstractmethod
@@ -308,7 +308,7 @@ class QLearning(OffPolicyAlgorithm):
         if np.random.rand() < self.eps_eval:
             action = self.action_space.sample()
         else:
-            action = self._select_action(self.params, state[None, ...])
+            action = self._select_action(self.params, next(self.rng), state[None, ...])
             action = np.array(action[0])
         return action
 
@@ -316,10 +316,10 @@ class QLearning(OffPolicyAlgorithm):
         if np.random.rand() < self.eps:
             action = self.action_space.sample()
         else:
-            action = self._select_action(self.params, state[None, ...])
+            action = self._select_action(self.params, next(self.rng), state[None, ...])
             action = np.array(action[0])
         return action
 
     @abstractmethod
-    def _select_action(self, params, state):
+    def _select_action(self, params, rng, state):
         pass
