@@ -14,15 +14,12 @@ config = {
         "epoch_ppo": 32,
     },
     "ddpg": {
-        "use_per": False,
         "start_steps": 1000,
     },
     "td3": {
-        "use_per": False,
         "start_steps": 1000,
     },
     "sac": {
-        "use_per": False,
         "start_steps": 1000,
     },
 }

@@ -9,21 +9,27 @@ import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import QLearning
-from rljax.network.critic import DiscreteQuantileFunction
+from rljax.network.critic import DiscreteQuantileFunction, DQNBody
 from rljax.utils import calculate_quantile_huber_loss, get_quantile_at_action
 
 
-def build_qrdqn(action_dim, num_quantiles, hidden_units, dueling_net):
-    return hk.transform(
-        lambda x: DiscreteQuantileFunction(
-            action_dim=action_dim,
+def build_qrdqn(state_space, action_space, num_quantiles, hidden_units, dueling_net):
+    def _func(x):
+        if len(state_space.shape) == 3:
+            x = DQNBody()(x)
+        return DiscreteQuantileFunction(
+            action_dim=action_space.n,
             num_quantiles=num_quantiles,
             num_critics=1,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
             dueling_net=dueling_net,
         )(x)
-    )
+
+    fake_input = state_space.sample()
+    if len(state_space.shape) == 1:
+        fake_input = fake_input.astype(np.float32)
+    return hk.transform(_func), fake_input[None, ...]
 
 
 class QRDQN(QLearning):
@@ -37,13 +43,13 @@ class QRDQN(QLearning):
         nstep=1,
         buffer_size=10 ** 6,
         use_per=False,
-        batch_size=256,
-        start_steps=1000,
-        update_interval=1,
-        update_interval_target=1000,
+        batch_size=32,
+        start_steps=50000,
+        update_interval=4,
+        update_interval_target=10000,
         eps=0.01,
         eps_eval=0.001,
-        lr=1e-4,
+        lr=5e-5,
         units=(512,),
         num_quantiles=200,
         dueling_net=True,
@@ -68,8 +74,7 @@ class QRDQN(QLearning):
         )
 
         # QR-DQN.
-        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
-        self.quantile_net = build_qrdqn(action_space.n, num_quantiles, units, dueling_net)
+        self.quantile_net, fake_input = build_qrdqn(state_space, action_space, num_quantiles, units, dueling_net)
         opt_init, self.opt = optix.adam(lr)
         self.params = self.params_target = self.quantile_net.init(next(self.rng), fake_input)
         self.opt_state = opt_init(self.params)
@@ -113,7 +118,7 @@ class QRDQN(QLearning):
             self.params_target = self._update_target(self.params_target, self.params)
 
         if self.learning_step % 1000 == 0:
-            writer.add_scalar('loss/quantile', loss, self.learning_step)
+            writer.add_scalar("loss/quantile", loss, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update(

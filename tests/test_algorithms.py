@@ -37,17 +37,18 @@ def _test_algorithm(env, algo):
 )
 def test_qlearning(use_per, dueling_net, double_q):
     for ALGO in [DQN, QRDQN]:
-        env = gym.make("CartPole-v0")
-        algo = ALGO(
-            num_steps=100000,
-            state_space=env.observation_space,
-            action_space=env.action_space,
-            seed=0,
-            use_per=use_per,
-            dueling_net=dueling_net,
-            double_q=double_q,
-        )
-        _test_algorithm(env, algo)
+        for env_id in ['CartPole-v0', 'MsPacmanNoFrameskip-v4']:
+            env = gym.make(env_id)
+            algo = ALGO(
+                num_steps=100000,
+                state_space=env.observation_space,
+                action_space=env.action_space,
+                seed=0,
+                use_per=use_per,
+                dueling_net=dueling_net,
+                double_q=double_q,
+            )
+            _test_algorithm(env, algo)
 
 
 @pytest.mark.parametrize(
@@ -59,16 +60,17 @@ def test_qlearning(use_per, dueling_net, double_q):
     ],
 )
 def test_sac_discrete(use_per, dueling_net):
-    env = gym.make("CartPole-v0")
-    algo = SACDiscrete(
-        num_steps=100000,
-        state_space=env.observation_space,
-        action_space=env.action_space,
-        seed=0,
-        use_per=use_per,
-        dueling_net=dueling_net,
-    )
-    _test_algorithm(env, algo)
+    for env_id in ['CartPole-v0', 'MsPacmanNoFrameskip-v4']:
+        env = gym.make(env_id)
+        algo = SACDiscrete(
+            num_steps=100000,
+            state_space=env.observation_space,
+            action_space=env.action_space,
+            seed=0,
+            use_per=use_per,
+            dueling_net=dueling_net,
+        )
+        _test_algorithm(env, algo)
 
 
 @pytest.mark.parametrize("use_per", [(False), (True)])

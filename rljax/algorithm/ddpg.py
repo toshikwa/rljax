@@ -13,24 +13,28 @@ from rljax.network.critic import ContinuousQFunction
 from rljax.utils import add_noise
 
 
-def build_ddpg_critic(action_dim, hidden_units):
-    return hk.transform(
-        lambda x: ContinuousQFunction(
+def build_ddpg_critic(state_space, action_space, hidden_units):
+    def _func(x):
+        return ContinuousQFunction(
             num_critics=1,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
         )(x)
-    )
+
+    fake_input = np.concatenate([state_space.sample(), action_space.sample()], axis=-1)
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
-def build_ddpg_actor(action_dim, hidden_units):
-    return hk.transform(
-        lambda x: DeterministicPolicy(
-            action_dim=action_dim,
+def build_ddpg_actor(state_space, action_space, hidden_units):
+    def _func(x):
+        return DeterministicPolicy(
+            action_dim=action_space.shape[0],
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
         )(x)
-    )
+
+    fake_input = state_space.sample()
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
 class DDPG(OffPolicyActorCritic):
@@ -44,12 +48,12 @@ class DDPG(OffPolicyActorCritic):
         nstep=1,
         buffer_size=10 ** 6,
         use_per=False,
-        batch_size=256,
+        batch_size=128,
         start_steps=10000,
         update_interval=1,
         tau=5e-3,
-        lr_actor=3e-4,
-        lr_critic=3e-4,
+        lr_actor=1e-3,
+        lr_critic=1e-3,
         units_actor=(400, 300),
         units_critic=(400, 300),
         std=0.1,
@@ -70,18 +74,16 @@ class DDPG(OffPolicyActorCritic):
         )
 
         # Critic.
-        fake_input = np.zeros((1, state_space.shape[0] + action_space.shape[0]), np.float32)
-        self.critic = build_ddpg_critic(action_space.shape[0], units_critic)
-        opt_init_critic, self.opt_critic = optix.adam(lr_critic)
+        self.critic, fake_input = build_ddpg_critic(state_space, action_space, units_critic)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
-        self.opt_state_critic = opt_init_critic(self.params_critic)
+        self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        fake_input = np.zeros((1, *state_space.shape), np.float32)
-        self.actor = build_ddpg_actor(action_space.shape[0], units_actor)
-        opt_init_actor, self.opt_actor = optix.adam(lr_actor)
+        self.actor, fake_input = build_ddpg_actor(state_space, action_space, units_actor)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), fake_input)
-        self.opt_state_actor = opt_init_actor(self.params_actor)
+        self.opt_state_actor = opt_init(self.params_actor)
 
         # Other parameters.
         self.std = std
@@ -140,7 +142,7 @@ class DDPG(OffPolicyActorCritic):
         self.params_actor_target = self._update_target(self.params_actor_target, self.params_actor)
 
         if self.learning_step % 1000 == 0:
-            writer.add_scalar('loss/critic', loss_critic, self.learning_step)
+            writer.add_scalar("loss/critic", loss_critic, self.learning_step)
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)

@@ -13,24 +13,28 @@ from rljax.network.critic import ContinuousQFunction
 from rljax.utils import reparameterize
 
 
-def build_sac_critic(action_dim, hidden_units):
-    return hk.transform(
-        lambda x: ContinuousQFunction(
+def build_sac_critic(state_space, action_space, hidden_units):
+    def _func(x):
+        return ContinuousQFunction(
             num_critics=2,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
         )(x)
-    )
+
+    fake_input = np.concatenate([state_space.sample(), action_space.sample()], axis=-1)
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
-def build_sac_actor(action_dim, hidden_units):
-    return hk.transform(
-        lambda x: StateDependentGaussianPolicy(
-            action_dim=action_dim,
+def build_sac_actor(state_space, action_space, hidden_units):
+    def _func(x):
+        return StateDependentGaussianPolicy(
+            action_dim=action_space.shape[0],
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
         )(x)
-    )
+
+    fake_input = state_space.sample()
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
 class SAC(OffPolicyActorCritic):
@@ -70,24 +74,22 @@ class SAC(OffPolicyActorCritic):
         )
 
         # Critic.
-        fake_input = np.zeros((1, state_space.shape[0] + action_space.shape[0]), np.float32)
-        self.critic = build_sac_critic(action_space.shape[0], units_critic)
-        opt_init_critic, self.opt_critic = optix.adam(lr_critic)
+        self.critic, fake_input = build_sac_critic(state_space, action_space, units_critic)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
-        self.opt_state_critic = opt_init_critic(self.params_critic)
+        self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
-        self.actor = build_sac_actor(action_space.shape[0], units_actor)
-        opt_init_actor, self.opt_actor = optix.adam(lr_actor)
+        self.actor, fake_input = build_sac_actor(state_space, action_space, units_actor)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), fake_input)
-        self.opt_state_actor = opt_init_actor(self.params_actor)
+        self.opt_state_actor = opt_init(self.params_actor)
 
         # Entropy coefficient.
         self.target_entropy = -float(action_space.shape[0])
         self.log_alpha = jnp.zeros((), dtype=jnp.float32)
-        opt_init_alpha, self.opt_alpha = optix.adam(lr_alpha)
-        self.opt_state_alpha = opt_init_alpha(self.log_alpha)
+        opt_init, self.opt_alpha = optix.adam(lr_alpha)
+        self.opt_state_alpha = opt_init(self.log_alpha)
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(

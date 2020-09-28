@@ -9,20 +9,26 @@ import jax.numpy as jnp
 from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import QLearning
-from rljax.network.critic import DiscreteQFunction
+from rljax.network.critic import DiscreteQFunction, DQNBody
 from rljax.utils import get_q_at_action
 
 
-def build_dqn(action_dim, hidden_units, dueling_net):
-    return hk.transform(
-        lambda x: DiscreteQFunction(
-            action_dim=action_dim,
+def build_dqn(state_space, action_space, hidden_units, dueling_net):
+    def _func(x):
+        if len(state_space.shape) == 3:
+            x = DQNBody()(x)
+        return DiscreteQFunction(
+            action_dim=action_space.n,
             num_critics=1,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
             dueling_net=dueling_net,
         )(x)
-    )
+
+    fake_input = state_space.sample()
+    if len(state_space.shape) == 1:
+        fake_input = fake_input.astype(np.float32)
+    return hk.transform(_func), fake_input[None, ...]
 
 
 class DQN(QLearning):
@@ -36,13 +42,13 @@ class DQN(QLearning):
         nstep=1,
         buffer_size=10 ** 6,
         use_per=False,
-        batch_size=256,
-        start_steps=1000,
-        update_interval=1,
-        update_interval_target=1000,
+        batch_size=32,
+        start_steps=50000,
+        update_interval=4,
+        update_interval_target=10000,
         eps=0.01,
         eps_eval=0.001,
-        lr=1e-4,
+        lr=5e-5,
         units=(512,),
         dueling_net=True,
         double_q=True,
@@ -66,8 +72,7 @@ class DQN(QLearning):
         )
 
         # DQN.
-        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
-        self.q_net = build_dqn(action_space.n, units, dueling_net)
+        self.q_net, fake_input = build_dqn(state_space, action_space, units, dueling_net)
         opt_init, self.opt = optix.adam(lr)
         self.params = self.params_target = self.q_net.init(next(self.rng), fake_input)
         self.opt_state = opt_init(self.params)
@@ -106,7 +111,7 @@ class DQN(QLearning):
             self.params_target = self._update_target(self.params_target, self.params)
 
         if self.learning_step % 1000 == 0:
-            writer.add_scalar('loss/q', loss, self.learning_step)
+            writer.add_scalar("loss/q", loss, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update(

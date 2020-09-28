@@ -13,24 +13,28 @@ from rljax.network.critic import ContinuousVFunction
 from rljax.utils import clip_gradient, evaluate_lop_pi, reparameterize
 
 
-def build_ppo_critic(action_dim, hidden_units):
-    return hk.transform(
-        lambda x: ContinuousVFunction(
+def build_ppo_critic(state_space, hidden_units):
+    def _func(x):
+        return ContinuousVFunction(
             num_critics=1,
             hidden_units=hidden_units,
             hidden_activation=jnp.tanh,
         )(x)
-    )
+
+    fake_input = state_space.sample()
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
-def build_ppo_actor(action_dim, hidden_units):
-    return hk.transform(
-        lambda x: StateIndependentGaussianPolicy(
-            action_dim=action_dim,
+def build_ppo_actor(state_space, action_space, hidden_units):
+    def _func(x):
+        return StateIndependentGaussianPolicy(
+            action_dim=action_space.shape[0],
             hidden_units=hidden_units,
             hidden_activation=jnp.tanh,
         )(x)
-    )
+
+    fake_input = state_space.sample()
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
 class PPO(OnPolicyActorCritic):
@@ -64,17 +68,16 @@ class PPO(OnPolicyActorCritic):
         )
 
         # Critic.
-        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
-        self.critic = build_ppo_critic(action_space.shape[0], units_critic)
-        opt_init_critic, self.opt_critic = optix.adam(lr_critic)
+        self.critic, fake_input = build_ppo_critic(state_space, units_critic)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
-        self.opt_state_critic = opt_init_critic(self.params_critic)
+        self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = build_ppo_actor(action_space.shape[0], units_actor)
-        opt_init_actor, self.opt_actor = optix.adam(lr_actor)
+        self.actor, fake_input = build_ppo_actor(state_space, action_space, units_actor)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), fake_input)
-        self.opt_state_actor = opt_init_actor(self.params_actor)
+        self.opt_state_actor = opt_init(self.params_actor)
 
         # Other parameters.
         self.epoch_ppo = epoch_ppo

@@ -9,30 +9,50 @@ from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import CategoricalPolicy
-from rljax.network.critic import DiscreteQFunction
+from rljax.network.critic import DiscreteQFunction, DQNBody
 from rljax.utils import get_q_at_action
 
 
-def build_sac_discrete_critic(action_dim, hidden_units, dueling_net):
-    return hk.transform(
-        lambda x: DiscreteQFunction(
-            action_dim=action_dim,
-            num_critics=2,
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-            dueling_net=dueling_net,
-        )(x)
-    )
+def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_net):
+    def _func(x):
+        if len(state_space.shape) == 3:
+            return [
+                DiscreteQFunction(
+                    action_dim=action_space.n,
+                    num_critics=1,
+                    hidden_units=hidden_units,
+                    hidden_activation=nn.relu,
+                    dueling_net=dueling_net,
+                )(DQNBody()(x))
+                for _ in range(2)
+            ]
+        elif len(state_space.shape) == 1:
+            return DiscreteQFunction(
+                action_dim=action_space.n,
+                num_critics=2,
+                hidden_units=hidden_units,
+                hidden_activation=nn.relu,
+                dueling_net=dueling_net,
+            )(x)
+
+    fake_input = state_space.sample()
+    if len(state_space.shape) == 1:
+        fake_input = fake_input.astype(np.float32)
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
-def build_sac_discrete_actor(action_dim, hidden_units):
-    return hk.transform(
-        lambda x: CategoricalPolicy(
-            action_dim=action_dim,
+def build_sac_discrete_actor(state_space, action_space, hidden_units):
+    def _func(x):
+        if len(state_space.shape) == 3:
+            x = DQNBody()(x)
+        return CategoricalPolicy(
+            action_dim=action_space.n,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
         )(x)
-    )
+
+    fake_input = state_space.sample()
+    return hk.transform(_func), fake_input[None, ...].astype(np.float32)
 
 
 class SACDiscrete(OffPolicyActorCritic):
@@ -46,10 +66,10 @@ class SACDiscrete(OffPolicyActorCritic):
         nstep=1,
         buffer_size=10 ** 6,
         use_per=False,
-        batch_size=256,
+        batch_size=64,
         start_steps=20000,
-        update_interval=1,
-        tau=5e-3,
+        update_interval=4,
+        update_interval_target=8000,
         lr_actor=3e-4,
         lr_critic=3e-4,
         lr_alpha=3e-4,
@@ -70,27 +90,26 @@ class SACDiscrete(OffPolicyActorCritic):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
-            tau=tau,
+            update_interval_target=update_interval_target,
         )
 
         # Critic.
-        fake_input = np.zeros((1, state_space.shape[0]), np.float32)
-        self.critic = build_sac_discrete_critic(action_space.n, units_critic, dueling_net)
-        opt_init_critic, self.opt_critic = optix.adam(lr_critic)
+        self.critic, fake_input = build_sac_discrete_critic(state_space, action_space, units_critic, dueling_net)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
-        self.opt_state_critic = opt_init_critic(self.params_critic)
+        self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = build_sac_discrete_actor(action_space.n, units_actor)
-        opt_init_actor, self.opt_actor = optix.adam(lr_actor)
+        self.actor, fake_input = build_sac_discrete_actor(state_space, action_space, units_actor)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), fake_input)
-        self.opt_state_actor = opt_init_actor(self.params_actor)
+        self.opt_state_actor = opt_init(self.params_actor)
 
         # Entropy coefficient.
         self.target_entropy = -np.log(1.0 / action_space.n) * target_entropy_ratio
         self.log_alpha = jnp.zeros((), dtype=jnp.float32)
-        opt_init_alpha, self.opt_alpha = optix.adam(lr_alpha)
-        self.opt_state_alpha = opt_init_alpha(self.log_alpha)
+        opt_init, self.opt_alpha = optix.adam(lr_alpha)
+        self.opt_state_alpha = opt_init(self.log_alpha)
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, state[None, ...])
@@ -160,10 +179,11 @@ class SACDiscrete(OffPolicyActorCritic):
         )
 
         # Update target network.
-        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
+        if self.env_step % self.update_interval_target == 0:
+            self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
         if self.learning_step % 1000 == 0:
-            writer.add_scalar('loss/critic', loss_critic, self.learning_step)
+            writer.add_scalar("loss/critic", loss_critic, self.learning_step)
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
             writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)
             writer.add_scalar("stat/alpha", jnp.exp(self.log_alpha), self.learning_step)

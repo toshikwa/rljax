@@ -4,6 +4,7 @@ dist/
 __pycache__/
 .vscode/
 logs/
+data/
 *.log
 *.out
 *.sh

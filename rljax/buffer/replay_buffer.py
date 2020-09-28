@@ -61,15 +61,22 @@ class ReplayBuffer:
         gamma,
         nstep,
     ):
+        assert len(state_space.shape) in (1, 3)
+
         self._n = 0
         self._p = 0
         self.buffer_size = buffer_size
         self.nstep = nstep
+        self.state_shape = state_space.shape
+        self.use_image = len(self.state_shape) == 3
 
-        self.state = np.empty((buffer_size, *state_space.shape), dtype=np.float32)
-        self.reward = np.empty((buffer_size, 1), dtype=np.float32)
-        self.done = np.empty((buffer_size, 1), dtype=np.float32)
-        self.next_state = np.empty((buffer_size, *state_space.shape), dtype=np.float32)
+        if self.use_image:
+            # Store images as a list of LazyFrames, which uses 4 times less memory.
+            self.state = [None] * buffer_size
+            self.next_state = [None] * buffer_size
+        else:
+            self.state = np.empty((buffer_size, *state_space.shape), dtype=np.float32)
+            self.next_state = np.empty((buffer_size, *state_space.shape), dtype=np.float32)
 
         if type(action_space) == Box:
             self.action = np.empty((buffer_size, *action_space.shape), dtype=np.float32)
@@ -77,6 +84,9 @@ class ReplayBuffer:
             self.action = np.empty((buffer_size, 1), dtype=np.int32)
         else:
             NotImplementedError
+
+        self.reward = np.empty((buffer_size, 1), dtype=np.float32)
+        self.done = np.empty((buffer_size, 1), dtype=np.float32)
 
         if nstep != 1:
             self.nstep_buffer = NStepBuffer(gamma, nstep)
@@ -112,12 +122,22 @@ class ReplayBuffer:
         return np.random.randint(low=0, high=self._n, size=batch_size)
 
     def _sample(self, idxes):
+        if self.use_image:
+            state = np.empty((len(idxes), *self.state_shape), dtype=np.uint8)
+            next_state = state.copy()
+            for i, idx in enumerate(idxes):
+                state[i, ...] = self.state[idx]
+                next_state[i, ...] = self.next_state[idx]
+        else:
+            state = self.state[idxes]
+            next_state = self.next_state[idxes]
+
         return (
-            self.state[idxes],
+            state,
             self.action[idxes],
             self.reward[idxes],
             self.done[idxes],
-            self.next_state[idxes],
+            next_state,
         )
 
     def sample(self, batch_size):
