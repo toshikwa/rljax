@@ -14,21 +14,18 @@ from rljax.utils import get_q_at_action
 
 
 def build_dqn(state_space, action_space, hidden_units, dueling_net):
-    def _func(x):
+    def _func(state):
         if len(state_space.shape) == 3:
-            x = DQNBody()(x)
+            state = DQNBody()(state)
         return DiscreteQFunction(
             action_dim=action_space.n,
             num_critics=1,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
             dueling_net=dueling_net,
-        )(x)
+        )(state)
 
-    fake_input = state_space.sample()
-    if len(state_space.shape) == 1:
-        fake_input = fake_input.astype(np.float32)
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...]
+    return hk.without_apply_rng(hk.transform(_func))
 
 
 class DQN(QLearning):
@@ -72,9 +69,9 @@ class DQN(QLearning):
         )
 
         # DQN.
-        self.q_net, fake_input = build_dqn(state_space, action_space, units, dueling_net)
+        self.q_net = build_dqn(state_space, action_space, units, dueling_net)
         opt_init, self.opt = optix.adam(lr)
-        self.params = self.params_target = self.q_net.init(next(self.rng), fake_input)
+        self.params = self.params_target = self.q_net.init(next(self.rng), self.fake_state)
         self.opt_state = opt_init(self.params)
 
         # Other parameters.

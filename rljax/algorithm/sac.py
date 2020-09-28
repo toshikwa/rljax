@@ -14,28 +14,26 @@ from rljax.network.critic import ContinuousQFunction
 from rljax.utils import reparameterize
 
 
-def build_sac_critic(state_space, action_space, hidden_units):
-    def _func(x):
+def build_sac_critic(hidden_units):
+    def _func(state, action):
         return ContinuousQFunction(
             num_critics=2,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
-        )(x)
+        )(state, action)
 
-    fake_input = np.concatenate([state_space.sample(), action_space.sample()], axis=-1)
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
-def build_sac_actor(state_space, action_space, hidden_units):
-    def _func(x):
+def build_sac_actor(action_space, hidden_units):
+    def _func(state):
         return StateDependentGaussianPolicy(
             action_dim=action_space.shape[0],
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
-        )(x)
+        )(state)
 
-    fake_input = state_space.sample()
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
 class SAC(OffPolicyActorCritic):
@@ -75,15 +73,15 @@ class SAC(OffPolicyActorCritic):
         )
 
         # Critic.
-        self.critic, fake_input = build_sac_critic(state_space, action_space, units_critic)
+        self.critic = build_sac_critic(units_critic)
         opt_init, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor, fake_input = build_sac_actor(state_space, action_space, units_actor)
+        self.actor = build_sac_actor(action_space, units_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.actor.init(next(self.rng), fake_input)
+        self.params_actor = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Entropy coefficient.
@@ -214,10 +212,10 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         next_mean, next_log_std = self.actor.apply(params_actor, next_state)
         next_action, next_log_pi = reparameterize(next_mean, next_log_std, rng)
-        next_q1, next_q2 = self.critic.apply(params_critic_target, jnp.concatenate([next_state, next_action], axis=1))
+        next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        curr_q1, curr_q2 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))
+        curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
         error = jnp.abs(target_q - curr_q1)
         loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
         return loss, jax.lax.stop_gradient(error)
@@ -255,7 +253,7 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         mean, log_std = self.actor.apply(params_actor, state)
         action, log_pi = reparameterize(mean, log_std, rng)
-        q1, q2 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))
+        q1, q2 = self.critic.apply(params_critic, state, action)
         mean_log_pi = log_pi.mean()
         return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), mean_log_pi
 

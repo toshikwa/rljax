@@ -15,7 +15,7 @@ from rljax.utils import get_q_at_action
 
 
 def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_net):
-    def _func(x):
+    def _func(state):
         if len(state_space.shape) == 3:
             return [
                 DiscreteQFunction(
@@ -24,7 +24,7 @@ def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_n
                     hidden_units=hidden_units,
                     hidden_activation=nn.relu,
                     dueling_net=dueling_net,
-                )(DQNBody()(x))
+                )(DQNBody()(state))
                 for _ in range(2)
             ]
         elif len(state_space.shape) == 1:
@@ -34,26 +34,22 @@ def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_n
                 hidden_units=hidden_units,
                 hidden_activation=nn.relu,
                 dueling_net=dueling_net,
-            )(x)
+            )(state)
 
-    fake_input = state_space.sample()
-    if len(state_space.shape) == 1:
-        fake_input = fake_input.astype(np.float32)
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
 def build_sac_discrete_actor(state_space, action_space, hidden_units):
-    def _func(x):
+    def _func(state):
         if len(state_space.shape) == 3:
-            x = DQNBody()(x)
+            x = DQNBody()(state)
         return CategoricalPolicy(
             action_dim=action_space.n,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
-        )(x)
+        )(state)
 
-    fake_input = state_space.sample()
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
 class SACDiscrete(OffPolicyActorCritic):
@@ -95,15 +91,15 @@ class SACDiscrete(OffPolicyActorCritic):
         )
 
         # Critic.
-        self.critic, fake_input = build_sac_discrete_critic(state_space, action_space, units_critic, dueling_net)
+        self.critic = build_sac_discrete_critic(state_space, action_space, units_critic, dueling_net)
         opt_init, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor, fake_input = build_sac_discrete_actor(state_space, action_space, units_actor)
+        self.actor = build_sac_discrete_actor(state_space, action_space, units_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.actor.init(next(self.rng), fake_input)
+        self.params_actor = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Entropy coefficient.

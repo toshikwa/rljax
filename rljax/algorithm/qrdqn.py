@@ -14,9 +14,9 @@ from rljax.utils import calculate_quantile_huber_loss, get_quantile_at_action
 
 
 def build_qrdqn(state_space, action_space, num_quantiles, hidden_units, dueling_net):
-    def _func(x):
+    def _func(state):
         if len(state_space.shape) == 3:
-            x = DQNBody()(x)
+            state = DQNBody()(state)
         return DiscreteQuantileFunction(
             action_dim=action_space.n,
             num_quantiles=num_quantiles,
@@ -24,12 +24,9 @@ def build_qrdqn(state_space, action_space, num_quantiles, hidden_units, dueling_
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
             dueling_net=dueling_net,
-        )(x)
+        )(state)
 
-    fake_input = state_space.sample()
-    if len(state_space.shape) == 1:
-        fake_input = fake_input.astype(np.float32)
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...]
+    return hk.without_apply_rng(hk.transform(_func))
 
 
 class QRDQN(QLearning):
@@ -74,9 +71,9 @@ class QRDQN(QLearning):
         )
 
         # QR-DQN.
-        self.quantile_net, fake_input = build_qrdqn(state_space, action_space, num_quantiles, units, dueling_net)
+        self.quantile_net = build_qrdqn(state_space, action_space, num_quantiles, units, dueling_net)
         opt_init, self.opt = optix.adam(lr)
-        self.params = self.params_target = self.quantile_net.init(next(self.rng), fake_input)
+        self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state)
         self.opt_state = opt_init(self.params)
 
         # Fixed fractions.

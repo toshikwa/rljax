@@ -50,13 +50,14 @@ class ContinuousQFunction(hk.Module):
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
 
-    def __call__(self, x):
+    def __call__(self, s, a):
         def q_func(x):
             for unit in self.hidden_units:
                 x = hk.Linear(unit)(x)
                 x = self.hidden_activation(x)
             return hk.Linear(1)(x)
 
+        x = jnp.concatenate([s, a], axis=1)
         if self.num_critics == 1:
             return q_func(x)
 
@@ -125,8 +126,7 @@ class DiscreteQFunction(hk.Module):
         if self.num_critics == 1:
             return q_func(x)
 
-        xs = [q_func(x) for _ in range(self.num_critics)]
-        return xs
+        return [q_func(x) for _ in range(self.num_critics)]
 
 
 class DiscreteQuantileFunction(hk.Module):
@@ -173,8 +173,7 @@ class DiscreteQuantileFunction(hk.Module):
         if self.num_critics == 1:
             return quantile_func(x)
 
-        xs = [quantile_func(x) for _ in range(self.num_critics)]
-        return xs
+        return [quantile_func(x) for _ in range(self.num_critics)]
 
 
 class CosineEmbeddingNetwork(hk.Module):

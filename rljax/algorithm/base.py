@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from functools import partial
 
 import numpy as np
+from gym.spaces import Box
 
 import jax
 from haiku import PRNGSequence
@@ -29,6 +30,16 @@ class Algorithm(ABC):
         self.state_space = state_space
         self.action_space = action_space
         self.gamma = gamma
+
+        # Define fake input for JIT.
+        self.fake_state = state_space.sample()[None, ...]
+        if len(state_space.shape) == 1:
+            self.fake_state = self.fake_state.astype(np.float32)
+        if type(action_space) == Box:
+            self.fake_action = action_space.sample()[None, ...]
+            self.fake_action = self.fake_action.astype(np.float32)
+        else:
+            self.fake_action = None
 
     @abstractmethod
     def is_update(self):

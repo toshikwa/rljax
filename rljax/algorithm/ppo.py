@@ -13,28 +13,26 @@ from rljax.network.critic import ContinuousVFunction
 from rljax.utils import clip_gradient, evaluate_lop_pi, reparameterize
 
 
-def build_ppo_critic(state_space, hidden_units):
-    def _func(x):
+def build_ppo_critic(hidden_units):
+    def _func(state):
         return ContinuousVFunction(
             num_critics=1,
             hidden_units=hidden_units,
             hidden_activation=jnp.tanh,
-        )(x)
+        )(state)
 
-    fake_input = state_space.sample()
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
-def build_ppo_actor(state_space, action_space, hidden_units):
-    def _func(x):
+def build_ppo_actor(action_space, hidden_units):
+    def _func(state):
         return StateIndependentGaussianPolicy(
             action_dim=action_space.shape[0],
             hidden_units=hidden_units,
             hidden_activation=jnp.tanh,
-        )(x)
+        )(state)
 
-    fake_input = state_space.sample()
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
 class PPO(OnPolicyActorCritic):
@@ -68,15 +66,15 @@ class PPO(OnPolicyActorCritic):
         )
 
         # Critic.
-        self.critic, fake_input = build_ppo_critic(state_space, units_critic)
+        self.critic = build_ppo_critic(units_critic)
         opt_init, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor, fake_input = build_ppo_actor(state_space, action_space, units_actor)
+        self.actor = build_ppo_actor(action_space, units_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), fake_input)
+        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Other parameters.

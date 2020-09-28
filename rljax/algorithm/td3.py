@@ -14,28 +14,26 @@ from rljax.network.critic import ContinuousQFunction
 from rljax.utils import add_noise
 
 
-def build_td3_critic(state_space, action_space, hidden_units):
-    def _func(x):
+def build_td3_critic(hidden_units):
+    def _func(state, action):
         return ContinuousQFunction(
             num_critics=2,
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
-        )(x)
+        )(state, action)
 
-    fake_input = np.concatenate([state_space.sample(), action_space.sample()], axis=-1)
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
-def build_td3_actor(state_space, action_space, hidden_units):
-    def _func(x):
+def build_td3_actor(action_space, hidden_units):
+    def _func(state):
         return DeterministicPolicy(
             action_dim=action_space.shape[0],
             hidden_units=hidden_units,
             hidden_activation=nn.relu,
-        )(x)
+        )(state)
 
-    fake_input = state_space.sample()
-    return hk.without_apply_rng(hk.transform(_func)), fake_input[None, ...].astype(np.float32)
+    return hk.without_apply_rng(hk.transform(_func))
 
 
 class TD3(OffPolicyActorCritic):
@@ -78,15 +76,15 @@ class TD3(OffPolicyActorCritic):
         )
 
         # Critic.
-        self.critic, fake_input = build_td3_critic(state_space, action_space, units_critic)
+        self.critic = build_td3_critic(units_critic)
         opt_init, self.opt_critic = optix.adam(lr_critic)
-        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), fake_input)
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor, fake_input = build_td3_actor(state_space, action_space, units_actor)
+        self.actor = build_td3_actor(action_space, units_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
-        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), fake_input)
+        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Other parameters.
@@ -200,9 +198,9 @@ class TD3(OffPolicyActorCritic):
         next_action = self.actor.apply(params_actor_target, next_state)
         noise = jax.random.normal(rng, next_action.shape) * self.std_target
         next_action = jnp.clip(next_action + jnp.clip(noise, -self.clip_noise, self.clip_noise), -1.0, 1.0)
-        next_q1, next_q2 = self.critic.apply(params_critic_target, jnp.concatenate([next_state, next_action], axis=1))
+        next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.minimum(next_q1, next_q2))
-        curr_q1, curr_q2 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))
+        curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
         error = jnp.abs(target_q - curr_q1)
         loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
         return loss, jax.lax.stop_gradient(error)
@@ -232,7 +230,7 @@ class TD3(OffPolicyActorCritic):
         state: np.ndarray,
     ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, state)
-        q1 = self.critic.apply(params_critic, jnp.concatenate([state, action], axis=1))[0]
+        q1 = self.critic.apply(params_critic, state, action)[0]
         return -q1.mean()
 
     def __str__(self):
