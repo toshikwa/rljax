@@ -21,6 +21,15 @@ config = {
         "num_quantiles": 50,
         "lr": 1e-3,
     },
+    "iqn": {
+        "start_steps": 1000,
+        "update_interval": 1,
+        "update_interval_target": 400,
+        "num_quantiles": 64,
+        "num_cosines": 16,
+        "feature_dim": 64,
+        "lr": 1e-3,
+    },
     "sac_discrete": {
         "start_steps": 1000,
         "update_interval": 1,

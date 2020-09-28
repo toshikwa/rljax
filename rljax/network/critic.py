@@ -131,7 +131,7 @@ class DiscreteQFunction(hk.Module):
 
 class DiscreteQuantileFunction(hk.Module):
     """
-    Critic for QR-DQN and IQN.
+    Critic for QR-DQN.
     """
 
     def __init__(
@@ -176,21 +176,58 @@ class DiscreteQuantileFunction(hk.Module):
         return [quantile_func(x) for _ in range(self.num_critics)]
 
 
-class CosineEmbeddingNetwork(hk.Module):
+class DiscreteImplicitQuantileFunction(hk.Module):
     """
-    Network for calculating cosine embeddings.
+    Critic for IQN.
     """
 
     def __init__(
         self,
-        state_dim,
+        action_dim,
+        num_critics=1,
+        num_quantiles=64,
         num_cosines=64,
+        feature_dim=7 * 7 * 64,
+        hidden_units=(512,),
+        hidden_activation=nn.relu,
+        dueling_net=True,
     ):
-        super(CosineEmbeddingNetwork, self).__init__()
-        self.state_dim = state_dim
+        super(DiscreteImplicitQuantileFunction, self).__init__()
+        self.action_dim = action_dim
+        self.num_critics = num_critics
+        self.num_quantiles = num_quantiles
         self.num_cosines = num_cosines
+        self.feature_dim = feature_dim
+        self.hidden_units = hidden_units
+        self.hidden_activation = hidden_activation
+        self.dueling_net = dueling_net
+        self.pi = math.pi * jnp.arange(1, num_cosines + 1, dtype=jnp.float32).reshape(1, 1, num_cosines)
 
-    def __call__(self, tau):
-        pi = math.pi * jnp.arange(1, self.num_cosines + 1, dtype=jnp.float32).reshape(1, 1, self.num_cosines)
-        cosine = jnp.cos(jnp.expand_dims(tau, 1) * pi).reshape(-1, self.num_cosines)
-        return nn.relu(hk.Linear(self.state_dim)(cosine))
+    def __call__(self, state_feature, tau):
+        def quantile_func(x):
+            a = x
+            for unit in self.hidden_units:
+                a = hk.Linear(unit)(a)
+                a = self.hidden_activation(a)
+            a = hk.Linear(self.action_dim)(a)
+            if not self.dueling_net:
+                return a.reshape(-1, self.num_quantiles, self.action_dim)
+
+            v = x
+            for unit in self.hidden_units:
+                v = hk.Linear(unit)(v)
+                v = self.hidden_activation(v)
+            v = hk.Linear(1)(v)
+            quantile = a + v - a.mean(axis=1, keepdims=True)
+            return quantile.reshape(-1, self.num_quantiles, self.action_dim)
+
+        # Calculate features of tau.
+        cosine = jnp.cos(jnp.expand_dims(tau, 2) * self.pi).reshape(-1, self.num_cosines)
+        cosine_feature = nn.relu(hk.Linear(self.feature_dim)(cosine)).reshape(-1, self.num_quantiles, self.feature_dim)
+        # Calculate features.
+        feature = (state_feature.reshape(-1, 1, self.feature_dim) * cosine_feature).reshape(-1, self.feature_dim)
+
+        if self.num_critics == 1:
+            return quantile_func(feature)
+
+        return [quantile_func(feature) for _ in range(self.num_critics)]

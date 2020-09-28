@@ -1,7 +1,7 @@
 import gym
 import pytest
 
-from rljax.algorithm import DDPG, DQN, PPO, QRDQN, SAC, TD3, SACDiscrete
+from rljax.algorithm import DDPG, DQN, IQN, PPO, QRDQN, SAC, TD3, SACDiscrete
 
 
 def _test_algorithm(env, algo):
@@ -22,13 +22,12 @@ def _test_algorithm(env, algo):
 @pytest.mark.parametrize(
     "use_per, dueling_net, double_q",
     [
-        (True, False, False),
-        (False, True, False),
-        (False, False, True),
+        (False, False, False),
+        (True, True, True),
     ],
 )
 def test_qlearning(use_per, dueling_net, double_q):
-    for ALGO in [DQN, QRDQN]:
+    for ALGO in [DQN, QRDQN, IQN]:
         env = gym.make("CartPole-v0")
         algo = ALGO(
             num_steps=100000,

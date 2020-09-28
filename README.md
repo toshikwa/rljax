@@ -31,14 +31,11 @@ Currently, following algorithms have been implemented.
 - [x] Double Q-Learning
 - [x] Prioritized Experience Replay(PER)
 - [x] Quantile Regression DQN(QR-DQN)
+- [x] Implicit Quantile Network(IQN)
 - [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
-
-We plan to implement the following algorithms in the future.
-
-- [ ] Implicit Quantile Network(IQN)
 
 ## Examples
 
-Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`.
+Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`. Note that while other discrete algorithms use two linear layers, IQN uses three linear layers due to the structure of the algorithm.
 
-<img src="https://user-images.githubusercontent.com/37267851/94395758-560a3400-019b-11eb-92e2-64ec0479b225.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94395756-54d90700-019b-11eb-8f41-eeabd6e0cb63.png" title="InvertedPendulum-v2" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/94482857-e59ff900-0214-11eb-89e7-5c53f5fecc14.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94395756-54d90700-019b-11eb-8f41-eeabd6e0cb63.png" title="InvertedPendulum-v2" width=400>
