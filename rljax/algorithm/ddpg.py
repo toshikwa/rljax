@@ -11,7 +11,7 @@ from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import DeterministicPolicy
 from rljax.network.critic import ContinuousQFunction
-from rljax.utils import add_noise
+from rljax.util import add_noise
 
 
 def build_ddpg_critic(hidden_units):

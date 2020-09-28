@@ -11,7 +11,7 @@ from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import StateDependentGaussianPolicy
 from rljax.network.critic import ContinuousQFunction
-from rljax.utils import reparameterize
+from rljax.util import reparameterize
 
 
 def build_sac_critic(hidden_units):

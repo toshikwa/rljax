@@ -10,7 +10,7 @@ from jax.experimental import optix
 from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network.actor import StateIndependentGaussianPolicy
 from rljax.network.critic import ContinuousVFunction
-from rljax.utils import clip_gradient, evaluate_lop_pi, reparameterize
+from rljax.util import clip_gradient, evaluate_lop_pi, reparameterize
 
 
 def build_ppo_critic(hidden_units):

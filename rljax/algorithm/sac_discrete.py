@@ -11,7 +11,7 @@ from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network.actor import CategoricalPolicy
 from rljax.network.critic import DiscreteQFunction, DQNBody
-from rljax.utils import get_q_at_action
+from rljax.util import get_q_at_action
 
 
 def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_net):

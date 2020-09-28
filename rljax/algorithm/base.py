@@ -7,7 +7,7 @@ from gym.spaces import Box
 import jax
 from haiku import PRNGSequence
 from rljax.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
-from rljax.utils import soft_update
+from rljax.util import soft_update
 
 
 class Algorithm(ABC):

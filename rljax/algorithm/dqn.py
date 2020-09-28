@@ -10,7 +10,7 @@ from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import QLearning
 from rljax.network.critic import DiscreteQFunction, DQNBody
-from rljax.utils import get_q_at_action
+from rljax.util import get_q_at_action
 
 
 def build_dqn(state_space, action_space, hidden_units, dueling_net):

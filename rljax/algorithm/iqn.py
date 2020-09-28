@@ -10,7 +10,7 @@ from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import QLearning
 from rljax.network.critic import DiscreteImplicitQuantileFunction, DQNBody
-from rljax.utils import calculate_quantile_huber_loss, get_quantile_at_action
+from rljax.util import calculate_quantile_huber_loss, get_quantile_at_action
 
 
 def build_iqn(state_space, action_space, num_quantiles, num_cosines, feature_dim, hidden_units, dueling_net):
