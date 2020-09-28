@@ -275,7 +275,7 @@ class SACDiscrete(OffPolicyActorCritic):
         pi, log_pi = self.actor.apply(params_actor, state)
         # Calculate soft q values and entropies(= -1 * E[log(\pi)]).
         mean_q = (pi * curr_s_q).sum(axis=1).mean()
-        mean_log_pi = (pi * curr_s_q).sum(axis=1).mean()
+        mean_log_pi = (pi * log_pi).sum(axis=1).mean()
         return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)
