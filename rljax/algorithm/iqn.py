@@ -176,20 +176,22 @@ class IQN(QLearning):
         # Sample fractions from uniform distributions.
         tau = jax.random.uniform(rng, (state.shape[0], self.num_quantiles))
         if self.double_q:
-            # calculate greedy actions with online network.
+            # Calculate greedy actions with online network.
             next_action = jnp.argmax(self.quantile_net.apply(params, next_state, tau).mean(axis=1), axis=1)[..., None]
             # Then calculate max quantile values with target network.
             next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state, tau), next_action)
         else:
-            # calculate greedy actions and max quantile values with target network.
+            # Calculate greedy actions and max quantile values with target network.
             next_quantile = jnp.max(self.quantile_net.apply(params_target, next_state, tau), axis=2, keepdims=True)
 
-        # calculate target quantile values and reshape to (batch_size, 1, N).
+        # Calculate target quantile values and reshape to (batch_size, 1, N).
         target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
         target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
-        # calculate current quantile values, whose shape is (batch_size, N, 1).
+        # Calculate current quantile values, whose shape is (batch_size, N, 1).
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state, tau), action)
-        loss, error = calculate_quantile_huber_loss(target_quantile - curr_quantile, tau, weight, 1.0)
+        td = target_quantile - curr_quantile
+        loss = calculate_quantile_huber_loss(td, tau, weight, 1.0)
+        error = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(error)
 
     def __str__(self):

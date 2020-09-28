@@ -155,12 +155,12 @@ class DQN(QLearning):
         weight: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if self.double_q:
-            # calculate greedy actions with online network.
+            # Calculate greedy actions with online network.
             next_action = jnp.argmax(self.q_net.apply(params, next_state), axis=1)[..., None]
             # Then calculate max q values with target network.
             next_q = get_q_at_action(self.q_net.apply(params_target, next_state), next_action)
         else:
-            # calculate greedy actions and max q values with target network.
+            # Calculate greedy actions and max q values with target network.
             next_q = jnp.max(self.q_net.apply(params_target, next_state), axis=1, keepdims=True)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
         curr_q = get_q_at_action(self.q_net.apply(params, state), action)

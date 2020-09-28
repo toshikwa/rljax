@@ -78,6 +78,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
     def update_priority(self, error):
         assert self._cached_idxes is not None, "Sample batch before updating priorities."
+        assert error.shape[1:] == (1,)
         pa = np.array(self._calculate_pa(error), dtype=np.float32).flatten()
         for i, _pa in zip(self._cached_idxes, pa):
             self.tree_sum[i] = _pa

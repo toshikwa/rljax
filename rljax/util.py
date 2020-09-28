@@ -118,21 +118,21 @@ def get_quantile_at_action(
 
 @jax.jit
 def _huber_loss(
-    error: jnp.ndarray,
+    td: jnp.ndarray,
     kappa: float = 1.0,
 ) -> jnp.ndarray:
-    abs_error = jnp.abs(error)
-    return jnp.where(abs_error <= kappa, 0.5 * jnp.square(error), kappa * (abs_error - 0.5 * kappa))
+    abs_td = jnp.abs(td)
+    return jnp.where(abs_td <= kappa, 0.5 * jnp.square(td), kappa * (abs_td - 0.5 * kappa))
 
 
 @jax.jit
 def calculate_quantile_huber_loss(
-    error: jnp.ndarray,
+    td: jnp.ndarray,
     tau: jnp.ndarray,
     weight: jnp.ndarray,
     kappa: float = 1.0,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    element_wise_loss = _huber_loss(error, kappa)
-    element_wise_loss *= jnp.abs(tau[..., None] - (jax.lax.stop_gradient(error) < 0)) / kappa
+) -> jnp.ndarray:
+    element_wise_loss = _huber_loss(td, kappa)
+    element_wise_loss *= jnp.abs(tau[..., None] - (jax.lax.stop_gradient(td) < 0)) / kappa
     batch_loss = element_wise_loss.sum(axis=1).mean(axis=1, keepdims=True)
-    return (batch_loss * weight).mean(), batch_loss
+    return (batch_loss * weight).mean()
