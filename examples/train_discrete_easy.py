@@ -12,12 +12,14 @@ config = {
         "start_steps": 1000,
         "update_interval": 1,
         "update_interval_target": 400,
+        "lr": 1e-3,
     },
     "qrdqn": {
         "start_steps": 1000,
         "update_interval": 1,
         "update_interval_target": 400,
-        "num_quantiles": 20,
+        "num_quantiles": 50,
+        "lr": 1e-3,
     },
     "sac_discrete": {
         "start_steps": 1000,

@@ -37,6 +37,8 @@ We plan to implement the following algorithms in the future.
 
 - [ ] Implicit Quantile Network(IQN)
 
+## Examples
+
 Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`.
 
-<img src="https://user-images.githubusercontent.com/37267851/94338069-7bc3fb80-002a-11eb-91ae-d163ebebd2a7.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94338071-7e265580-002a-11eb-8f10-b8cf5dac0207.png" title="InvertedPendulum-v2" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/94395758-560a3400-019b-11eb-92e2-64ec0479b225.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94395756-54d90700-019b-11eb-8f41-eeabd6e0cb63.png" title="InvertedPendulum-v2" width=400>

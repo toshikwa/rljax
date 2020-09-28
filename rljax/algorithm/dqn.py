@@ -48,7 +48,7 @@ class DQN(QLearning):
         update_interval_target=10000,
         eps=0.01,
         eps_eval=0.001,
-        lr=5e-5,
+        lr=2.5e-4,
         units=(512,),
         dueling_net=True,
         double_q=True,

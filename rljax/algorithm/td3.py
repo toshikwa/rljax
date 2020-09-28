@@ -117,7 +117,7 @@ class TD3(OffPolicyActorCritic):
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        # Update critic.
+        # Update critic and target.
         self.opt_state_critic, self.params_critic, loss_critic, error = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
@@ -131,22 +131,21 @@ class TD3(OffPolicyActorCritic):
             weight=weight,
             rng=next(self.rng),
         )
+        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
+
 
         # Update priority.
         if self.use_per:
             self.buffer.update_priority(error)
 
         if self.learning_step % self.update_interval_policy == 0:
-            # Update actor.
+            # Update actor and target.
             self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
                 opt_state_actor=self.opt_state_actor,
                 params_actor=self.params_actor,
                 params_critic=self.params_critic,
                 state=state,
             )
-
-            # Update target networks.
-            self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
             self.params_actor_target = self._update_target(self.params_actor_target, self.params_actor)
 
             if self.learning_step % 1000 == 0:
