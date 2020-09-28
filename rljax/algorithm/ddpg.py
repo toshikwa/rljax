@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -148,7 +149,7 @@ class DDPG(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
         self,
-        opt_state_critic,
+        opt_state_critic: Any,
         params_critic: hk.Params,
         params_actor_target: hk.Params,
         params_critic_target: hk.Params,
@@ -158,7 +159,7 @@ class DDPG(OffPolicyActorCritic):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-    ):
+    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_critic, error), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
@@ -186,7 +187,7 @@ class DDPG(OffPolicyActorCritic):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         next_action = self.actor.apply(params_actor_target, None, next_state)
         next_q = self.critic.apply(params_critic_target, None, jnp.concatenate([next_state, next_action], axis=1))
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
@@ -198,11 +199,11 @@ class DDPG(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
         self,
-        opt_state_actor,
+        opt_state_actor: Any,
         params_actor: hk.Params,
         params_critic: hk.Params,
         state: np.ndarray,
-    ):
+    ) -> Tuple[Any, hk.Params, jnp.ndarray]:
         loss_actor, grad_actor = jax.value_and_grad(self._loss_actor)(
             params_actor,
             params_critic=params_critic,

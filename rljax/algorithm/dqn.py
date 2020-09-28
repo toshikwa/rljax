@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -81,7 +81,11 @@ class DQN(QLearning):
         self.double_q = double_q
 
     @partial(jax.jit, static_argnums=0)
-    def _select_action(self, params, state):
+    def _select_action(
+        self,
+        params: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
         s_q = self.q_net.apply(params, None, state)
         return jnp.argmax(s_q, axis=1)
 
@@ -125,7 +129,7 @@ class DQN(QLearning):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-    ):
+    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss, error), grad = jax.value_and_grad(self._loss, has_aux=True)(
             params,
             params_target=params_target,
@@ -151,7 +155,7 @@ class DQN(QLearning):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if self.double_q:
             # calculate greedy actions with online network.
             next_action = jnp.argmax(self.q_net.apply(params, None, next_state), axis=1)[..., None]

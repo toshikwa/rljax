@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Tuple
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -147,11 +147,11 @@ class PPO(OnPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
         self,
-        opt_state_critic,
+        opt_state_critic: Any,
         params_critic: hk.Params,
         state: np.ndarray,
         target: np.ndarray,
-    ):
+    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         loss_critic, grad_critic = jax.value_and_grad(self._loss_critic)(
             params_critic,
             state=state,
@@ -174,13 +174,13 @@ class PPO(OnPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
         self,
-        opt_state_actor,
+        opt_state_actor: Any,
         params_actor: hk.Params,
         state: np.ndarray,
         action: np.ndarray,
         log_pi_old: np.ndarray,
-        gae: np.ndarray,
-    ):
+        gae: jnp.ndarray,
+    ) -> Tuple[Any, hk.Params, jnp.ndarray]:
         loss_actor, grad_actor = jax.value_and_grad(self._loss_actor)(
             params_actor,
             state=state,
@@ -200,7 +200,7 @@ class PPO(OnPolicyActorCritic):
         state: np.ndarray,
         action: np.ndarray,
         log_pi_old: np.ndarray,
-        gae: np.ndarray,
+        gae: jnp.ndarray,
     ) -> jnp.ndarray:
         mean, log_pi = self.actor.apply(params_actor, None, state)
         log_pi = evaluate_lop_pi(mean, log_pi, action)

@@ -131,7 +131,7 @@ def calculate_quantile_huber_loss(
     tau: jnp.ndarray,
     weight: jnp.ndarray,
     kappa: float = 1.0,
-) -> jnp.ndarray:
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
     element_wise_loss = _huber_loss(error, kappa)
     element_wise_loss *= jnp.abs(tau[..., None] - (jax.lax.stop_gradient(error) < 0)) / kappa
     batch_loss = element_wise_loss.sum(axis=1).mean(axis=1, keepdims=True)

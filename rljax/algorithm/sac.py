@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -106,7 +107,7 @@ class SAC(OffPolicyActorCritic):
         params_actor: hk.Params,
         rng: jnp.ndarray,
         state: np.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, None, state)
         return reparameterize(mean, log_std, rng)[0]
 
@@ -165,7 +166,7 @@ class SAC(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
         self,
-        opt_state_critic,
+        opt_state_critic: Any,
         params_critic: hk.Params,
         params_critic_target: hk.Params,
         params_actor: hk.Params,
@@ -177,7 +178,7 @@ class SAC(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight: np.ndarray,
         rng: jnp.ndarray,
-    ):
+    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_critic, error), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
@@ -201,7 +202,7 @@ class SAC(OffPolicyActorCritic):
         params_critic: hk.Params,
         params_critic_target: hk.Params,
         params_actor: hk.Params,
-        log_alpha: np.ndarray,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
         action: np.ndarray,
         reward: np.ndarray,
@@ -209,7 +210,7 @@ class SAC(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight: np.ndarray,
         rng: jnp.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         next_mean, next_log_std = self.actor.apply(params_actor, None, next_state)
         next_action, next_log_pi = reparameterize(next_mean, next_log_std, rng)
@@ -224,13 +225,13 @@ class SAC(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
         self,
-        opt_state_actor,
+        opt_state_actor: Any,
         params_actor: hk.Params,
         params_critic: hk.Params,
-        log_alpha: np.ndarray,
+        log_alpha: jnp.ndarray,
         state: np.ndarray,
-        rng: np.ndarray,
-    ):
+        rng: jnp.ndarray,
+    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_actor, mean_log_pi), grad_actor = jax.value_and_grad(self._loss_actor, has_aux=True)(
             params_actor,
             params_critic=params_critic,
@@ -250,7 +251,7 @@ class SAC(OffPolicyActorCritic):
         log_alpha: jnp.ndarray,
         state: np.ndarray,
         rng: np.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         mean, log_std = self.actor.apply(params_actor, None, state)
         action, log_pi = reparameterize(mean, log_std, rng)
@@ -261,10 +262,10 @@ class SAC(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_alpha(
         self,
-        opt_state_alpha,
-        log_alpha: np.ndarray,
-        mean_log_pi: np.ndarray,
-    ):
+        opt_state_alpha: Any,
+        log_alpha: jnp.ndarray,
+        mean_log_pi: jnp.ndarray,
+    ) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
         loss_alpha, grad_alpha = jax.value_and_grad(self._loss_alpha)(
             log_alpha,
             mean_log_pi=mean_log_pi,

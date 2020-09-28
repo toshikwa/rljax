@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -111,14 +112,6 @@ class SACDiscrete(OffPolicyActorCritic):
         opt_init, self.opt_alpha = optix.adam(lr_alpha)
         self.opt_state_alpha = opt_init(self.log_alpha)
 
-    def select_action(self, state):
-        action = self._select_action(self.params_actor, state[None, ...])
-        return np.array(action[0])
-
-    def explore(self, state):
-        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
-        return np.array(action[0])
-
     @partial(jax.jit, static_argnums=0)
     def _select_action(
         self,
@@ -192,7 +185,7 @@ class SACDiscrete(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
         self,
-        opt_state_critic,
+        opt_state_critic: Any,
         params_critic: hk.Params,
         params_critic_target: hk.Params,
         params_actor: hk.Params,
@@ -203,7 +196,7 @@ class SACDiscrete(OffPolicyActorCritic):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-    ):
+    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_critic, error), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
@@ -233,7 +226,7 @@ class SACDiscrete(OffPolicyActorCritic):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         pi, log_pi = self.actor.apply(params_actor, None, next_state)
         next_q1, next_q2 = self.critic.apply(params_critic_target, None, next_state)
@@ -248,12 +241,12 @@ class SACDiscrete(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
         self,
-        opt_state_actor,
+        opt_state_actor: Any,
         params_actor: hk.Params,
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
-    ):
+    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_actor, mean_log_pi), grad_actor = jax.value_and_grad(self._loss_actor, has_aux=True)(
             params_actor,
             params_critic=params_critic,
@@ -271,7 +264,7 @@ class SACDiscrete(OffPolicyActorCritic):
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         curr_q1, curr_q2 = self.critic.apply(params_critic, None, state)
         curr_q = jax.lax.stop_gradient(jnp.minimum(curr_q1, curr_q2))
@@ -283,10 +276,10 @@ class SACDiscrete(OffPolicyActorCritic):
     @partial(jax.jit, static_argnums=0)
     def _update_alpha(
         self,
-        opt_state_alpha,
+        opt_state_alpha: Any,
         log_alpha: jnp.ndarray,
-        mean_log_pi: np.ndarray,
-    ):
+        mean_log_pi: jnp.ndarray,
+    ) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
         loss_alpha, grad_alpha = jax.value_and_grad(self._loss_alpha)(
             log_alpha,
             mean_log_pi=mean_log_pi,
@@ -299,7 +292,7 @@ class SACDiscrete(OffPolicyActorCritic):
     def _loss_alpha(
         self,
         log_alpha: jnp.ndarray,
-        mean_log_pi: np.ndarray,
+        mean_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
         return -log_alpha * (self.target_entropy + mean_log_pi)
 
