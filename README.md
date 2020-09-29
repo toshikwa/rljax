@@ -38,4 +38,4 @@ Currently, following algorithms have been implemented.
 
 Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`. Note that while other discrete algorithms use two linear layers, IQN uses three linear layers due to the structure of the algorithm.
 
-<img src="https://user-images.githubusercontent.com/37267851/94482857-e59ff900-0214-11eb-89e7-5c53f5fecc14.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94395756-54d90700-019b-11eb-8f41-eeabd6e0cb63.png" title="InvertedPendulum-v2" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/94482857-e59ff900-0214-11eb-89e7-5c53f5fecc14.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94509799-1d786200-0250-11eb-8a0e-779cd76e9dc3.png" title="InvertedPendulum-v2" width=400>

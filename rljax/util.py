@@ -91,7 +91,7 @@ def add_noise(
     """
     Add noise to actions.
     """
-    return jnp.clip(x + jax.random.normal(key, x.shape), x_min, x_max)
+    return jnp.clip(x + jax.random.normal(key, x.shape) * std, x_min, x_max)
 
 
 @jax.jit
