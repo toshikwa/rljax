@@ -94,7 +94,7 @@ class CategoricalPolicy(hk.Module):
         self.hidden_activation = hidden_activation
 
     def __call__(self, x):
-        if len(x.shape) == 3:
+        if len(x.shape) == 4:
             x = DQNBody()(x)
         x = MLP(self.action_space.n, self.hidden_units, self.hidden_activation)(x)
         pi = nn.softmax(x, axis=1)

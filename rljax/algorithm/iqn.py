@@ -29,7 +29,7 @@ class IQN(QLearning):
         tau=5e-3,
         eps=0.01,
         eps_eval=0.001,
-        lr=2.5e-4,
+        lr=5.e-5,
         units=(512,),
         num_quantiles=64,
         num_cosines=64,
