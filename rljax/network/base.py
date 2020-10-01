@@ -10,18 +10,22 @@ class MLP(hk.Module):
         hidden_units,
         hidden_activation=nn.relu,
         output_activation=None,
+        output_scale=1.0
     ):
         super(MLP, self).__init__()
         self.output_dim = output_dim
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
         self.output_activation = output_activation
+        self.output_kwargs = {}
+        if output_scale != 1.0:
+            self.output_kwargs['w_init'] = hk.initializers.VarianceScaling(scale=output_scale)
 
     def __call__(self, x):
         for unit in self.hidden_units:
             x = hk.Linear(unit)(x)
             x = self.hidden_activation(x)
-        x = hk.Linear(self.output_dim)(x)
+        x = hk.Linear(self.output_dim, **self.output_kwargs)(x)
         if self.output_activation is not None:
             x = self.output_activation(x)
         return x

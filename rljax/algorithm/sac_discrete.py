@@ -24,7 +24,7 @@ class SACDiscrete(OffPolicyActorCritic):
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=64,
-        start_steps=20000,
+        start_steps=10000,
         update_interval=4,
         update_interval_target=8000,
         lr_actor=3e-4,

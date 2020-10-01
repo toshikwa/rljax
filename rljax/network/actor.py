@@ -72,6 +72,7 @@ class StateIndependentGaussianPolicy(hk.Module):
             self.action_space.shape[0],
             self.hidden_units,
             self.hidden_activation,
+            output_scale=0.01,
         )(x)
         log_std = hk.get_parameter("log_std", (1, self.action_space.shape[0]), init=jnp.zeros)
         return mean, jnp.clip(log_std, -20, 2)
