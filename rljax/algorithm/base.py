@@ -23,6 +23,7 @@ class Algorithm(ABC):
         seed,
         gamma,
     ):
+        np.random.seed(seed)
         self.rng = PRNGSequence(seed)
         self.env_step = 0
         self.learning_step = 0
@@ -146,6 +147,7 @@ class OffPolicyAlgorithm(Algorithm):
         batch_size,
         start_steps,
         update_interval,
+        tau,
     ):
         super(OffPolicyAlgorithm, self).__init__(
             num_steps=num_steps,
@@ -177,6 +179,7 @@ class OffPolicyAlgorithm(Algorithm):
         self.batch_size = batch_size
         self.start_steps = start_steps
         self.update_interval = update_interval
+        self._update_target = jax.jit(partial(soft_update, tau=tau))
 
     def is_update(self):
         return self.env_step % self.update_interval == 0 and self.env_step >= self.start_steps
@@ -223,10 +226,8 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         batch_size,
         start_steps,
         update_interval,
-        update_interval_target=None,
-        tau=None,
+        tau,
     ):
-        assert update_interval_target or tau
         super(OffPolicyActorCritic, self).__init__(
             num_steps=num_steps,
             state_space=state_space,
@@ -239,12 +240,8 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
+            tau=tau,
         )
-        if update_interval_target:
-            self.update_interval_target = update_interval_target
-            self._update_target = jax.jit(partial(soft_update, tau=1.0))
-        else:
-            self._update_target = jax.jit(partial(soft_update, tau=tau))
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, next(self.rng), state[None, ...])
@@ -281,7 +278,7 @@ class QLearning(OffPolicyAlgorithm):
         batch_size,
         start_steps,
         update_interval,
-        update_interval_target,
+        tau,
         eps,
         eps_eval,
     ):
@@ -297,12 +294,10 @@ class QLearning(OffPolicyAlgorithm):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
+            tau=tau,
         )
-
-        self.update_interval_target = update_interval_target
         self.eps = eps
         self.eps_eval = eps_eval
-        self._update_target = jax.jit(partial(soft_update, tau=1.0))
 
     def select_action(self, state):
         if np.random.rand() < self.eps_eval:

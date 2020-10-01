@@ -1,6 +1,7 @@
 import haiku as hk
 import jax.numpy as jnp
 from jax import nn
+from rljax.network.base import MLP, DQNBody
 
 
 class DeterministicPolicy(hk.Module):
@@ -10,21 +11,22 @@ class DeterministicPolicy(hk.Module):
 
     def __init__(
         self,
-        action_dim,
-        hidden_units=(400, 300),
+        action_space,
+        hidden_units=(256, 256),
         hidden_activation=nn.relu,
     ):
         super(DeterministicPolicy, self).__init__()
-        self.action_dim = action_dim
+        self.action_space = action_space
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
 
     def __call__(self, x):
-        for unit in self.hidden_units:
-            x = hk.Linear(unit)(x)
-            x = self.hidden_activation(x)
-        x = hk.Linear(self.action_dim)(x)
-        return jnp.tanh(x)
+        return MLP(
+            self.action_space.shape[0],
+            self.hidden_units,
+            self.hidden_activation,
+            output_activation=jnp.tanh,
+        )(x)
 
 
 class StateDependentGaussianPolicy(hk.Module):
@@ -34,22 +36,19 @@ class StateDependentGaussianPolicy(hk.Module):
 
     def __init__(
         self,
-        action_dim,
+        action_space,
         hidden_units=(256, 256),
         hidden_activation=nn.relu,
     ):
         super(StateDependentGaussianPolicy, self).__init__()
-        self.action_dim = action_dim
+        self.action_space = action_space
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
 
     def __call__(self, x):
-        for unit in self.hidden_units:
-            x = hk.Linear(unit)(x)
-            x = self.hidden_activation(x)
-        x = hk.Linear(2 * self.action_dim)(x)
+        x = MLP(2 * self.action_space.shape[0], self.hidden_units, self.hidden_activation)(x)
         mean, log_std = jnp.split(x, 2, axis=1)
-        return mean, log_std
+        return mean, jnp.clip(log_std, -20, 2)
 
 
 class StateIndependentGaussianPolicy(hk.Module):
@@ -59,23 +58,23 @@ class StateIndependentGaussianPolicy(hk.Module):
 
     def __init__(
         self,
-        action_dim,
+        action_space,
         hidden_units=(64, 64),
         hidden_activation=jnp.tanh,
     ):
         super(StateIndependentGaussianPolicy, self).__init__()
-        self.action_dim = action_dim
+        self.action_space = action_space
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
 
     def __call__(self, x):
-        for unit in self.hidden_units:
-            x = hk.Linear(unit)(x)
-            x = self.hidden_activation(x)
-        mean = hk.Linear(self.action_dim)(x)
-        log_std = hk.get_parameter("log_std", (1, self.action_dim), init=jnp.zeros)
-
-        return mean, log_std
+        mean = MLP(
+            self.action_space.shape[0],
+            self.hidden_units,
+            self.hidden_activation,
+        )(x)
+        log_std = hk.get_parameter("log_std", (1, self.action_space.shape[0]), init=jnp.zeros)
+        return mean, jnp.clip(log_std, -20, 2)
 
 
 class CategoricalPolicy(hk.Module):
@@ -85,19 +84,18 @@ class CategoricalPolicy(hk.Module):
 
     def __init__(
         self,
-        action_dim,
+        action_space,
         hidden_units=(256, 256),
         hidden_activation=nn.relu,
     ):
         super(CategoricalPolicy, self).__init__()
-        self.action_dim = action_dim
+        self.action_space = action_space
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
 
     def __call__(self, x):
-        for unit in self.hidden_units:
-            x = hk.Linear(unit)(x)
-            x = self.hidden_activation(x)
-        x = hk.Linear(self.action_dim)(x)
+        if len(x.shape) == 3:
+            x = DQNBody()(x)
+        x = MLP(self.action_space.n, self.hidden_units, self.hidden_activation)(x)
         pi = nn.softmax(x, axis=1)
         return pi, jnp.log(pi + 1e-6)

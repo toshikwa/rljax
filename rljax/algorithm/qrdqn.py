@@ -6,27 +6,10 @@ import numpy as np
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import QLearning
-from rljax.network.critic import DiscreteQuantileFunction, DQNBody
-from rljax.util import calculate_quantile_huber_loss, get_quantile_at_action
-
-
-def build_qrdqn(state_space, action_space, num_quantiles, hidden_units, dueling_net):
-    def _func(state):
-        if len(state_space.shape) == 3:
-            state = DQNBody()(state)
-        return DiscreteQuantileFunction(
-            action_dim=action_space.n,
-            num_critics=1,
-            num_quantiles=num_quantiles,
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-            dueling_net=dueling_net,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
+from rljax.network import DiscreteQuantileFunction
+from rljax.util import calculate_quantile_loss, get_quantile_at_action
 
 
 class QRDQN(QLearning):
@@ -43,16 +26,17 @@ class QRDQN(QLearning):
         batch_size=32,
         start_steps=50000,
         update_interval=4,
-        update_interval_target=10000,
+        tau=5e-3,
         eps=0.01,
         eps_eval=0.001,
         lr=2.5e-4,
         units=(512,),
         num_quantiles=200,
-        dueling_net=True,
-        double_q=True,
+        loss_type="l2",
+        dueling_net=False,
+        double_q=False,
     ):
-        assert update_interval_target % update_interval == 0
+        assert loss_type in ["l2", "huber"]
         super(QRDQN, self).__init__(
             num_steps=num_steps,
             state_space=state_space,
@@ -65,14 +49,23 @@ class QRDQN(QLearning):
             use_per=use_per,
             start_steps=start_steps,
             update_interval=update_interval,
-            update_interval_target=update_interval_target,
+            tau=tau,
             eps=eps,
             eps_eval=eps_eval,
         )
 
+        def quantile_fn(s):
+            return DiscreteQuantileFunction(
+                action_space=action_space,
+                num_critics=1,
+                num_quantiles=num_quantiles,
+                hidden_units=units,
+                dueling_net=dueling_net,
+            )(s)
+
         # QR-DQN.
-        self.quantile_net = build_qrdqn(state_space, action_space, num_quantiles, units, dueling_net)
-        opt_init, self.opt = optix.adam(lr)
+        self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
+        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state)
         self.opt_state = opt_init(self.params)
 
@@ -81,8 +74,9 @@ class QRDQN(QLearning):
         self.tau_hat = jnp.expand_dims((tau[1:] + tau[:-1]) / 2.0, 0)
 
         # Other parameters.
-        self.double_q = double_q
         self.num_quantiles = num_quantiles
+        self.loss_type = loss_type
+        self.double_q = double_q
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(
@@ -91,8 +85,8 @@ class QRDQN(QLearning):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        q = self.quantile_net.apply(params, state).mean(axis=1)
-        return jnp.argmax(q, axis=1)
+        q_s = self.quantile_net.apply(params, state).mean(axis=1)
+        return jnp.argmax(q_s, axis=1)
 
     def update(self, writer):
         self.learning_step += 1
@@ -116,8 +110,7 @@ class QRDQN(QLearning):
             self.buffer.update_priority(error)
 
         # Update target network.
-        if self.env_step % self.update_interval_target == 0:
-            self.params_target = self._update_target(self.params_target, self.params)
+        self.params_target = self._update_target(self.params_target, self.params)
 
         if self.learning_step % 1000 == 0:
             writer.add_scalar("loss/quantile", loss, self.learning_step)
@@ -176,7 +169,7 @@ class QRDQN(QLearning):
         # Calculate current quantile values, whose shape is (batch_size, N, 1).
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state), action)
         td = target_quantile - curr_quantile
-        loss = calculate_quantile_huber_loss(td, self.tau_hat, weight, 1.0)
+        loss = calculate_quantile_loss(td, self.tau_hat, weight, self.loss_type)
         error = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(error)
 

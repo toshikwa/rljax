@@ -2,9 +2,8 @@ import argparse
 import os
 from datetime import datetime
 
-import gym
-
 from rljax.algorithm import CONTINUOUS_ALGORITHM
+from rljax.env import make_continuous_env
 from rljax.trainer import Trainer
 
 config = {
@@ -14,20 +13,20 @@ config = {
         "epoch_ppo": 32,
     },
     "ddpg": {
-        "start_steps": 1000,
+        "start_steps": 5000,
     },
     "td3": {
-        "start_steps": 1000,
+        "start_steps": 5000,
     },
     "sac": {
-        "start_steps": 1000,
+        "start_steps": 5000,
     },
 }
 
 
 def run(args):
-    env = gym.make(args.env_id)
-    env_test = gym.make(args.env_id)
+    env = make_continuous_env(args.env_id)
+    env_test = make_continuous_env(args.env_id)
 
     algo = CONTINUOUS_ALGORITHM[args.algo](
         num_steps=args.num_steps,

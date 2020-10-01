@@ -8,31 +8,8 @@ import jax
 import jax.numpy as jnp
 from jax.experimental import optix
 from rljax.algorithm.base import OnPolicyActorCritic
-from rljax.network.actor import StateIndependentGaussianPolicy
-from rljax.network.critic import ContinuousVFunction
+from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
 from rljax.util import clip_gradient, evaluate_lop_pi, reparameterize
-
-
-def build_ppo_critic(hidden_units):
-    def _func(state):
-        return ContinuousVFunction(
-            num_critics=1,
-            hidden_units=hidden_units,
-            hidden_activation=jnp.tanh,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
-
-
-def build_ppo_actor(action_space, hidden_units):
-    def _func(state):
-        return StateIndependentGaussianPolicy(
-            action_dim=action_space.shape[0],
-            hidden_units=hidden_units,
-            hidden_activation=jnp.tanh,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
 
 
 class PPO(OnPolicyActorCritic):
@@ -52,7 +29,7 @@ class PPO(OnPolicyActorCritic):
         epoch_ppo=10,
         clip_eps=0.2,
         lambd=0.97,
-        max_grad_norm=10.0,
+        max_grad_norm=0.5,
     ):
         assert buffer_size % batch_size == 0
         super(PPO, self).__init__(
@@ -65,14 +42,26 @@ class PPO(OnPolicyActorCritic):
             batch_size=batch_size,
         )
 
+        def critic_fn(s):
+            return ContinuousVFunction(
+                num_critics=1,
+                hidden_units=units_critic,
+            )(s)
+
+        def actor_fn(s):
+            return StateIndependentGaussianPolicy(
+                action_space=action_space,
+                hidden_units=units_actor,
+            )(s)
+
         # Critic.
-        self.critic = build_ppo_critic(units_critic)
+        self.critic = hk.without_apply_rng(hk.transform(critic_fn))
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = build_ppo_actor(action_space, units_actor)
+        self.actor = hk.without_apply_rng(hk.transform(actor_fn))
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)
@@ -202,8 +191,8 @@ class PPO(OnPolicyActorCritic):
         gae: jnp.ndarray,
     ) -> jnp.ndarray:
         # Calculate log(\pi) at current policy.
-        mean, log_pi = self.actor.apply(params_actor, state)
-        log_pi = evaluate_lop_pi(mean, log_pi, action)
+        mean, log_std = self.actor.apply(params_actor, state)
+        log_pi = evaluate_lop_pi(mean, log_std, action)
         # Calculate importance ratio.
         ratio = jnp.exp(log_pi - log_pi_old)
         loss_actor1 = -ratio * gae

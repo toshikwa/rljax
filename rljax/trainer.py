@@ -31,7 +31,6 @@ class Trainer:
         self.env_test = env_test
 
         # Set seeds.
-        np.random.seed(seed)
         self.env.seed(seed)
         self.env_test.seed(2 ** 31 - seed)
 

@@ -6,52 +6,10 @@ import numpy as np
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
-from rljax.network.actor import CategoricalPolicy
-from rljax.network.critic import DiscreteQFunction, DQNBody
+from rljax.network import CategoricalPolicy, DiscreteQFunction
 from rljax.util import get_q_at_action
-
-
-def build_sac_discrete_critic(state_space, action_space, hidden_units, dueling_net):
-    def _func(state):
-        if len(state_space.shape) == 3:
-            return [
-                DiscreteQFunction(
-                    action_dim=action_space.n,
-                    num_critics=1,
-                    hidden_units=hidden_units,
-                    hidden_activation=nn.relu,
-                    dueling_net=dueling_net,
-                )(DQNBody()(state))
-                for _ in range(2)
-            ]
-        elif len(state_space.shape) == 1:
-            return DiscreteQFunction(
-                action_dim=action_space.n,
-                num_critics=2,
-                hidden_units=hidden_units,
-                hidden_activation=nn.relu,
-                dueling_net=dueling_net,
-            )(state)
-        else:
-            NotImplementedError
-
-    return hk.without_apply_rng(hk.transform(_func))
-
-
-def build_sac_discrete_actor(state_space, action_space, hidden_units):
-    def _func(state):
-        if len(state_space.shape) == 3:
-            x = DQNBody()(state)
-        return CategoricalPolicy(
-            action_dim=action_space.n,
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
 
 
 class SACDiscrete(OffPolicyActorCritic):
@@ -68,14 +26,14 @@ class SACDiscrete(OffPolicyActorCritic):
         batch_size=64,
         start_steps=20000,
         update_interval=4,
-        update_interval_target=8000,
+        tau=5e-3,
         lr_actor=3e-4,
         lr_critic=3e-4,
         lr_alpha=3e-4,
         units_actor=(512,),
         units_critic=(512,),
         target_entropy_ratio=0.98,
-        dueling_net=True,
+        dueling_net=False,
     ):
         super(SACDiscrete, self).__init__(
             num_steps=num_steps,
@@ -89,17 +47,31 @@ class SACDiscrete(OffPolicyActorCritic):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
-            update_interval_target=update_interval_target,
+            tau=tau,
         )
 
+        def critic_fn(s):
+            return DiscreteQFunction(
+                action_space=action_space,
+                num_critics=2,
+                hidden_units=units_critic,
+                dueling_net=dueling_net,
+            )(s)
+
+        def actor_fn(s):
+            return CategoricalPolicy(
+                action_space=action_space,
+                hidden_units=units_actor,
+            )(s)
+
         # Critic.
-        self.critic = build_sac_discrete_critic(state_space, action_space, units_critic, dueling_net)
+        self.critic = hk.without_apply_rng(hk.transform(critic_fn))
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = build_sac_discrete_actor(state_space, action_space, units_actor)
+        self.actor = hk.without_apply_rng(hk.transform(actor_fn))
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)
@@ -171,8 +143,7 @@ class SACDiscrete(OffPolicyActorCritic):
         )
 
         # Update target network.
-        if self.env_step % self.update_interval_target == 0:
-            self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
+        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
         if self.learning_step % 1000 == 0:
             writer.add_scalar("loss/critic", loss_critic, self.learning_step)
@@ -269,14 +240,14 @@ class SACDiscrete(OffPolicyActorCritic):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         # Calculate soft q values at every actions with online critic.
-        curr_s_q1, curr_s_q2 = self.critic.apply(params_critic, state)
-        curr_s_q = jax.lax.stop_gradient(jnp.minimum(curr_s_q1, curr_s_q2))
+        curr_q_s1, curr_q_s2 = self.critic.apply(params_critic, state)
+        curr_q_s = jax.lax.stop_gradient(jnp.minimum(curr_q_s1, curr_q_s1))
         # Calculate action distribution.
         pi, log_pi = self.actor.apply(params_actor, state)
         # Calculate soft q values and entropies(= -1 * E[log(\pi)]).
-        mean_q = (pi * curr_s_q).sum(axis=1).mean()
+        curr_q = (pi * curr_q_s).sum(axis=1).mean()
         mean_log_pi = (pi * log_pi).sum(axis=1).mean()
-        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
+        return alpha * mean_log_pi - curr_q, jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)
     def _update_alpha(

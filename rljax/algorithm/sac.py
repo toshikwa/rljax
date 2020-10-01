@@ -6,34 +6,10 @@ import numpy as np
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
-from rljax.network.actor import StateDependentGaussianPolicy
-from rljax.network.critic import ContinuousQFunction
+from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
 from rljax.util import reparameterize
-
-
-def build_sac_critic(hidden_units):
-    def _func(state, action):
-        return ContinuousQFunction(
-            num_critics=2,
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-        )(state, action)
-
-    return hk.without_apply_rng(hk.transform(_func))
-
-
-def build_sac_actor(action_space, hidden_units):
-    def _func(state):
-        return StateDependentGaussianPolicy(
-            action_dim=action_space.shape[0],
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
 
 
 class SAC(OffPolicyActorCritic):
@@ -72,14 +48,26 @@ class SAC(OffPolicyActorCritic):
             tau=tau,
         )
 
+        def critic_fn(s, a):
+            return ContinuousQFunction(
+                num_critics=2,
+                hidden_units=units_critic,
+            )(s, a)
+
+        def actor_fn(s):
+            return StateDependentGaussianPolicy(
+                action_space=action_space,
+                hidden_units=units_actor,
+            )(s)
+
         # Critic.
-        self.critic = build_sac_critic(units_critic)
+        self.critic = hk.without_apply_rng(hk.transform(critic_fn))
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = build_sac_actor(action_space, units_actor)
+        self.actor = hk.without_apply_rng(hk.transform(actor_fn))
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)

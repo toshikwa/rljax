@@ -4,7 +4,7 @@
 Rljax is a collection of RL algorithms written in JAX.
 
 ## Setup
-You can install dependencies simply by executing the following. To use GPUs, nvidia-driver and CUDA must be installed.
+You can install dependencies simply by executing the following. To use GPUs, CUDA (10.0, 10.1, 10.2 or 11.0) must be installed.
 ```bash
 pip install --upgrade https://storage.googleapis.com/jax-releases/`nvcc -V | sed -En "s/.* release ([0-9]*)\.([0-9]*),.*/cuda\1\2/p"`/jaxlib-0.1.55-`python3 -V | sed -En "s/Python ([0-9]*)\.([0-9]*).*/cp\1\2/p"`-none-manylinux2010_x86_64.whl jax
 pip install -e .
@@ -36,6 +36,6 @@ Currently, following algorithms have been implemented.
 
 ## Examples
 
-Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`. Note that while other discrete algorithms use two linear layers, IQN uses three linear layers due to the structure of the algorithm.
+Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`.
 
-<img src="https://user-images.githubusercontent.com/37267851/94482857-e59ff900-0214-11eb-89e7-5c53f5fecc14.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94509799-1d786200-0250-11eb-8a0e-779cd76e9dc3.png" title="InvertedPendulum-v2" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/94747565-2dac5080-03ba-11eb-8bf2-994eabefb29e.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94751929-c5af3780-03c4-11eb-8372-832762d8dfc1.png" title="InvertedPendulum-v2" width=400>

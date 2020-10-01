@@ -6,34 +6,10 @@ import numpy as np
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
-from rljax.network.actor import DeterministicPolicy
-from rljax.network.critic import ContinuousQFunction
+from rljax.network import ContinuousQFunction, DeterministicPolicy
 from rljax.util import add_noise
-
-
-def build_td3_critic(hidden_units):
-    def _func(state, action):
-        return ContinuousQFunction(
-            num_critics=2,
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-        )(state, action)
-
-    return hk.without_apply_rng(hk.transform(_func))
-
-
-def build_td3_actor(action_space, hidden_units):
-    def _func(state):
-        return DeterministicPolicy(
-            action_dim=action_space.shape[0],
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
 
 
 class TD3(OffPolicyActorCritic):
@@ -47,14 +23,14 @@ class TD3(OffPolicyActorCritic):
         nstep=1,
         buffer_size=10 ** 6,
         use_per=False,
-        batch_size=128,
+        batch_size=256,
         start_steps=10000,
         update_interval=1,
         tau=5e-3,
         lr_actor=1e-3,
         lr_critic=1e-3,
-        units_actor=(400, 300),
-        units_critic=(400, 300),
+        units_actor=(256, 256),
+        units_critic=(256, 256),
         std=0.1,
         std_target=0.2,
         clip_noise=0.5,
@@ -75,14 +51,26 @@ class TD3(OffPolicyActorCritic):
             tau=tau,
         )
 
+        def critic_fn(s, a):
+            return ContinuousQFunction(
+                num_critics=2,
+                hidden_units=units_critic,
+            )(s, a)
+
+        def actor_fn(s):
+            return DeterministicPolicy(
+                action_space=action_space,
+                hidden_units=units_actor,
+            )(s)
+
         # Critic.
-        self.critic = build_td3_critic(units_critic)
+        self.critic = hk.without_apply_rng(hk.transform(critic_fn))
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = build_td3_actor(action_space, units_actor)
+        self.actor = hk.without_apply_rng(hk.transform(actor_fn))
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)

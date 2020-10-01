@@ -6,34 +6,10 @@ import numpy as np
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import OffPolicyActorCritic
-from rljax.network.actor import DeterministicPolicy
-from rljax.network.critic import ContinuousQFunction
+from rljax.network import ContinuousQFunction, DeterministicPolicy
 from rljax.util import add_noise
-
-
-def build_ddpg_critic(hidden_units):
-    def _func(state, action):
-        return ContinuousQFunction(
-            num_critics=1,
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-        )(state, action)
-
-    return hk.without_apply_rng(hk.transform(_func))
-
-
-def build_ddpg_actor(action_space, hidden_units):
-    def _func(state):
-        return DeterministicPolicy(
-            action_dim=action_space.shape[0],
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
 
 
 class DDPG(OffPolicyActorCritic):
@@ -47,15 +23,16 @@ class DDPG(OffPolicyActorCritic):
         nstep=1,
         buffer_size=10 ** 6,
         use_per=False,
-        batch_size=128,
+        batch_size=256,
         start_steps=10000,
         update_interval=1,
         tau=5e-3,
         lr_actor=1e-3,
         lr_critic=1e-3,
-        units_actor=(400, 300),
-        units_critic=(400, 300),
+        units_actor=(256, 256),
+        units_critic=(256, 256),
         std=0.1,
+        update_interval_policy=2,
     ):
         super(DDPG, self).__init__(
             num_steps=num_steps,
@@ -72,20 +49,33 @@ class DDPG(OffPolicyActorCritic):
             tau=tau,
         )
 
+        def critic_fn(s, a):
+            return ContinuousQFunction(
+                num_critics=1,
+                hidden_units=units_critic,
+            )(s, a)
+
+        def actor_fn(s):
+            return DeterministicPolicy(
+                action_space=action_space,
+                hidden_units=units_actor,
+            )(s)
+
         # Critic.
-        self.critic = build_ddpg_critic(units_critic)
+        self.critic = hk.without_apply_rng(hk.transform(critic_fn))
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = build_ddpg_actor(action_space, units_actor)
+        self.actor = hk.without_apply_rng(hk.transform(actor_fn))
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Other parameters.
         self.std = std
+        self.update_interval_policy = update_interval_policy
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(
@@ -111,7 +101,7 @@ class DDPG(OffPolicyActorCritic):
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        # Update critic.
+        # Update critic and target.
         self.opt_state_critic, self.params_critic, loss_critic, error = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
@@ -124,26 +114,25 @@ class DDPG(OffPolicyActorCritic):
             next_state=next_state,
             weight=weight,
         )
+        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
         # Update priority.
         if self.use_per:
             self.buffer.update_priority(error)
 
-        # Update actor.
-        self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
-            opt_state_actor=self.opt_state_actor,
-            params_actor=self.params_actor,
-            params_critic=self.params_critic,
-            state=state,
-        )
+        if self.learning_step % self.update_interval_policy == 0:
+            # Update actor and target.
+            self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
+                opt_state_actor=self.opt_state_actor,
+                params_actor=self.params_actor,
+                params_critic=self.params_critic,
+                state=state,
+            )
+            self.params_actor_target = self._update_target(self.params_actor_target, self.params_actor)
 
-        # Update target networks.
-        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
-        self.params_actor_target = self._update_target(self.params_actor_target, self.params_actor)
-
-        if self.learning_step % 1000 == 0:
-            writer.add_scalar("loss/critic", loss_critic, self.learning_step)
-            writer.add_scalar("loss/actor", loss_actor, self.learning_step)
+            if self.learning_step % 1000 == 0:
+                writer.add_scalar("loss/critic", loss_critic, self.learning_step)
+                writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(

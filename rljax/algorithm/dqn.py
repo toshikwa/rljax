@@ -6,26 +6,10 @@ import numpy as np
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import nn
 from jax.experimental import optix
 from rljax.algorithm.base import QLearning
-from rljax.network.critic import DiscreteQFunction, DQNBody
-from rljax.util import get_q_at_action
-
-
-def build_dqn(state_space, action_space, hidden_units, dueling_net):
-    def _func(state):
-        if len(state_space.shape) == 3:
-            state = DQNBody()(state)
-        return DiscreteQFunction(
-            action_dim=action_space.n,
-            num_critics=1,
-            hidden_units=hidden_units,
-            hidden_activation=nn.relu,
-            dueling_net=dueling_net,
-        )(state)
-
-    return hk.without_apply_rng(hk.transform(_func))
+from rljax.network import DiscreteQFunction
+from rljax.util import get_q_at_action, huber_fn
 
 
 class DQN(QLearning):
@@ -42,15 +26,16 @@ class DQN(QLearning):
         batch_size=32,
         start_steps=50000,
         update_interval=4,
-        update_interval_target=10000,
+        tau=5e-3,
         eps=0.01,
         eps_eval=0.001,
         lr=2.5e-4,
         units=(512,),
-        dueling_net=True,
-        double_q=True,
+        loss_type="l2",
+        dueling_net=False,
+        double_q=False,
     ):
-        assert update_interval_target % update_interval == 0
+        assert loss_type in ["l2", "huber"]
         super(DQN, self).__init__(
             num_steps=num_steps,
             state_space=state_space,
@@ -63,18 +48,27 @@ class DQN(QLearning):
             use_per=use_per,
             start_steps=start_steps,
             update_interval=update_interval,
-            update_interval_target=update_interval_target,
+            tau=tau,
             eps=eps,
             eps_eval=eps_eval,
         )
 
+        def q_fn(s):
+            return DiscreteQFunction(
+                action_space=action_space,
+                num_critics=1,
+                hidden_units=units,
+                dueling_net=dueling_net,
+            )(s)
+
         # DQN.
-        self.q_net = build_dqn(state_space, action_space, units, dueling_net)
-        opt_init, self.opt = optix.adam(lr)
+        self.q_net = hk.without_apply_rng(hk.transform(q_fn))
+        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.params = self.params_target = self.q_net.init(next(self.rng), self.fake_state)
         self.opt_state = opt_init(self.params)
 
         # Other parameters.
+        self.loss_type = loss_type
         self.double_q = double_q
 
     @partial(jax.jit, static_argnums=0)
@@ -84,8 +78,8 @@ class DQN(QLearning):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        s_q = self.q_net.apply(params, state)
-        return jnp.argmax(s_q, axis=1)
+        q_s = self.q_net.apply(params, state)
+        return jnp.argmax(q_s, axis=1)
 
     def update(self, writer):
         self.learning_step += 1
@@ -109,8 +103,7 @@ class DQN(QLearning):
             self.buffer.update_priority(error)
 
         # Update target network.
-        if self.env_step % self.update_interval_target == 0:
-            self.params_target = self._update_target(self.params_target, self.params)
+        self.params_target = self._update_target(self.params_target, self.params)
 
         if self.learning_step % 1000 == 0:
             writer.add_scalar("loss/q", loss, self.learning_step)
@@ -164,8 +157,13 @@ class DQN(QLearning):
             next_q = jnp.max(self.q_net.apply(params_target, next_state), axis=1, keepdims=True)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
         curr_q = get_q_at_action(self.q_net.apply(params, state), action)
-        error = jnp.abs(target_q - curr_q)
-        return jnp.mean(jnp.square(error) * weight), jax.lax.stop_gradient(error)
+
+        td = target_q - curr_q
+        if self.loss_type == "l2":
+            loss = jnp.mean(jnp.square(td) * weight)
+        elif self.loss_type == "huber":
+            loss = jnp.mean(huber_fn(td) * weight)
+        return loss, jax.lax.stop_gradient(jnp.abs(td))
 
     def __str__(self):
         return "DQN" if not self.use_per else "DQN+PER"

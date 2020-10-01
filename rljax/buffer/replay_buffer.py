@@ -144,5 +144,5 @@ class ReplayBuffer:
         idxes = self._sample_idx(batch_size)
         batch = self._sample(idxes)
         # Use fake weight to use the same interface with PER.
-        weight = np.array([1], dtype=np.float32)
+        weight = np.ones((), dtype=np.float32)
         return weight, batch

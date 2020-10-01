@@ -9,7 +9,7 @@ from rljax.trainer import Trainer
 
 def run(args):
     env = make_atari_env(args.env_id)
-    env_test = make_atari_env(args.env_id, clip_rewards=False)
+    env_test = make_atari_env(args.env_id, episode_life=False, clip_rewards=False)
 
     algo = DISCRETE_ALGORITHM[args.algo](
         num_steps=args.num_steps,

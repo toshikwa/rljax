@@ -1,4 +1,5 @@
 import math
+from functools import partial
 from typing import Any, Tuple
 
 import haiku as hk
@@ -117,22 +118,24 @@ def get_quantile_at_action(
 
 
 @jax.jit
-def _huber_loss(
-    td: jnp.ndarray,
-    kappa: float = 1.0,
-) -> jnp.ndarray:
+def huber_fn(td: jnp.ndarray) -> jnp.ndarray:
     abs_td = jnp.abs(td)
-    return jnp.where(abs_td <= kappa, 0.5 * jnp.square(td), kappa * (abs_td - 0.5 * kappa))
+    return jnp.where(abs_td <= 1.0, jnp.square(td), abs_td)
 
 
-@jax.jit
-def calculate_quantile_huber_loss(
+@partial(jax.jit, static_argnums=3)
+def calculate_quantile_loss(
     td: jnp.ndarray,
     tau: jnp.ndarray,
     weight: jnp.ndarray,
-    kappa: float = 1.0,
+    loss_type: float = "l2",  # "l2" or "huber"
 ) -> jnp.ndarray:
-    element_wise_loss = _huber_loss(td, kappa)
-    element_wise_loss *= jnp.abs(tau[..., None] - (jax.lax.stop_gradient(td) < 0)) / kappa
+    if loss_type == "l2":
+        element_wise_loss = jnp.square(td)
+    elif loss_type == "huber":
+        element_wise_loss = huber_fn(td)
+    else:
+        NotImplementedError
+    element_wise_loss *= jax.lax.stop_gradient(jnp.abs(tau[..., None] - (td < 0)))
     batch_loss = element_wise_loss.sum(axis=1).mean(axis=1, keepdims=True)
     return (batch_loss * weight).mean()
