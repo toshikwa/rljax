@@ -2,9 +2,7 @@ import os
 from datetime import timedelta
 from time import sleep, time
 
-import numpy as np
 import pandas as pd
-
 from tensorboardX import SummaryWriter
 
 

@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from functools import partial
 
+import jax
 import numpy as np
 from gym.spaces import Box
-
-import jax
 from haiku import PRNGSequence
+
 from rljax.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
 from rljax.util import soft_update
 

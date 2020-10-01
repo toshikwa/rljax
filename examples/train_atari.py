@@ -6,7 +6,6 @@ from rljax.algorithm import DISCRETE_ALGORITHM
 from rljax.env import make_atari_env
 from rljax.trainer import Trainer
 
-
 config = {
     "dqn": {
         "nstep": 3,

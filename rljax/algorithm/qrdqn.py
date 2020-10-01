@@ -1,12 +1,12 @@
 from functools import partial
 from typing import Any, Tuple
 
-import numpy as np
-
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.experimental import optix
+
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQuantileFunction
 from rljax.util import calculate_quantile_loss, get_quantile_at_action

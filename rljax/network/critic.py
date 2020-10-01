@@ -3,6 +3,7 @@ import math
 import haiku as hk
 import jax.numpy as jnp
 from jax import nn
+
 from rljax.network.base import MLP, DQNBody
 
 
