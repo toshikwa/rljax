@@ -95,7 +95,7 @@ class OnPolicyActorCritic(Algorithm):
         self.batch_size = batch_size
 
     def select_action(self, state):
-        action = self._select_action(self.params_actor, next(self.rng), state[None, ...])
+        action = self._select_action(self.params_actor, state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
@@ -103,7 +103,7 @@ class OnPolicyActorCritic(Algorithm):
         return np.array(action[0]), np.array(log_pi[0])
 
     @abstractmethod
-    def _select_action(self, params_actor, rng, state):
+    def _select_action(self, params_actor, state):
         pass
 
     @abstractmethod
@@ -147,8 +147,10 @@ class OffPolicyAlgorithm(Algorithm):
         batch_size,
         start_steps,
         update_interval,
-        tau,
+        update_interval_target=None,
+        tau=None,
     ):
+        assert update_interval_target or tau
         super(OffPolicyAlgorithm, self).__init__(
             num_steps=num_steps,
             state_space=state_space,
@@ -179,7 +181,12 @@ class OffPolicyAlgorithm(Algorithm):
         self.batch_size = batch_size
         self.start_steps = start_steps
         self.update_interval = update_interval
-        self._update_target = jax.jit(partial(soft_update, tau=tau))
+
+        if update_interval_target:
+            self.update_interval_target = update_interval_target
+            self._update_target = jax.jit(partial(soft_update, tau=1.0))
+        else:
+            self._update_target = jax.jit(partial(soft_update, tau=tau))
 
     def is_update(self):
         return self.env_step % self.update_interval == 0 and self.env_step >= self.start_steps
@@ -226,7 +233,8 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         batch_size,
         start_steps,
         update_interval,
-        tau,
+        update_interval_target=None,
+        tau=None,
     ):
         super(OffPolicyActorCritic, self).__init__(
             num_steps=num_steps,
@@ -240,11 +248,12 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
+            update_interval_target=update_interval_target,
             tau=tau,
         )
 
     def select_action(self, state):
-        action = self._select_action(self.params_actor, next(self.rng), state[None, ...])
+        action = self._select_action(self.params_actor, state[None, ...])
         return np.array(action[0])
 
     def explore(self, state):
@@ -252,7 +261,7 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         return np.array(action[0])
 
     @abstractmethod
-    def _select_action(self, params_actor, rng, state):
+    def _select_action(self, params_actor, state):
         pass
 
     @abstractmethod
@@ -278,7 +287,7 @@ class QLearning(OffPolicyAlgorithm):
         batch_size,
         start_steps,
         update_interval,
-        tau,
+        update_interval_target,
         eps,
         eps_eval,
     ):
@@ -294,7 +303,7 @@ class QLearning(OffPolicyAlgorithm):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
-            tau=tau,
+            update_interval_target=update_interval_target,
         )
         self.eps = eps
         self.eps_eval = eps_eval
@@ -303,7 +312,7 @@ class QLearning(OffPolicyAlgorithm):
         if np.random.rand() < self.eps_eval:
             action = self.action_space.sample()
         else:
-            action = self._select_action(self.params, next(self.rng), state[None, ...])
+            action = self.forward(state[None, ...])
             action = np.array(action[0])
         return action
 
@@ -311,10 +320,13 @@ class QLearning(OffPolicyAlgorithm):
         if np.random.rand() < self.eps:
             action = self.action_space.sample()
         else:
-            action = self._select_action(self.params, next(self.rng), state[None, ...])
+            action = self.forward(state[None, ...])
             action = np.array(action[0])
         return action
 
+    def forward(self, state):
+        return self._forward(self.params, state)
+
     @abstractmethod
-    def _select_action(self, params, rng, state):
+    def _forward(self, params, state):
         pass

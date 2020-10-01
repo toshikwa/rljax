@@ -26,7 +26,7 @@ class DQN(QLearning):
         batch_size=32,
         start_steps=50000,
         update_interval=4,
-        tau=5e-3,
+        update_interval_target=8000,
         eps=0.01,
         eps_eval=0.001,
         lr=2.5e-4,
@@ -48,7 +48,7 @@ class DQN(QLearning):
             use_per=use_per,
             start_steps=start_steps,
             update_interval=update_interval,
-            tau=tau,
+            update_interval_target=update_interval_target,
             eps=eps,
             eps_eval=eps_eval,
         )
@@ -72,10 +72,9 @@ class DQN(QLearning):
         self.double_q = double_q
 
     @partial(jax.jit, static_argnums=0)
-    def _select_action(
+    def _forward(
         self,
         params: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         q_s = self.q_net.apply(params, state)
@@ -103,7 +102,8 @@ class DQN(QLearning):
             self.buffer.update_priority(error)
 
         # Update target network.
-        self.params_target = self._update_target(self.params_target, self.params)
+        if self.env_step % self.update_interval_target == 0:
+            self.params_target = self._update_target(self.params_target, self.params)
 
         if self.learning_step % 1000 == 0:
             writer.add_scalar("loss/q", loss, self.learning_step)

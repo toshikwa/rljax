@@ -29,7 +29,7 @@ class PPO(OnPolicyActorCritic):
         epoch_ppo=10,
         clip_eps=0.2,
         lambd=0.97,
-        max_grad_norm=0.5,
+        max_grad_norm=10.0,
     ):
         assert buffer_size % batch_size == 0
         super(PPO, self).__init__(
@@ -77,7 +77,6 @@ class PPO(OnPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, state)

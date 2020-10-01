@@ -85,7 +85,6 @@ class TD3(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         return self.actor.apply(params_actor, state)

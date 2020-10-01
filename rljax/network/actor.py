@@ -85,7 +85,7 @@ class CategoricalPolicy(hk.Module):
     def __init__(
         self,
         action_space,
-        hidden_units=(256, 256),
+        hidden_units=(512,),
         hidden_activation=nn.relu,
     ):
         super(CategoricalPolicy, self).__init__()
@@ -98,4 +98,5 @@ class CategoricalPolicy(hk.Module):
             x = DQNBody()(x)
         x = MLP(self.action_space.n, self.hidden_units, self.hidden_activation)(x)
         pi = nn.softmax(x, axis=1)
-        return pi, jnp.log(pi + 1e-6)
+        log_pi = jnp.log(pi + (pi == 0.0) * 1e-8)
+        return pi, log_pi

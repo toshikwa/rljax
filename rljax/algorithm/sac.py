@@ -82,7 +82,6 @@ class SAC(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, state)
