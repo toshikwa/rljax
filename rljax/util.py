@@ -44,7 +44,7 @@ def evaluate_lop_pi(
 
 
 @jax.jit
-def reparameterize(
+def reparameterize_gaussian_with_tanh(
     mean: jnp.ndarray,
     log_std: jnp.ndarray,
     key: jnp.ndarray,
@@ -100,6 +100,10 @@ def get_q_at_action(
     q_s: jnp.ndarray,
     action: jnp.ndarray,
 ) -> jnp.ndarray:
+    """
+    Get q values at (s, a).
+    """
+
     def _get(q_s, action):
         return q_s[action]
 
@@ -111,6 +115,10 @@ def get_quantile_at_action(
     quantile_s: jnp.ndarray,
     action: jnp.ndarray,
 ) -> jnp.ndarray:
+    """
+    Get quantile values at (s, a).
+    """
+
     def _get(quantile_s, action):
         return quantile_s[:, action]
 
@@ -130,6 +138,9 @@ def calculate_quantile_loss(
     weight: jnp.ndarray,
     loss_type: float = "l2",  # "l2" or "huber"
 ) -> jnp.ndarray:
+    """
+    Calculate quantile loss.
+    """
     if loss_type == "l2":
         element_wise_loss = jnp.square(td)
     elif loss_type == "huber":
