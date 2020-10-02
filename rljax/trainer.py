@@ -48,13 +48,11 @@ class Trainer:
     def train(self):
         # Time to start training.
         self.start_time = time()
-        # Episode's timestep.
-        t = 0
         # Initialize the environment.
         state = self.env.reset()
 
         for step in range(1, self.num_steps + 1):
-            state, t = self.algo.step(self.env, state, t)
+            state = self.algo.step(self.env, state)
 
             if self.algo.is_update():
                 self.algo.update(self.writer)

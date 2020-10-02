@@ -25,7 +25,9 @@ class Algorithm(ABC):
     ):
         np.random.seed(seed)
         self.rng = PRNGSequence(seed)
+
         self.env_step = 0
+        self.episode_step = 0
         self.learning_step = 0
         self.num_steps = num_steps
         self.state_space = state_space
@@ -51,7 +53,7 @@ class Algorithm(ABC):
         pass
 
     @abstractmethod
-    def step(self, env, state, t):
+    def step(self, env, state):
         pass
 
     @abstractmethod
@@ -113,20 +115,20 @@ class OnPolicyActorCritic(Algorithm):
     def is_update(self):
         return self.env_step % self.buffer_size == 0
 
-    def step(self, env, state, t):
-        t += 1
+    def step(self, env, state):
         self.env_step += 1
+        self.episode_step += 1
 
         action, log_pi = self.explore(state)
         next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
+        mask = False if self.episode_step == env._max_episode_steps else done
         self.buffer.append(state, action, reward, mask, log_pi, next_state)
 
         if done:
-            t = 0
+            self.episode_step = 0
             next_state = env.reset()
 
-        return next_state, t
+        return next_state
 
 
 class OffPolicyAlgorithm(Algorithm):
@@ -195,9 +197,9 @@ class OffPolicyAlgorithm(Algorithm):
     def explore(self, state):
         pass
 
-    def step(self, env, state, t):
-        t += 1
+    def step(self, env, state):
         self.env_step += 1
+        self.episode_step += 1
 
         if self.env_step <= self.start_steps:
             action = env.action_space.sample()
@@ -205,14 +207,14 @@ class OffPolicyAlgorithm(Algorithm):
             action = self.explore(state)
 
         next_state, reward, done, _ = env.step(action)
-        mask = False if t == env._max_episode_steps else done
+        mask = False if self.episode_step == env._max_episode_steps else done
         self.buffer.append(state, action, reward, mask, next_state, done)
 
         if done:
-            t = 0
+            self.episode_step = 0
             next_state = env.reset()
 
-        return next_state, t
+        return next_state
 
 
 class OffPolicyActorCritic(OffPolicyAlgorithm):
