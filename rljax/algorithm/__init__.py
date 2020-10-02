@@ -4,6 +4,7 @@ from .iqn import IQN
 from .ppo import PPO
 from .qrdqn import QRDQN
 from .sac import SAC
+from .sac_discor import DisCor
 from .sac_discrete import SACDiscrete
 from .td3 import TD3
 
@@ -12,6 +13,7 @@ CONTINUOUS_ALGORITHM = {
     "ddpg": DDPG,
     "td3": TD3,
     "sac": SAC,
+    "discor": DisCor,
 }
 DISCRETE_ALGORITHM = {
     "dqn": DQN,
