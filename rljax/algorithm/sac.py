@@ -1,15 +1,15 @@
 from functools import partial
 from typing import Any, Tuple
 
-import numpy as np
-
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.experimental import optix
+
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
-from rljax.util import reparameterize
+from rljax.util import reparameterize_gaussian_with_tanh
 
 
 class SAC(OffPolicyActorCritic):
@@ -82,7 +82,6 @@ class SAC(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, state)
@@ -96,9 +95,9 @@ class SAC(OffPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize(mean, log_std, rng)[0]
+        return reparameterize_gaussian_with_tanh(mean, log_std, rng)[0]
 
-    def update(self, writer):
+    def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
@@ -143,7 +142,7 @@ class SAC(OffPolicyActorCritic):
         # Update target network.
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
-        if self.learning_step % 1000 == 0:
+        if writer and self.learning_step % 1000 == 0:
             writer.add_scalar("loss/critic", loss_critic, self.learning_step)
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
             writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)
@@ -201,7 +200,7 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         # Sample next actions.
         next_mean, next_log_std = self.actor.apply(params_actor, next_state)
-        next_action, next_log_pi = reparameterize(next_mean, next_log_std, rng)
+        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, rng)
         # Calculate target soft q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
@@ -245,7 +244,7 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         # Sample actions.
         mean, log_std = self.actor.apply(params_actor, state)
-        action, log_pi = reparameterize(mean, log_std, rng)
+        action, log_pi = reparameterize_gaussian_with_tanh(mean, log_std, rng)
         # Calculate soft q values with online critic.
         q1, q2 = self.critic.apply(params_critic, state, action)
         mean_log_pi = log_pi.mean()

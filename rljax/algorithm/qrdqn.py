@@ -1,12 +1,12 @@
 from functools import partial
 from typing import Any, Tuple
 
-import numpy as np
-
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.experimental import optix
+
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQuantileFunction
 from rljax.util import calculate_quantile_loss, get_quantile_at_action
@@ -26,10 +26,10 @@ class QRDQN(QLearning):
         batch_size=32,
         start_steps=50000,
         update_interval=4,
-        tau=5e-3,
+        update_interval_target=8000,
         eps=0.01,
         eps_eval=0.001,
-        lr=5.0e-5,
+        lr=5e-5,
         units=(512,),
         num_quantiles=200,
         loss_type="l2",
@@ -49,7 +49,7 @@ class QRDQN(QLearning):
             use_per=use_per,
             start_steps=start_steps,
             update_interval=update_interval,
-            tau=tau,
+            update_interval_target=update_interval_target,
             eps=eps,
             eps_eval=eps_eval,
         )
@@ -79,16 +79,15 @@ class QRDQN(QLearning):
         self.double_q = double_q
 
     @partial(jax.jit, static_argnums=0)
-    def _select_action(
+    def _forward(
         self,
         params: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         q_s = self.quantile_net.apply(params, state).mean(axis=1)
         return jnp.argmax(q_s, axis=1)
 
-    def update(self, writer):
+    def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
@@ -110,9 +109,10 @@ class QRDQN(QLearning):
             self.buffer.update_priority(error)
 
         # Update target network.
-        self.params_target = self._update_target(self.params_target, self.params)
+        if self.env_step % self.update_interval_target == 0:
+            self.params_target = self._update_target(self.params_target, self.params)
 
-        if self.learning_step % 1000 == 0:
+        if writer and self.learning_step % 1000 == 0:
             writer.add_scalar("loss/quantile", loss, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)

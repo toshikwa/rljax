@@ -8,7 +8,7 @@ def _test_algorithm(env, algo):
     state = env.reset()
 
     # Test step() method.
-    _state, _ = algo.step(env, state, 100000)
+    _state = algo.step(env, state)
     assert env.observation_space.contains(_state)
 
     # Test select_action() method.

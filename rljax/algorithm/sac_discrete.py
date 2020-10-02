@@ -1,12 +1,12 @@
 from functools import partial
 from typing import Any, Tuple
 
-import numpy as np
-
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.experimental import optix
+
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import CategoricalPolicy, DiscreteQFunction
 from rljax.util import get_q_at_action
@@ -24,9 +24,9 @@ class SACDiscrete(OffPolicyActorCritic):
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=64,
-        start_steps=20000,
+        start_steps=10000,
         update_interval=4,
-        tau=5e-3,
+        update_interval_target=8000,
         lr_actor=3e-4,
         lr_critic=3e-4,
         lr_alpha=3e-4,
@@ -47,7 +47,7 @@ class SACDiscrete(OffPolicyActorCritic):
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
-            tau=tau,
+            update_interval_target=update_interval_target,
         )
 
         def critic_fn(s):
@@ -86,7 +86,6 @@ class SACDiscrete(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         pi, _ = self.actor.apply(params_actor, state)
@@ -102,7 +101,7 @@ class SACDiscrete(OffPolicyActorCritic):
         pi, _ = self.actor.apply(params_actor, state)
         return jax.random.categorical(rng, pi)
 
-    def update(self, writer):
+    def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
@@ -143,9 +142,10 @@ class SACDiscrete(OffPolicyActorCritic):
         )
 
         # Update target network.
-        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
+        if self.env_step % self.update_interval_target == 0:
+            self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
-        if self.learning_step % 1000 == 0:
+        if writer and self.learning_step % 100 == 0:
             writer.add_scalar("loss/critic", loss_critic, self.learning_step)
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
             writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)
@@ -238,16 +238,16 @@ class SACDiscrete(OffPolicyActorCritic):
         log_alpha: jnp.ndarray,
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jnp.exp(log_alpha)
+        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
         # Calculate soft q values at every actions with online critic.
         curr_q_s1, curr_q_s2 = self.critic.apply(params_critic, state)
-        curr_q_s = jax.lax.stop_gradient(jnp.minimum(curr_q_s1, curr_q_s1))
+        curr_q_s = jax.lax.stop_gradient(jnp.minimum(curr_q_s1, curr_q_s2))
         # Calculate action distribution.
         pi, log_pi = self.actor.apply(params_actor, state)
         # Calculate soft q values and entropies(= -1 * E[log(\pi)]).
         curr_q = (pi * curr_q_s).sum(axis=1).mean()
         mean_log_pi = (pi * log_pi).sum(axis=1).mean()
-        return alpha * mean_log_pi - curr_q, jax.lax.stop_gradient(mean_log_pi)
+        return -(curr_q - alpha * mean_log_pi), jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)
     def _update_alpha(

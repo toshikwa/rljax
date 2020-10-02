@@ -1,12 +1,12 @@
 from functools import partial
 from typing import Any, Tuple
 
-import numpy as np
-
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.experimental import optix
+
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, DeterministicPolicy
 from rljax.util import add_noise
@@ -81,7 +81,6 @@ class DDPG(OffPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         return self.actor.apply(params_actor, state)
@@ -96,7 +95,7 @@ class DDPG(OffPolicyActorCritic):
         action = self.actor.apply(params_actor, state)
         return add_noise(action, rng, self.std, -1.0, 1.0)
 
-    def update(self, writer):
+    def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
@@ -120,7 +119,7 @@ class DDPG(OffPolicyActorCritic):
         if self.use_per:
             self.buffer.update_priority(error)
 
-        if self.learning_step % self.update_interval_policy == 0:
+        if writer and self.learning_step % self.update_interval_policy == 0:
             # Update actor and target.
             self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
                 opt_state_actor=self.opt_state_actor,

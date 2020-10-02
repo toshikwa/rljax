@@ -1,15 +1,15 @@
 from functools import partial
 from typing import Any, Tuple
 
-import numpy as np
-
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.experimental import optix
+
 from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
-from rljax.util import clip_gradient, evaluate_lop_pi, reparameterize
+from rljax.util import clip_gradient, evaluate_lop_pi, reparameterize_gaussian_with_tanh
 
 
 class PPO(OnPolicyActorCritic):
@@ -29,7 +29,7 @@ class PPO(OnPolicyActorCritic):
         epoch_ppo=10,
         clip_eps=0.2,
         lambd=0.97,
-        max_grad_norm=0.5,
+        max_grad_norm=10.0,
     ):
         assert buffer_size % batch_size == 0
         super(PPO, self).__init__(
@@ -77,7 +77,6 @@ class PPO(OnPolicyActorCritic):
     def _select_action(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         mean, _ = self.actor.apply(params_actor, state)
@@ -91,9 +90,9 @@ class PPO(OnPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize(mean, log_std, rng)
+        return reparameterize_gaussian_with_tanh(mean, log_std, rng)
 
-    def update(self, writer):
+    def update(self, writer=None):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()
 
         # Calculate gamma-returns and GAEs.
@@ -129,8 +128,9 @@ class PPO(OnPolicyActorCritic):
                     gae=gae[idx],
                 )
 
-        writer.add_scalar("loss/critic", loss_critic, self.learning_step)
-        writer.add_scalar("loss/actor", loss_actor, self.learning_step)
+        if writer:
+            writer.add_scalar("loss/critic", loss_critic, self.learning_step)
+            writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(

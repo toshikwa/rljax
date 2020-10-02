@@ -38,7 +38,64 @@ Currently, following algorithms have been implemented.
 - [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
 
 ## Examples
+All algorithms can be trained in a few lines of codes.
 
-Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`.
+<details>
+<summary>Getting started</summary>
 
-<img src="https://user-images.githubusercontent.com/37267851/94747565-2dac5080-03ba-11eb-8bf2-994eabefb29e.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94751929-c5af3780-03c4-11eb-8372-832762d8dfc1.png" title="InvertedPendulum-v2" width=400>
+Here is a quick example of how to train DQN on `CartPole-v0`.
+
+```Python
+import gym
+
+from rljax.algorithm import DQN
+from rljax.trainer import Trainer
+
+NUM_STEPS = 20000
+SEED = 0
+
+env = gym.make("CartPole-v0")
+env_test = gym.make("CartPole-v0")
+
+algo = DQN(
+    num_steps=NUM_STEPS,
+    state_space=env.observation_space,
+    action_space=env.action_space,
+    seed=SEED,
+    batch_size=256,
+    start_steps=1000,
+    update_interval=1,
+    update_interval_target=400,
+)
+
+trainer = Trainer(
+    env=env,
+    env_test=env_test,
+    algo=algo,
+    log_dir="/tmp/rljax/dqn",
+    num_steps=NUM_STEPS,
+    eval_interval=1000,
+    seed=SEED,
+)
+trainer.train()
+```
+
+</details>
+
+<details>
+<summary>Simple examples</summary>
+
+Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_continuous_easy.py)) and the continuous action environment `InvertedPendulum-v2` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_discrete_easy.py)).
+
+<img src="https://user-images.githubusercontent.com/37267851/94864541-1da67680-0477-11eb-97ce-c6abc0eb2c51.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94751929-c5af3780-03c4-11eb-8372-832762d8dfc1.png" title="InvertedPendulum-v2" width=400>
+
+</details>
+
+<details>
+<summary>MuJoCo(Gym)</summary>
+
+I benchmarked my implementations in environments from MuJoCo's `-v3` task suites, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/train_mujoco.py)).
+
+<img src="https://user-images.githubusercontent.com/37267851/94887999-b0b0d200-04b2-11eb-9a37-7e2b87dfa71a.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/94888002-b1e1ff00-04b2-11eb-87da-243f39d325b6.png" title="Walker2d-v3" width=400>
+
+</details>

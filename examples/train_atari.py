@@ -6,6 +6,31 @@ from rljax.algorithm import DISCRETE_ALGORITHM
 from rljax.env import make_atari_env
 from rljax.trainer import Trainer
 
+config = {
+    "dqn": {
+        "nstep": 3,
+        "loss_type": "l2",
+        "dueling_net": True,
+        "double_q": True,
+    },
+    "qrdqn": {
+        "nstep": 3,
+        "loss_type": "l2",
+        "dueling_net": True,
+        "double_q": True,
+    },
+    "iqn": {
+        "nstep": 3,
+        "loss_type": "l2",
+        "dueling_net": True,
+        "double_q": True,
+    },
+    "sac_discrete": {
+        "nstep": 3,
+        "dueling_net": True,
+    },
+}
+
 
 def run(args):
     env = make_atari_env(args.env_id)
@@ -36,7 +61,7 @@ def run(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--algo", type=str, default="dqn")
-    p.add_argument("--num_steps", type=int, default=3 * 10 ** 6)
+    p.add_argument("--num_steps", type=int, default=5 * 10 ** 6)
     p.add_argument("--eval_interval", type=int, default=20000)
     p.add_argument("--env_id", type=str, default="MsPacmanNoFrameskip-v4")
     p.add_argument("--seed", type=int, default=0)

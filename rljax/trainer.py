@@ -2,10 +2,10 @@ import os
 from datetime import timedelta
 from time import sleep, time
 
-import numpy as np
 import pandas as pd
-
 from tensorboardX import SummaryWriter
+
+from rljax.util import evaluate
 
 
 class Trainer:
@@ -50,13 +50,11 @@ class Trainer:
     def train(self):
         # Time to start training.
         self.start_time = time()
-        # Episode's timestep.
-        t = 0
         # Initialize the environment.
         state = self.env.reset()
 
         for step in range(1, self.num_steps + 1):
-            state, t = self.algo.step(self.env, state, t)
+            state = self.algo.step(self.env, state)
 
             if self.algo.is_update():
                 self.algo.update(self.writer)
@@ -65,22 +63,11 @@ class Trainer:
                 self.evaluate(step)
 
         # Wait for the logging to be finished.
-        sleep(10)
+        sleep(2)
 
     def evaluate(self, step):
-        mean_return = 0.0
-
-        for _ in range(self.num_eval_episodes):
-            state = self.env_test.reset()
-            episode_return = 0.0
-            done = False
-
-            while not done:
-                action = self.algo.select_action(state)
-                state, reward, done, _ = self.env_test.step(action)
-                episode_return += reward
-
-            mean_return += episode_return / self.num_eval_episodes
+        # Evaluate.
+        mean_return = evaluate(self.env_test, self.algo, self.num_eval_episodes)
 
         # Log to CSV.
         self.log["step"].append(step)

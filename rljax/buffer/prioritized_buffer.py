@@ -1,9 +1,9 @@
 from functools import partial
 
-import numpy as np
-
 import jax
 import jax.numpy as jnp
+import numpy as np
+
 from rljax.buffer.replay_buffer import ReplayBuffer
 from rljax.buffer.segment_tree import MinTree, SumTree
 
