@@ -150,3 +150,17 @@ def calculate_quantile_loss(
     element_wise_loss *= jax.lax.stop_gradient(jnp.abs(tau[..., None] - (td < 0)))
     batch_loss = element_wise_loss.sum(axis=1).mean(axis=1, keepdims=True)
     return (batch_loss * weight).mean()
+
+
+def evaluate(env_test, algo, num_episodes=10):
+    total_return = 0.0
+
+    for _ in range(num_episodes):
+        state = env_test.reset()
+        done = False
+        while not done:
+            action = algo.select_action(state)
+            state, reward, done, _ = env_test.step(action)
+            total_return += reward
+
+    return total_return / num_episodes

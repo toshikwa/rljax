@@ -5,6 +5,8 @@ from time import sleep, time
 import pandas as pd
 from tensorboardX import SummaryWriter
 
+from rljax.util import evaluate
+
 
 class Trainer:
     """
@@ -61,22 +63,11 @@ class Trainer:
                 self.evaluate(step)
 
         # Wait for the logging to be finished.
-        sleep(10)
+        sleep(2)
 
     def evaluate(self, step):
-        mean_return = 0.0
-
-        for _ in range(self.num_eval_episodes):
-            state = self.env_test.reset()
-            episode_return = 0.0
-            done = False
-
-            while not done:
-                action = self.algo.select_action(state)
-                state, reward, done, _ = self.env_test.step(action)
-                episode_return += reward
-
-            mean_return += episode_return / self.num_eval_episodes
+        # Evaluate.
+        mean_return = evaluate(self.env_test, self.algo, self.num_eval_episodes)
 
         # Log to CSV.
         self.log["step"].append(step)

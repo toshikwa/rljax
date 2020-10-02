@@ -37,8 +37,45 @@ Currently, following algorithms have been implemented.
 - [x] Implicit Quantile Network(IQN)
 - [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
 
-## Examples
+## Example
 
-Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`.
+All algorithms can be trained in a few lines of codes. Here is a quick example of how to train and run DQN on `CartPole-v0`.
+
+```
+import gym
+
+from rljax.algorithm import DQN
+from rljax.trainer import Trainer
+
+NUM_STEPS = 20000
+SEED = 0
+
+env = gym.make("CartPole-v0")
+env_test = gym.make("CartPole-v0")
+
+algo = DQN(
+    num_steps=NUM_STEPS,
+    state_space=env.observation_space,
+    action_space=env.action_space,
+    seed=SEED,
+    batch_size=256,
+    start_steps=1000,
+    update_interval=1,
+    update_interval_target=400,
+)
+
+trainer = Trainer(
+    env=env,
+    env_test=env_test,
+    algo=algo,
+    log_dir="/tmp/rljax/dqn",
+    num_steps=NUM_STEPS,
+    eval_interval=1000,
+    seed=SEED,
+)
+trainer.train()
+```
+
+Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` and the continuous action environment `InvertedPendulum-v2`. See [train_discrete_easy.py](https://github.com/ku2482/rljax/blob/master/examples/train_discrete_easy.py) and [train_continuous_easy.py](https://github.com/ku2482/rljax/blob/master/examples/train_continuous_easy.py) for more details.
 
 <img src="https://user-images.githubusercontent.com/37267851/94864541-1da67680-0477-11eb-97ce-c6abc0eb2c51.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94751929-c5af3780-03c4-11eb-8372-832762d8dfc1.png" title="InvertedPendulum-v2" width=400>

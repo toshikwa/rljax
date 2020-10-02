@@ -101,7 +101,7 @@ class SACDiscrete(OffPolicyActorCritic):
         pi, _ = self.actor.apply(params_actor, state)
         return jax.random.categorical(rng, pi)
 
-    def update(self, writer):
+    def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
@@ -145,7 +145,7 @@ class SACDiscrete(OffPolicyActorCritic):
         if self.env_step % self.update_interval_target == 0:
             self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
-        if self.learning_step % 100 == 0:
+        if writer and self.learning_step % 100 == 0:
             writer.add_scalar("loss/critic", loss_critic, self.learning_step)
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
             writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)

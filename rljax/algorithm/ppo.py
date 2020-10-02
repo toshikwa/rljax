@@ -92,7 +92,7 @@ class PPO(OnPolicyActorCritic):
         mean, log_std = self.actor.apply(params_actor, state)
         return reparameterize_gaussian_with_tanh(mean, log_std, rng)
 
-    def update(self, writer):
+    def update(self, writer=None):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()
 
         # Calculate gamma-returns and GAEs.
@@ -128,8 +128,9 @@ class PPO(OnPolicyActorCritic):
                     gae=gae[idx],
                 )
 
-        writer.add_scalar("loss/critic", loss_critic, self.learning_step)
-        writer.add_scalar("loss/actor", loss_actor, self.learning_step)
+        if writer:
+            writer.add_scalar("loss/critic", loss_critic, self.learning_step)
+            writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(

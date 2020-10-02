@@ -87,7 +87,7 @@ class QRDQN(QLearning):
         q_s = self.quantile_net.apply(params, state).mean(axis=1)
         return jnp.argmax(q_s, axis=1)
 
-    def update(self, writer):
+    def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
@@ -112,7 +112,7 @@ class QRDQN(QLearning):
         if self.env_step % self.update_interval_target == 0:
             self.params_target = self._update_target(self.params_target, self.params)
 
-        if self.learning_step % 1000 == 0:
+        if writer and self.learning_step % 1000 == 0:
             writer.add_scalar("loss/quantile", loss, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)

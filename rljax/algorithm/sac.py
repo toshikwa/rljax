@@ -97,7 +97,7 @@ class SAC(OffPolicyActorCritic):
         mean, log_std = self.actor.apply(params_actor, state)
         return reparameterize_gaussian_with_tanh(mean, log_std, rng)[0]
 
-    def update(self, writer):
+    def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
@@ -142,7 +142,7 @@ class SAC(OffPolicyActorCritic):
         # Update target network.
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
-        if self.learning_step % 1000 == 0:
+        if writer and self.learning_step % 1000 == 0:
             writer.add_scalar("loss/critic", loss_critic, self.learning_step)
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
             writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)
