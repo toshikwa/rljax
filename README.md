@@ -90,3 +90,12 @@ Below shows that our algorithms successfully learning the discrete action enviro
 <img src="https://user-images.githubusercontent.com/37267851/94864541-1da67680-0477-11eb-97ce-c6abc0eb2c51.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94751929-c5af3780-03c4-11eb-8372-832762d8dfc1.png" title="InvertedPendulum-v2" width=400>
 
 </details>
+
+<details>
+<summary>MuJoCo(Gym)</summary>
+
+I benchmarked my implementations in several environments from MuJoCo's `-v3` task suites, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html). Please see [here](https://github.com/ku2482/rljax/blob/master/examples/train_mujoco.py) for more details.
+
+<img src="https://user-images.githubusercontent.com/37267851/94887999-b0b0d200-04b2-11eb-9a37-7e2b87dfa71a.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/94888002-b1e1ff00-04b2-11eb-87da-243f39d325b6.png" title="Walker2d-v3" width=400>
+
+</details>
