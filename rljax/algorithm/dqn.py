@@ -87,7 +87,7 @@ class DQN(QLearning):
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        self.opt_state, self.params, loss, error = self._update(
+        self.opt_state, self.params, loss, abs_td = self._update(
             opt_state=self.opt_state,
             params=self.params,
             params_target=self.params_target,
@@ -101,7 +101,7 @@ class DQN(QLearning):
 
         # Update priority.
         if self.use_per:
-            self.buffer.update_priority(error)
+            self.buffer.update_priority(abs_td)
 
         # Update target network.
         if self.env_step % self.update_interval_target == 0:
@@ -123,7 +123,7 @@ class DQN(QLearning):
         next_state: np.ndarray,
         weight: np.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss, error), grad = jax.value_and_grad(self._loss, has_aux=True)(
+        (loss, abs_td), grad = jax.value_and_grad(self._loss, has_aux=True)(
             params,
             params_target=params_target,
             state=state,
@@ -135,7 +135,7 @@ class DQN(QLearning):
         )
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
-        return opt_state, params, loss, error
+        return opt_state, params, loss, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss(

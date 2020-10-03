@@ -1,5 +1,6 @@
 from .ddpg import DDPG
 from .dqn import DQN
+from .dqn_discor import DQN_DisCor
 from .iqn import IQN
 from .ppo import PPO
 from .qrdqn import QRDQN
@@ -20,4 +21,5 @@ DISCRETE_ALGORITHM = {
     "iqn": IQN,
     "qrdqn": QRDQN,
     "sac_discrete": SAC_Discrete,
+    "dqn_discor": DQN_DisCor,
 }

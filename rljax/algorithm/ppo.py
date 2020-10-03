@@ -216,7 +216,7 @@ class PPO(OnPolicyActorCritic):
         next_value = jax.lax.stop_gradient(self.critic.apply(params_critic, next_state))
         # Calculate TD errors.
         delta = reward + self.gamma * next_value * (1.0 - done) - value
-        # Calculate gae recursively from behind.
+        # Calculate GAE recursively from behind.
         gae = [delta[-1]]
         for t in jnp.arange(reward.shape[0] - 2, -1, -1):
             gae.insert(0, delta[t] + self.gamma * self.lambd * (1 - done[t]) * gae[0])

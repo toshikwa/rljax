@@ -42,6 +42,15 @@ config = {
         "update_interval_target": 400,
         "target_entropy_ratio": 0.8,
     },
+    "dqn_discor": {
+        "batch_size": 256,
+        "start_steps": 1000,
+        "update_interval": 1,
+        "update_interval_target": 400,
+        "loss_type": "l2",
+        "lr": 1e-3,
+        "units_error": (512,),
+    },
 }
 
 

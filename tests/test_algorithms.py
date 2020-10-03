@@ -1,7 +1,7 @@
 import gym
 import pytest
 
-from rljax.algorithm import DDPG, DQN, IQN, PPO, QRDQN, SAC, TD3, SAC_Discrete
+from rljax.algorithm import DDPG, DQN, IQN, PPO, QRDQN, SAC, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
 
 
 def _test_algorithm(env, algo):
@@ -26,19 +26,60 @@ def _test_algorithm(env, algo):
         (True, True, True),
     ],
 )
-def test_qlearning(use_per, dueling_net, double_q):
-    for ALGO in [DQN, QRDQN, IQN]:
-        env = gym.make("CartPole-v0")
-        algo = ALGO(
-            num_steps=100000,
-            state_space=env.observation_space,
-            action_space=env.action_space,
-            seed=0,
-            use_per=use_per,
-            dueling_net=dueling_net,
-            double_q=double_q,
-        )
-        _test_algorithm(env, algo)
+def test_dqn(use_per, dueling_net, double_q):
+    env = gym.make("CartPole-v0")
+    algo = DQN(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+        use_per=use_per,
+        dueling_net=dueling_net,
+        double_q=double_q,
+    )
+    _test_algorithm(env, algo)
+
+
+@pytest.mark.parametrize(
+    "use_per, dueling_net, double_q",
+    [
+        (False, False, False),
+        (True, True, True),
+    ],
+)
+def test_qrdqn(use_per, dueling_net, double_q):
+    env = gym.make("CartPole-v0")
+    algo = QRDQN(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+        use_per=use_per,
+        dueling_net=dueling_net,
+        double_q=double_q,
+    )
+    _test_algorithm(env, algo)
+
+
+@pytest.mark.parametrize(
+    "use_per, dueling_net, double_q",
+    [
+        (False, False, False),
+        (True, True, True),
+    ],
+)
+def test_iqn(use_per, dueling_net, double_q):
+    env = gym.make("CartPole-v0")
+    algo = IQN(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+        use_per=use_per,
+        dueling_net=dueling_net,
+        double_q=double_q,
+    )
+    _test_algorithm(env, algo)
 
 
 @pytest.mark.parametrize(
@@ -61,23 +102,70 @@ def test_sac_discrete(use_per, dueling_net):
     _test_algorithm(env, algo)
 
 
-@pytest.mark.parametrize("use_per", [(False), (True)])
-def test_actor_critic(use_per):
-    for ALGO in [DDPG, TD3, SAC]:
-        env = gym.make("MountainCarContinuous-v0")
-        algo = ALGO(
-            num_steps=100000,
-            state_space=env.observation_space,
-            action_space=env.action_space,
-            seed=0,
-            use_per=use_per,
-        )
-        _test_algorithm(env, algo)
+def test_dqn_discor():
+    env = gym.make("CartPole-v0")
+    algo = DQN_DisCor(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+    )
+    _test_algorithm(env, algo)
 
 
 def test_ppo():
     env = gym.make("MountainCarContinuous-v0")
     algo = PPO(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+    )
+    _test_algorithm(env, algo)
+
+
+@pytest.mark.parametrize("use_per", [(False), (True)])
+def test_ddpg(use_per):
+    env = gym.make("MountainCarContinuous-v0")
+    algo = DDPG(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+        use_per=use_per,
+    )
+    _test_algorithm(env, algo)
+
+
+@pytest.mark.parametrize("use_per", [(False), (True)])
+def test_td3(use_per):
+    env = gym.make("MountainCarContinuous-v0")
+    algo = TD3(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+        use_per=use_per,
+    )
+    _test_algorithm(env, algo)
+
+
+@pytest.mark.parametrize("use_per", [(False), (True)])
+def test_sac(use_per):
+    env = gym.make("MountainCarContinuous-v0")
+    algo = SAC(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+        use_per=use_per,
+    )
+    _test_algorithm(env, algo)
+
+
+def test_sac_discor():
+    env = gym.make("MountainCarContinuous-v0")
+    algo = SAC_DisCor(
         num_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,

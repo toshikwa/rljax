@@ -76,15 +76,15 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         weight = np.array(weight, dtype=np.float32)
         return np.expand_dims(weight, axis=1)
 
-    def update_priority(self, error):
+    def update_priority(self, abs_td):
         assert self._cached_idxes is not None, "Sample batch before updating priorities."
-        assert error.shape[1:] == (1,)
-        pa = np.array(self._calculate_pa(error), dtype=np.float32).flatten()
+        assert abs_td.shape[1:] == (1,)
+        pa = np.array(self._calculate_pa(abs_td), dtype=np.float32).flatten()
         for i, _pa in zip(self._cached_idxes, pa):
             self.tree_sum[i] = _pa
             self.tree_min[i] = _pa
         self._cached_idxes = None
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_pa(self, error: jnp.ndarray) -> jnp.ndarray:
-        return jnp.clip((error + self.eps) ** self.alpha, self.min_pa, self.max_pa)
+    def _calculate_pa(self, abs_td: jnp.ndarray) -> jnp.ndarray:
+        return jnp.clip((abs_td + self.eps) ** self.alpha, self.min_pa, self.max_pa)

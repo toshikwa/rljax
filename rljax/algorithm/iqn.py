@@ -98,7 +98,7 @@ class IQN(QLearning):
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        self.opt_state, self.params, loss, error = self._update(
+        self.opt_state, self.params, loss, abs_td = self._update(
             opt_state=self.opt_state,
             params=self.params,
             params_target=self.params_target,
@@ -114,7 +114,7 @@ class IQN(QLearning):
 
         # Update priority.
         if self.use_per:
-            self.buffer.update_priority(error)
+            self.buffer.update_priority(abs_td)
 
         # Update target network.
         if self.env_step % self.update_interval_target == 0:
@@ -138,7 +138,7 @@ class IQN(QLearning):
         rng1: np.ndarray,
         rng2: np.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss, error), grad = jax.value_and_grad(self._loss, has_aux=True)(
+        (loss, abs_td), grad = jax.value_and_grad(self._loss, has_aux=True)(
             params,
             params_target=params_target,
             state=state,
@@ -152,7 +152,7 @@ class IQN(QLearning):
         )
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
-        return opt_state, params, loss, error
+        return opt_state, params, loss, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss(
@@ -189,5 +189,5 @@ class IQN(QLearning):
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state, tau), action)
         td = target_quantile - curr_quantile
         loss = calculate_quantile_loss(td, tau, weight, self.loss_type)
-        error = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
-        return loss, jax.lax.stop_gradient(error)
+        abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
+        return loss, jax.lax.stop_gradient(abs_td)

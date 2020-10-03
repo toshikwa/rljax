@@ -21,7 +21,7 @@ config = {
     "sac": {
         "start_steps": 5000,
     },
-    "discor": {
+    "sac_discor": {
         "start_steps": 5000,
         "units_error": (256, 256),
     },

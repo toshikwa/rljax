@@ -9,7 +9,6 @@ from jax.experimental import optix
 
 from rljax.algorithm.sac import SAC
 from rljax.network import ContinuousQFunction
-from rljax.util import reparameterize_gaussian_with_tanh
 
 
 class SAC_DisCor(SAC):
@@ -91,7 +90,7 @@ class SAC_DisCor(SAC):
         )
 
         # Update critic.
-        self.opt_state_critic, self.params_critic, loss_critic, td1, td2 = self._update_critic(
+        self.opt_state_critic, self.params_critic, loss_critic, (abs_td1, abs_td2) = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
             params_critic_target=self.params_critic_target,
@@ -108,7 +107,7 @@ class SAC_DisCor(SAC):
         )
 
         # Update error model.
-        self.opt_state_error, self.params_error, loss_error, mean_error1, mean_error2 = self._update_error(
+        self.opt_state_error, self.params_error, loss_error, (mean_error1, mean_error2) = self._update_error(
             opt_state_error=self.opt_state_error,
             params_error=self.params_error,
             params_error_target=self.params_error_target,
@@ -117,8 +116,8 @@ class SAC_DisCor(SAC):
             action=action,
             done=done,
             next_state=next_state,
-            td1=td1,
-            td2=td2,
+            abs_td1=abs_td1,
+            abs_td2=abs_td2,
             rng=next(self.rng),
         )
 
@@ -156,23 +155,37 @@ class SAC_DisCor(SAC):
             writer.add_scalar("stat/rm_error2", self.rm_error2, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def sample_next_error(self, params_actor, params_error_target, next_state, rng):
+    def sample_next_error(
+        self,
+        params_actor: hk.Params,
+        params_error_target: hk.Params,
+        next_state: np.ndarray,
+        rng: jnp.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Calculate actions.
-        mean, log_std = self.actor.apply(params_actor, next_state)
-        next_action, _ = reparameterize_gaussian_with_tanh(mean, log_std, rng)
+        next_action = self._explore(params_actor, rng, next_state)
         # Calculate errors.
         return self.error.apply(params_error_target, next_state, next_action)
 
     @partial(jax.jit, static_argnums=0)
-    def calculate_weight(self, params_actor, params_error_target, rm_error1, rm_error2, done, next_state, rng):
+    def calculate_weight(
+        self,
+        params_actor: hk.Params,
+        params_error_target: hk.Params,
+        rm_error1: jnp.ndarray,
+        rm_error2: jnp.ndarray,
+        done: np.ndarray,
+        next_state: np.ndarray,
+        rng: jnp.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Calculate next errors.
         next_error1, next_error2 = self.sample_next_error(params_actor, params_error_target, next_state, rng)
         # Terms inside the exponent of importance weights.
         x1 = -(1.0 - done) * self.gamma * next_error1 / rm_error1
         x2 = -(1.0 - done) * self.gamma * next_error2 / rm_error2
         # Calculate importance weights.
-        weight1 = jax.lax.stop_gradient(jax.nn.softmax(x1, axis=0))
-        weight2 = jax.lax.stop_gradient(jax.nn.softmax(x2, axis=0))
+        weight1 = jax.lax.stop_gradient(jax.nn.softmax(x1, axis=0) * x1.shape[0])
+        weight2 = jax.lax.stop_gradient(jax.nn.softmax(x2, axis=0) * x2.shape[0])
         return weight1, weight2
 
     @partial(jax.jit, static_argnums=0)
@@ -186,8 +199,8 @@ class SAC_DisCor(SAC):
         action: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        td1: np.ndarray,
-        td2: np.ndarray,
+        abs_td1: jnp.ndarray,
+        abs_td2: jnp.ndarray,
         rng: jnp.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_error, (mean_error1, mean_error2)), grad_error = jax.value_and_grad(self._loss_error, has_aux=True)(
@@ -198,13 +211,13 @@ class SAC_DisCor(SAC):
             action=action,
             done=done,
             next_state=next_state,
-            td1=td1,
-            td2=td2,
+            abs_td1=abs_td1,
+            abs_td2=abs_td2,
             rng=rng,
         )
-        update, opt_state_error = self.opt_critic(grad_error, opt_state_error)
+        update, opt_state_error = self.opt_error(grad_error, opt_state_error)
         params_error = optix.apply_updates(params_error, update)
-        return opt_state_error, params_error, loss_error, mean_error1, mean_error2
+        return opt_state_error, params_error, loss_error, (mean_error1, mean_error2)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_error(
@@ -216,82 +229,17 @@ class SAC_DisCor(SAC):
         action: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        td1: np.ndarray,
-        td2: np.ndarray,
+        abs_td1: np.ndarray,
+        abs_td2: np.ndarray,
         rng: jnp.ndarray,
     ) -> jnp.ndarray:
         # Calculate next errors.
         next_error1, next_error2 = self.sample_next_error(params_actor, params_error_target, next_state, rng)
         # Calculate target errors.
-        target_error1 = jax.lax.stop_gradient(td1 + (1.0 - done) * self.gamma * next_error1)
-        target_error2 = jax.lax.stop_gradient(td2 + (1.0 - done) * self.gamma * next_error2)
+        target_error1 = jax.lax.stop_gradient(abs_td1 + (1.0 - done) * self.gamma * next_error1)
+        target_error2 = jax.lax.stop_gradient(abs_td2 + (1.0 - done) * self.gamma * next_error2)
         # Calculate current errors.
         curr_error1, curr_error2 = self.error.apply(params_error, state, action)
         loss = jnp.square(curr_error1 - target_error1).mean() + jnp.square(curr_error2 - target_error2).mean()
         mean_error1, mean_error2 = jax.lax.stop_gradient(curr_error1.mean()), jax.lax.stop_gradient(curr_error2.mean())
         return loss, (mean_error1, mean_error2)
-
-    @partial(jax.jit, static_argnums=0)
-    def _update_critic(
-        self,
-        opt_state_critic: Any,
-        params_critic: hk.Params,
-        params_critic_target: hk.Params,
-        params_actor: hk.Params,
-        log_alpha: jnp.ndarray,
-        state: np.ndarray,
-        action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        weight1: np.ndarray,
-        weight2: np.ndarray,
-        rng: jnp.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss_critic, (td1, td2)), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
-            params_critic,
-            params_critic_target=params_critic_target,
-            params_actor=params_actor,
-            log_alpha=log_alpha,
-            state=state,
-            action=action,
-            reward=reward,
-            done=done,
-            next_state=next_state,
-            weight1=weight1,
-            weight2=weight2,
-            rng=rng,
-        )
-        update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
-        params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, loss_critic, td1, td2
-
-    @partial(jax.jit, static_argnums=0)
-    def _loss_critic(
-        self,
-        params_critic: hk.Params,
-        params_critic_target: hk.Params,
-        params_actor: hk.Params,
-        log_alpha: jnp.ndarray,
-        state: np.ndarray,
-        action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        weight1: np.ndarray,
-        weight2: np.ndarray,
-        rng: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jnp.exp(log_alpha)
-        # Sample next actions.
-        next_mean, next_log_std = self.actor.apply(params_actor, next_state)
-        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, rng)
-        # Calculate target soft q values (clipped double q) with target critic.
-        next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
-        next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        # Calculate current soft q values with online critic.
-        curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
-        td1, td2 = jnp.abs(curr_q1 - target_q), jnp.abs(curr_q2 - target_q)
-        loss = (jnp.square(td1) * weight1).sum() + (jnp.square(td2) * weight2).sum()
-        return loss, (jax.lax.stop_gradient(td1), jax.lax.stop_gradient(td2))
