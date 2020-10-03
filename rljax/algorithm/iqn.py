@@ -35,6 +35,7 @@ class IQN(QLearning):
         lr=5e-5,
         units=(512,),
         num_quantiles=64,
+        num_quantiles_eval=32,
         num_cosines=64,
         loss_type="l2",
         dueling_net=False,
@@ -62,12 +63,11 @@ class IQN(QLearning):
             return DiscreteImplicitQuantileFunction(
                 action_space=action_space,
                 num_critics=1,
-                num_quantiles=num_quantiles,
                 hidden_units=units,
                 dueling_net=dueling_net,
             )(s, cum_p)
 
-        # IQN.
+        # Quantile network.
         fake_cum_p = np.empty((1, num_quantiles), dtype=np.float32)
         self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
         opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
@@ -76,6 +76,7 @@ class IQN(QLearning):
 
         # Other parameters.
         self.num_quantiles = num_quantiles
+        self.num_quantiles_eval = num_quantiles_eval
         self.num_cosines = num_cosines
         self.loss_type = loss_type
         self.double_q = double_q
@@ -90,7 +91,7 @@ class IQN(QLearning):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        cum_p = jax.random.uniform(rng, (1, self.num_quantiles))
+        cum_p = jax.random.uniform(rng, (1, self.num_quantiles_eval))
         q_s = self.quantile_net.apply(params, state, cum_p).mean(axis=1)
         return jnp.argmax(q_s, axis=1)
 

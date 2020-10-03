@@ -143,7 +143,6 @@ class DiscreteImplicitQuantileFunction(hk.Module):
         self,
         action_space,
         num_critics=1,
-        num_quantiles=64,
         num_cosines=64,
         hidden_units=(512,),
         dueling_net=True,
@@ -152,7 +151,6 @@ class DiscreteImplicitQuantileFunction(hk.Module):
         super(DiscreteImplicitQuantileFunction, self).__init__()
         self.action_space = action_space
         self.num_critics = num_critics
-        self.num_quantiles = num_quantiles
         self.num_cosines = num_cosines
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
@@ -163,17 +161,20 @@ class DiscreteImplicitQuantileFunction(hk.Module):
         def _fn(x, cum_p):
             if len(x.shape) == 4:
                 x = DQNBody()(x)
-            # Calculate features.
+
+            # NOTE: For IQN and FQF, number of quantiles are variable.
             feature_dim = x.shape[1]
+            num_quantiles = cum_p.shape[1]
+            # Calculate features.
             cosine = jnp.cos(jnp.expand_dims(cum_p, 2) * self.pi).reshape(-1, self.num_cosines)
-            cosine_feature = nn.relu(hk.Linear(feature_dim)(cosine)).reshape(-1, self.num_quantiles, feature_dim)
+            cosine_feature = nn.relu(hk.Linear(feature_dim)(cosine)).reshape(-1, num_quantiles, feature_dim)
             x = (x.reshape(-1, 1, feature_dim) * cosine_feature).reshape(-1, feature_dim)
             # Apply quantile network.
             output = MLP(self.action_space.n, self.hidden_units, self.hidden_activation)(x)
-            output = output.reshape(-1, self.num_quantiles, self.action_space.n)
+            output = output.reshape(-1, num_quantiles, self.action_space.n)
             if self.dueling_net:
                 baseline = MLP(1, self.hidden_units, self.hidden_activation)(x)
-                baseline = baseline.reshape(-1, self.num_quantiles, 1)
+                baseline = baseline.reshape(-1, num_quantiles, 1)
                 return output + baseline - output.mean(axis=2, keepdims=True)
             else:
                 return output
