@@ -1,6 +1,6 @@
 **WARNING: Rljax is currently in a beta version and being actively improved. Any contributions are welcome :)**
 
-# RL Algorithms in JAX
+# Rljax
 Rljax is a collection of RL algorithms written in JAX.
 
 ## Setup
@@ -10,7 +10,7 @@ pip install https://storage.googleapis.com/jax-releases/`nvcc -V | sed -En "s/.*
 pip install -e .
 ```
 
-If you don't have a GPU, please executing the following instead.
+If you don't have a GPU, please execute the following instead.
 ```bash
 pip install jaxlib==0.1.55 jax==0.2.0
 pip install -e .
@@ -25,19 +25,19 @@ pip install mujoco_py==2.0.2.11
 Currently, following algorithms have been implemented.
 
 | **Algorithm** | **Action Space** | **Vector State** | **Pixel State** | **PER**[[11]](#reference) | **DisCor**[[12]](#reference) |
-| :--                            | :--                | :--:               | :--:               | :--:                       | - |
-| PPO[[1]](#reference)           | Continuous         | :heavy_check_mark: | -                  | -                          | - |
-| DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | - |
-| TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | - |
+| :--                            | :--                | :--:               | :--:               | :--:                       | :--: |
+| PPO[[1]](#reference)           | Continuous         | :heavy_check_mark: | -                  | -                          | -    |
+| DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    |
+| TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    |
 | SAC[[4,5]](#reference)         | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | :heavy_check_mark: |
 | DQN[[6]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | :heavy_check_mark: |
-| QR-DQN[[7]](#reference)        | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
-| IQN[[8]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
-| FQF[[9]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
-| SAC-Discrete[[10]](#reference) | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
+| QR-DQN[[7]](#reference)        | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
+| IQN[[8]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
+| FQF[[9]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
+| SAC-Discrete[[10]](#reference) | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
 
 ## Example
-All algorithms can be trained in a few lines of codes.
+All algorithms can be trained in a few lines of code.
 
 <details>
 <summary>Getting started</summary>
