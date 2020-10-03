@@ -176,7 +176,7 @@ class IQN(QLearning):
 
         if self.double_q:
             # Calculate greedy actions with online network. (NOTE: We reuse cum_p1 here for the simple implementation.)
-            next_action = jnp.argmax(self.quantile_net.apply(params, next_state, cum_p1).mean(axis=1), axis=1)[..., None]
+            next_action = self._forward(params, rng1, next_state)[..., None]
             # Then calculate max quantile values with target network.
             next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state, cum_p2), next_action)
         else:

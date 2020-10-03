@@ -74,7 +74,7 @@ class QRDQN(QLearning):
 
         # Fixed cumulative probabilities for calculating quantile values.
         cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
-        self.cum_p_hat = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
+        self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
 
         # Other parameters.
         self.num_quantiles = num_quantiles
@@ -159,7 +159,7 @@ class QRDQN(QLearning):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if self.double_q:
             # Calculate greedy actions with online network.
-            next_action = jnp.argmax(self.quantile_net.apply(params, next_state).mean(axis=1), axis=1)[..., None]
+            next_action = self._forward(params, next_state)[..., None]
             # Then calculate max quantile values with target network.
             next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state), next_action)
         else:
@@ -172,7 +172,7 @@ class QRDQN(QLearning):
         # Calculate current quantile values, whose shape is (batch_size, N, 1).
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state), action)
         td = target_quantile - curr_quantile
-        loss = calculate_quantile_loss(td, self.cum_p_hat, weight, self.loss_type)
+        loss = calculate_quantile_loss(td, self.cum_p_prime, weight, self.loss_type)
         abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(abs_td)
 

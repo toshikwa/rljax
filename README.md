@@ -28,6 +28,7 @@ Currently, following algorithms have been implemented.
 - [x] Deep Deterministic Policy Gradient(DDPG)
 - [x] Twin Delayed DDPG(TD3)
 - [x] Soft Actor-Critic(SAC)
+- [x] Distribution Correction(DisCor) for SAC and DQN
 - [x] Deep Q Network(DQN)
 - [x] N-step return
 - [x] Dueling Network
@@ -35,6 +36,7 @@ Currently, following algorithms have been implemented.
 - [x] Prioritized Experience Replay(PER)
 - [x] Quantile Regression DQN(QR-DQN)
 - [x] Implicit Quantile Network(IQN)
+- [x] Fully-parameterized Quantile Function(FQF)
 - [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
 
 ## Examples

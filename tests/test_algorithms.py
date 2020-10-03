@@ -1,7 +1,7 @@
 import gym
 import pytest
 
-from rljax.algorithm import DDPG, DQN, IQN, PPO, QRDQN, SAC, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
+from rljax.algorithm import DDPG, DQN, FQF, IQN, PPO, QRDQN, SAC, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
 
 
 def _test_algorithm(env, algo):
@@ -71,6 +71,27 @@ def test_qrdqn(use_per, dueling_net, double_q):
 def test_iqn(use_per, dueling_net, double_q):
     env = gym.make("CartPole-v0")
     algo = IQN(
+        num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+        use_per=use_per,
+        dueling_net=dueling_net,
+        double_q=double_q,
+    )
+    _test_algorithm(env, algo)
+
+
+@pytest.mark.parametrize(
+    "use_per, dueling_net, double_q",
+    [
+        (False, False, False),
+        (True, True, True),
+    ],
+)
+def test_fqf(use_per, dueling_net, double_q):
+    env = gym.make("CartPole-v0")
+    algo = FQF(
         num_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
