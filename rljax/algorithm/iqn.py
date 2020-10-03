@@ -58,20 +58,20 @@ class IQN(QLearning):
             eps_eval=eps_eval,
         )
 
-        def quantile_fn(s, tau):
+        def quantile_fn(s, cum_p):
             return DiscreteImplicitQuantileFunction(
                 action_space=action_space,
                 num_critics=1,
                 num_quantiles=num_quantiles,
                 hidden_units=units,
                 dueling_net=dueling_net,
-            )(s, tau)
+            )(s, cum_p)
 
         # IQN.
-        fake_tau = np.empty((1, num_quantiles), dtype=np.float32)
+        fake_cum_p = np.empty((1, num_quantiles), dtype=np.float32)
         self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
         opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
-        self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state, fake_tau)
+        self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state, fake_cum_p)
         self.opt_state = opt_init(self.params)
 
         # Other parameters.
@@ -90,8 +90,8 @@ class IQN(QLearning):
         rng: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        tau = jax.random.uniform(rng, (1, self.num_quantiles))
-        q_s = self.quantile_net.apply(params, state, tau).mean(axis=1)
+        cum_p = jax.random.uniform(rng, (1, self.num_quantiles))
+        q_s = self.quantile_net.apply(params, state, cum_p).mean(axis=1)
         return jnp.argmax(q_s, axis=1)
 
     def update(self, writer=None):
@@ -169,27 +169,27 @@ class IQN(QLearning):
         rng1: np.ndarray,
         rng2: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        # Sample fractions.
-        tau = jax.random.uniform(rng1, (state.shape[0], self.num_quantiles))
-        tau_dash = jax.random.uniform(rng2, (state.shape[0], self.num_quantiles))
+        # Sample cumulative probabilities.
+        cum_p1 = jax.random.uniform(rng1, (state.shape[0], self.num_quantiles))
+        cum_p2 = jax.random.uniform(rng2, (state.shape[0], self.num_quantiles))
 
         if self.double_q:
-            # Calculate greedy actions with online network. (NOTE: We reuse tau here for the simple implementation.)
-            next_action = jnp.argmax(self.quantile_net.apply(params, next_state, tau).mean(axis=1), axis=1)[..., None]
+            # Calculate greedy actions with online network. (NOTE: We reuse cum_p1 here for the simple implementation.)
+            next_action = jnp.argmax(self.quantile_net.apply(params, next_state, cum_p1).mean(axis=1), axis=1)[..., None]
             # Then calculate max quantile values with target network.
-            next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state, tau_dash), next_action)
+            next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state, cum_p2), next_action)
         else:
             # Calculate greedy actions and max quantile values with target network.
-            next_quantile = jnp.max(self.quantile_net.apply(params_target, next_state, tau_dash), axis=2, keepdims=True)
+            next_quantile = jnp.max(self.quantile_net.apply(params_target, next_state, cum_p2), axis=2, keepdims=True)
 
         # Calculate target quantile values and reshape to (batch_size, 1, N).
         target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
         target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
 
         # Calculate current quantile values, whose shape is (batch_size, N, 1).
-        curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state, tau), action)
+        curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state, cum_p1), action)
         td = target_quantile - curr_quantile
-        loss = calculate_quantile_loss(td, tau, weight, self.loss_type)
+        loss = calculate_quantile_loss(td, cum_p1, weight, self.loss_type)
         abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(abs_td)
 

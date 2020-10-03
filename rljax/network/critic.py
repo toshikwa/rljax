@@ -159,13 +159,13 @@ class DiscreteImplicitQuantileFunction(hk.Module):
         self.dueling_net = dueling_net
         self.pi = math.pi * jnp.arange(1, num_cosines + 1, dtype=jnp.float32).reshape(1, 1, num_cosines)
 
-    def __call__(self, x, tau):
-        def _fn(x, tau):
+    def __call__(self, x, cum_p):
+        def _fn(x, cum_p):
             if len(x.shape) == 4:
                 x = DQNBody()(x)
             # Calculate features.
             feature_dim = x.shape[1]
-            cosine = jnp.cos(jnp.expand_dims(tau, 2) * self.pi).reshape(-1, self.num_cosines)
+            cosine = jnp.cos(jnp.expand_dims(cum_p, 2) * self.pi).reshape(-1, self.num_cosines)
             cosine_feature = nn.relu(hk.Linear(feature_dim)(cosine)).reshape(-1, self.num_quantiles, feature_dim)
             x = (x.reshape(-1, 1, feature_dim) * cosine_feature).reshape(-1, feature_dim)
             # Apply quantile network.
@@ -179,5 +179,5 @@ class DiscreteImplicitQuantileFunction(hk.Module):
                 return output
 
         if self.num_critics == 1:
-            return _fn(x, tau)
-        return [_fn(x, tau) for _ in range(self.num_critics)]
+            return _fn(x, cum_p)
+        return [_fn(x, cum_p) for _ in range(self.num_critics)]

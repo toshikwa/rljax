@@ -149,7 +149,7 @@ def huber_fn(td: jnp.ndarray) -> jnp.ndarray:
 @partial(jax.jit, static_argnums=3)
 def calculate_quantile_loss(
     td: jnp.ndarray,
-    tau: jnp.ndarray,
+    cum_p: jnp.ndarray,
     weight: jnp.ndarray,
     loss_type: float = "l2",
 ) -> jnp.ndarray:
@@ -162,6 +162,6 @@ def calculate_quantile_loss(
         element_wise_loss = huber_fn(td)
     else:
         NotImplementedError
-    element_wise_loss *= jax.lax.stop_gradient(jnp.abs(tau[..., None] - (td < 0)))
+    element_wise_loss *= jax.lax.stop_gradient(jnp.abs(cum_p[..., None] - (td < 0)))
     batch_loss = element_wise_loss.sum(axis=1).mean(axis=1, keepdims=True)
     return (batch_loss * weight).mean()
