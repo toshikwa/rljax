@@ -20,19 +20,20 @@ def _test_algorithm(env, algo):
 
 
 @pytest.mark.parametrize(
-    "use_per, dueling_net, double_q",
+    "nstep, use_per, dueling_net, double_q",
     [
-        (False, False, False),
-        (True, True, True),
+        (1, False, False, False),
+        (3, True, True, True),
     ],
 )
-def test_dqn(use_per, dueling_net, double_q):
+def test_dqn(nstep, use_per, dueling_net, double_q):
     env = gym.make("CartPole-v0")
     algo = DQN(
         num_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
+        nstep=nstep,
         use_per=use_per,
         dueling_net=dueling_net,
         double_q=double_q,
