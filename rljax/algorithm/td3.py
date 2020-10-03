@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, DeterministicPolicy
-from rljax.util import add_noise
+from rljax.util import add_noise, load_params, save_params
 
 
 class TD3(OffPolicyActorCritic):
@@ -230,3 +231,12 @@ class TD3(OffPolicyActorCritic):
         action = self.actor.apply(params_actor, state)
         q1 = self.critic.apply(params_critic, state, action)[0]
         return -q1.mean()
+
+    def save_params(self, save_dir):
+        super(TD3, self).save_params(save_dir)
+        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
+        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
+
+    def load_params(self, save_dir):
+        self.params_critic = self.params_critic_target = load_params(os.path.join(save_dir, "params_critic.npz"))
+        self.params_actor = self.params_actor_target = load_params(os.path.join(save_dir, "params_actor.npz"))

@@ -42,7 +42,6 @@ config = {
         "update_interval_target": 400,
         "loss_type": "l2",
         "lr": 1e-3,
-        "units_error": (512,),
     },
     "sac_discrete": {
         "batch_size": 256,

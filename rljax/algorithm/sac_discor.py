@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,10 +10,11 @@ from jax.experimental import optix
 
 from rljax.algorithm.sac import SAC
 from rljax.network import ContinuousQFunction
+from rljax.util import load_params, save_params
 
 
 class SAC_DisCor(SAC):
-    name = "SAC-DisCor"
+    name = "SAC+DisCor"
 
     def __init__(
         self,
@@ -243,3 +245,11 @@ class SAC_DisCor(SAC):
         loss = jnp.square(curr_error1 - target_error1).mean() + jnp.square(curr_error2 - target_error2).mean()
         mean_error1, mean_error2 = jax.lax.stop_gradient(curr_error1.mean()), jax.lax.stop_gradient(curr_error2.mean())
         return loss, (mean_error1, mean_error2)
+
+    def save_params(self, save_dir):
+        super(SAC_DisCor, self).save_params(save_dir)
+        save_params(self.params_error, os.path.join(save_dir, "params_error.npz"))
+
+    def load_params(self, save_dir):
+        super(SAC_DisCor, self).load_params(save_dir)
+        self.params_error = self.params_error_target = load_params(os.path.join(save_dir, "params_error.npz"))

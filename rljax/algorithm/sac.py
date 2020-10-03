@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
-from rljax.util import reparameterize_gaussian_with_tanh
+from rljax.util import load_params, reparameterize_gaussian_with_tanh, save_params
 
 
 class SAC(OffPolicyActorCritic):
@@ -279,3 +280,12 @@ class SAC(OffPolicyActorCritic):
         mean_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
         return -log_alpha * (self.target_entropy + mean_log_pi)
+
+    def save_params(self, save_dir):
+        super(SAC, self).save_params(save_dir)
+        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
+        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
+
+    def load_params(self, save_dir):
+        self.params_critic = self.params_critic_target = load_params(os.path.join(save_dir, "params_critic.npz"))
+        self.params_actor = load_params(os.path.join(save_dir, "params_actor.npz"))

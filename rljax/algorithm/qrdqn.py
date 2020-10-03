@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQuantileFunction
-from rljax.util import calculate_quantile_loss, get_quantile_at_action
+from rljax.util import calculate_quantile_loss, get_quantile_at_action, load_params, save_params
 
 
 class QRDQN(QLearning):
@@ -174,3 +175,10 @@ class QRDQN(QLearning):
         loss = calculate_quantile_loss(td, self.tau_hat, weight, self.loss_type)
         abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(abs_td)
+
+    def save_params(self, save_dir):
+        super(QRDQN, self).save_params(save_dir)
+        save_params(self.params, os.path.join(save_dir, "params.npz"))
+
+    def load_params(self, save_dir):
+        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))

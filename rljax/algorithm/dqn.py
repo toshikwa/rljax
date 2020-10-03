@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQFunction
-from rljax.util import get_q_at_action, huber_fn
+from rljax.util import get_q_at_action, huber_fn, load_params, save_params
 
 
 class DQN(QLearning):
@@ -166,3 +167,10 @@ class DQN(QLearning):
         elif self.loss_type == "huber":
             loss = jnp.mean(huber_fn(td) * weight)
         return loss, jax.lax.stop_gradient(jnp.abs(td))
+
+    def save_params(self, save_dir):
+        super(DQN, self).save_params(save_dir)
+        save_params(self.params, os.path.join(save_dir, "params.npz"))
+
+    def load_params(self, save_dir):
+        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))

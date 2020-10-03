@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from functools import partial
 
@@ -60,6 +61,15 @@ class Algorithm(ABC):
 
     @abstractmethod
     def update(self, writer):
+        pass
+
+    @abstractmethod
+    def save_params(self, save_dir):
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+    @abstractmethod
+    def load_params(self, save_dir):
         pass
 
     def __str__(self):

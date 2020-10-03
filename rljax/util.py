@@ -5,6 +5,7 @@ from typing import Any, Tuple
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 @jax.jit
@@ -81,6 +82,20 @@ def soft_update(
     return jax.tree_multimap(lambda t, s: (1 - tau) * t + tau * s, target_params, online_params)
 
 
+def save_params(params, path):
+    """
+    Save parameters.
+    """
+    np.savez(path, **params)
+
+
+def load_params(path):
+    """
+    Load parameters.
+    """
+    return jax.tree_multimap(lambda x: x, np.load(path))
+
+
 @jax.jit
 def add_noise(
     x: jnp.ndarray,
@@ -136,7 +151,7 @@ def calculate_quantile_loss(
     td: jnp.ndarray,
     tau: jnp.ndarray,
     weight: jnp.ndarray,
-    loss_type: float = "l2",  # "l2" or "huber"
+    loss_type: float = "l2",
 ) -> jnp.ndarray:
     """
     Calculate quantile loss.

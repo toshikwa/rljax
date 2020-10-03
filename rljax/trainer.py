@@ -2,7 +2,6 @@ import os
 from datetime import timedelta
 from time import sleep, time
 
-import numpy as np
 import pandas as pd
 from tensorboardX import SummaryWriter
 
@@ -39,6 +38,7 @@ class Trainer:
         # Log setting.
         self.log = {"step": [], "return": []}
         self.csv_path = os.path.join(log_dir, "log.csv")
+        self.param_dir = os.path.join(log_dir, "param")
         self.writer = SummaryWriter(log_dir=os.path.join(log_dir, "summary"))
 
         # Other parameters.
@@ -60,6 +60,7 @@ class Trainer:
 
             if step % self.eval_interval == 0:
                 self.evaluate(step)
+                self.algo.save_params(os.path.join(self.param_dir, f"step{step}"))
 
         # Wait for the logging to be finished.
         sleep(2)

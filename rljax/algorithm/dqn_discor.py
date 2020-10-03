@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,11 +10,11 @@ from jax.experimental import optix
 
 from rljax.algorithm.dqn import DQN
 from rljax.network import DiscreteQFunction
-from rljax.util import get_q_at_action, soft_update
+from rljax.util import get_q_at_action, load_params, save_params, soft_update
 
 
 class DQN_DisCor(DQN):
-    name = "DQN-DisCor"
+    name = "DQN+DisCor"
 
     def __init__(
         self,
@@ -203,3 +204,11 @@ class DQN_DisCor(DQN):
         loss = jnp.square(curr_error - target_error).mean()
         mean_error = jax.lax.stop_gradient(curr_error.mean())
         return loss, mean_error
+
+    def save_params(self, save_dir):
+        super(DQN_DisCor, self).save_params(save_dir)
+        save_params(self.params_error, os.path.join(save_dir, "params_error.npz"))
+
+    def load_params(self, save_dir):
+        super(DQN_DisCor, self).load_params(save_dir)
+        self.params_error = self.params_error_target = load_params(os.path.join(save_dir, "params_error.npz"))
