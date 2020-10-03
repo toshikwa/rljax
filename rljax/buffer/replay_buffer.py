@@ -14,7 +14,7 @@ class NStepBuffer:
         gamma=0.99,
         nstep=3,
     ):
-        self.discounts = [gamma ** i for i in range(nstep)]
+        self.discount = [gamma ** i for i in range(nstep)]
         self.nstep = nstep
         self.state = deque(maxlen=self.nstep)
         self.action = deque(maxlen=self.nstep)
@@ -26,7 +26,7 @@ class NStepBuffer:
         self.reward.append(reward)
 
     def get(self):
-        assert len(self.rewards) > 0
+        assert len(self.reward) > 0
 
         state = self.state.popleft()
         action = self.action.popleft()
