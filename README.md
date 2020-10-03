@@ -28,6 +28,7 @@ Currently, following algorithms have been implemented.
 - [x] Deep Deterministic Policy Gradient(DDPG)
 - [x] Twin Delayed DDPG(TD3)
 - [x] Soft Actor-Critic(SAC)
+- [x] Distribution Correction(DisCor) for SAC and DQN
 - [x] Deep Q Network(DQN)
 - [x] N-step return
 - [x] Dueling Network
@@ -35,6 +36,7 @@ Currently, following algorithms have been implemented.
 - [x] Prioritized Experience Replay(PER)
 - [x] Quantile Regression DQN(QR-DQN)
 - [x] Implicit Quantile Network(IQN)
+- [x] Fully-parameterized Quantile Function(FQF)
 - [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
 
 ## Examples
@@ -87,7 +89,7 @@ trainer.train()
 
 Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_continuous_easy.py)) and the continuous action environment `InvertedPendulum-v2` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_discrete_easy.py)).
 
-<img src="https://user-images.githubusercontent.com/37267851/94864541-1da67680-0477-11eb-97ce-c6abc0eb2c51.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94751929-c5af3780-03c4-11eb-8372-832762d8dfc1.png" title="InvertedPendulum-v2" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/94993592-08dbf700-05cd-11eb-8bf0-a40f8e0567d0.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94993625-4fc9ec80-05cd-11eb-8c2d-a0bf0c791086.png" title="InvertedPendulum-v2" width=400>
 
 </details>
 

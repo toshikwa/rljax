@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from functools import partial
 
@@ -14,6 +15,8 @@ class Algorithm(ABC):
     """
     Base class for algorithms.
     """
+
+    name = None
 
     def __init__(
         self,
@@ -61,8 +64,16 @@ class Algorithm(ABC):
         pass
 
     @abstractmethod
-    def __str__(self):
+    def save_params(self, save_dir):
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+    @abstractmethod
+    def load_params(self, save_dir):
         pass
+
+    def __str__(self):
+        return self.name
 
 
 class OnPolicyActorCritic(Algorithm):

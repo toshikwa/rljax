@@ -5,8 +5,6 @@ from time import sleep, time
 import pandas as pd
 from tensorboardX import SummaryWriter
 
-from rljax.util import evaluate
-
 
 class Trainer:
     """
@@ -40,6 +38,7 @@ class Trainer:
         # Log setting.
         self.log = {"step": [], "return": []}
         self.csv_path = os.path.join(log_dir, "log.csv")
+        self.param_dir = os.path.join(log_dir, "param")
         self.writer = SummaryWriter(log_dir=os.path.join(log_dir, "summary"))
 
         # Other parameters.
@@ -61,22 +60,30 @@ class Trainer:
 
             if step % self.eval_interval == 0:
                 self.evaluate(step)
+                self.algo.save_params(os.path.join(self.param_dir, f"step{step}"))
 
         # Wait for the logging to be finished.
         sleep(2)
 
     def evaluate(self, step):
-        # Evaluate.
-        mean_return = evaluate(self.env_test, self.algo, self.num_eval_episodes)
+        total_return = 0.0
+        for _ in range(self.num_eval_episodes):
+            state = self.env_test.reset()
+            done = False
+            while not done:
+                action = self.algo.select_action(state)
+                state, reward, done, info = self.env_test.step(action)
+                total_return += reward
+        mean_return = total_return / self.num_eval_episodes
+
+        # Log to TensorBoard.
+        self.writer.add_scalar("return/test", mean_return, step)
+        print(f"Num steps: {step:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
 
         # Log to CSV.
         self.log["step"].append(step)
         self.log["return"].append(mean_return)
         pd.DataFrame(self.log).to_csv(self.csv_path, index=False)
-
-        # Log to TensorBoard.
-        self.writer.add_scalar("return/test", mean_return, step)
-        print(f"Num steps: {step:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
 
     @property
     def time(self):

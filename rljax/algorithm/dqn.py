@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,10 +10,12 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQFunction
-from rljax.util import get_q_at_action, huber_fn
+from rljax.util import get_q_at_action, huber_fn, load_params, save_params
 
 
 class DQN(QLearning):
+    name = "DQN"
+
     def __init__(
         self,
         num_steps,
@@ -85,7 +88,7 @@ class DQN(QLearning):
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        self.opt_state, self.params, loss, error = self._update(
+        self.opt_state, self.params, loss, abs_td = self._update(
             opt_state=self.opt_state,
             params=self.params,
             params_target=self.params_target,
@@ -99,7 +102,7 @@ class DQN(QLearning):
 
         # Update priority.
         if self.use_per:
-            self.buffer.update_priority(error)
+            self.buffer.update_priority(abs_td)
 
         # Update target network.
         if self.env_step % self.update_interval_target == 0:
@@ -121,7 +124,7 @@ class DQN(QLearning):
         next_state: np.ndarray,
         weight: np.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss, error), grad = jax.value_and_grad(self._loss, has_aux=True)(
+        (loss, abs_td), grad = jax.value_and_grad(self._loss, has_aux=True)(
             params,
             params_target=params_target,
             state=state,
@@ -133,7 +136,7 @@ class DQN(QLearning):
         )
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
-        return opt_state, params, loss, error
+        return opt_state, params, loss, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss(
@@ -149,7 +152,7 @@ class DQN(QLearning):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if self.double_q:
             # Calculate greedy actions with online network.
-            next_action = jnp.argmax(self.q_net.apply(params, next_state), axis=1)[..., None]
+            next_action = self._forward(params, next_state)[..., None]
             # Then calculate max q values with target network.
             next_q = get_q_at_action(self.q_net.apply(params_target, next_state), next_action)
         else:
@@ -165,5 +168,9 @@ class DQN(QLearning):
             loss = jnp.mean(huber_fn(td) * weight)
         return loss, jax.lax.stop_gradient(jnp.abs(td))
 
-    def __str__(self):
-        return "DQN" if not self.use_per else "DQN+PER"
+    def save_params(self, save_dir):
+        super(DQN, self).save_params(save_dir)
+        save_params(self.params, os.path.join(save_dir, "params.npz"))
+
+    def load_params(self, save_dir):
+        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))

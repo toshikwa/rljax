@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,10 +10,12 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, DeterministicPolicy
-from rljax.util import add_noise
+from rljax.util import add_noise, load_params, save_params
 
 
 class TD3(OffPolicyActorCritic):
+    name = "TD3"
+
     def __init__(
         self,
         num_steps,
@@ -105,7 +108,7 @@ class TD3(OffPolicyActorCritic):
         state, action, reward, done, next_state = batch
 
         # Update critic and target.
-        self.opt_state_critic, self.params_critic, loss_critic, error = self._update_critic(
+        self.opt_state_critic, self.params_critic, loss_critic, (abs_td1, _) = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
             params_actor_target=self.params_actor_target,
@@ -115,14 +118,15 @@ class TD3(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
-            weight=weight,
+            weight1=weight,
+            weight2=weight,
             rng=next(self.rng),
         )
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
         # Update priority.
         if self.use_per:
-            self.buffer.update_priority(error)
+            self.buffer.update_priority(abs_td1)
 
         if self.learning_step % self.update_interval_policy == 0:
             # Update actor and target.
@@ -150,10 +154,11 @@ class TD3(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight: np.ndarray,
+        weight1: np.ndarray,
+        weight2: np.ndarray,
         rng: jnp.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss_critic, error), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
+        (loss_critic, (abs_td1, abs_td2)), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
             params_actor_target=params_actor_target,
@@ -162,12 +167,13 @@ class TD3(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
-            weight=weight,
+            weight1=weight1,
+            weight2=weight2,
             rng=rng,
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, loss_critic, error
+        return opt_state_critic, params_critic, loss_critic, (abs_td1, abs_td2)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -180,7 +186,8 @@ class TD3(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight: np.ndarray,
+        weight1: np.ndarray,
+        weight2: np.ndarray,
         rng: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Calculate next actions and add clipped noises.
@@ -192,9 +199,10 @@ class TD3(OffPolicyActorCritic):
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.minimum(next_q1, next_q2))
         # Calculate current q values with online critic.
         curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
-        error = jnp.abs(target_q - curr_q1)
-        loss = (jnp.square(error) * weight).mean() + (jnp.square(target_q - curr_q2) * weight).mean()
-        return loss, jax.lax.stop_gradient(error)
+        abs_td1 = jnp.abs(target_q - curr_q1)
+        abs_td2 = jnp.abs(target_q - curr_q2)
+        loss = (jnp.square(abs_td1) * weight1).mean() + (jnp.square(abs_td2) * weight2).mean()
+        return loss, (jax.lax.stop_gradient(abs_td1), jax.lax.stop_gradient(abs_td2))
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
@@ -224,5 +232,11 @@ class TD3(OffPolicyActorCritic):
         q1 = self.critic.apply(params_critic, state, action)[0]
         return -q1.mean()
 
-    def __str__(self):
-        return "TD3"
+    def save_params(self, save_dir):
+        super(TD3, self).save_params(save_dir)
+        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
+        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
+
+    def load_params(self, save_dir):
+        self.params_critic = self.params_critic_target = load_params(os.path.join(save_dir, "params_critic.npz"))
+        self.params_actor = self.params_actor_target = load_params(os.path.join(save_dir, "params_actor.npz"))

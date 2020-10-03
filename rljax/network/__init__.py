@@ -7,3 +7,4 @@ from .critic import (
     DiscreteQFunction,
     DiscreteQuantileFunction,
 )
+from .misc import CumProbNetwork

@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,10 +10,12 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQuantileFunction
-from rljax.util import calculate_quantile_loss, get_quantile_at_action
+from rljax.util import calculate_quantile_loss, get_quantile_at_action, load_params, save_params
 
 
 class QRDQN(QLearning):
+    name = "QR-DQN"
+
     def __init__(
         self,
         num_steps,
@@ -63,15 +66,15 @@ class QRDQN(QLearning):
                 dueling_net=dueling_net,
             )(s)
 
-        # QR-DQN.
+        # Quantile network.
         self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
         opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state)
         self.opt_state = opt_init(self.params)
 
-        # Fixed fractions.
-        tau = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
-        self.tau_hat = jnp.expand_dims((tau[1:] + tau[:-1]) / 2.0, 0)
+        # Fixed cumulative probabilities for calculating quantile values.
+        cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
+        self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
 
         # Other parameters.
         self.num_quantiles = num_quantiles
@@ -92,7 +95,7 @@ class QRDQN(QLearning):
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        self.opt_state, self.params, loss, error = self._update(
+        self.opt_state, self.params, loss, abs_td = self._update(
             opt_state=self.opt_state,
             params=self.params,
             params_target=self.params_target,
@@ -106,7 +109,7 @@ class QRDQN(QLearning):
 
         # Update priority.
         if self.use_per:
-            self.buffer.update_priority(error)
+            self.buffer.update_priority(abs_td)
 
         # Update target network.
         if self.env_step % self.update_interval_target == 0:
@@ -128,7 +131,7 @@ class QRDQN(QLearning):
         next_state: np.ndarray,
         weight: np.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss, error), grad = jax.value_and_grad(self._loss, has_aux=True)(
+        (loss, abs_td), grad = jax.value_and_grad(self._loss, has_aux=True)(
             params,
             params_target=params_target,
             state=state,
@@ -140,7 +143,7 @@ class QRDQN(QLearning):
         )
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
-        return opt_state, params, loss, error
+        return opt_state, params, loss, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss(
@@ -156,7 +159,7 @@ class QRDQN(QLearning):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         if self.double_q:
             # Calculate greedy actions with online network.
-            next_action = jnp.argmax(self.quantile_net.apply(params, next_state).mean(axis=1), axis=1)[..., None]
+            next_action = self._forward(params, next_state)[..., None]
             # Then calculate max quantile values with target network.
             next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state), next_action)
         else:
@@ -169,9 +172,13 @@ class QRDQN(QLearning):
         # Calculate current quantile values, whose shape is (batch_size, N, 1).
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state), action)
         td = target_quantile - curr_quantile
-        loss = calculate_quantile_loss(td, self.tau_hat, weight, self.loss_type)
-        error = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
-        return loss, jax.lax.stop_gradient(error)
+        loss = calculate_quantile_loss(td, self.cum_p_prime, weight, self.loss_type)
+        abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
+        return loss, jax.lax.stop_gradient(abs_td)
 
-    def __str__(self):
-        return "QR-DQN" if not self.use_per else "QR-DQN+PER"
+    def save_params(self, save_dir):
+        super(QRDQN, self).save_params(save_dir)
+        save_params(self.params, os.path.join(save_dir, "params.npz"))
+
+    def load_params(self, save_dir):
+        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))

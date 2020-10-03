@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -9,10 +10,12 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, DeterministicPolicy
-from rljax.util import add_noise
+from rljax.util import add_noise, load_params, save_params
 
 
 class DDPG(OffPolicyActorCritic):
+    name = "DDPG"
+
     def __init__(
         self,
         num_steps,
@@ -101,7 +104,7 @@ class DDPG(OffPolicyActorCritic):
         state, action, reward, done, next_state = batch
 
         # Update critic and target.
-        self.opt_state_critic, self.params_critic, loss_critic, error = self._update_critic(
+        self.opt_state_critic, self.params_critic, loss_critic, abs_td = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
             params_actor_target=self.params_actor_target,
@@ -117,7 +120,7 @@ class DDPG(OffPolicyActorCritic):
 
         # Update priority.
         if self.use_per:
-            self.buffer.update_priority(error)
+            self.buffer.update_priority(abs_td)
 
         if writer and self.learning_step % self.update_interval_policy == 0:
             # Update actor and target.
@@ -147,7 +150,7 @@ class DDPG(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight: np.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss_critic, error), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
+        (loss_critic, abs_td), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
             params_critic_target=params_critic_target,
             params_actor_target=params_actor_target,
@@ -160,7 +163,7 @@ class DDPG(OffPolicyActorCritic):
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, loss_critic, error
+        return opt_state_critic, params_critic, loss_critic, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -182,9 +185,9 @@ class DDPG(OffPolicyActorCritic):
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
         # Calculate current q values with online critic.
         curr_q = self.critic.apply(params_critic, state, action)
-        error = jnp.abs(target_q - curr_q)
-        loss = (jnp.square(error) * weight).mean()
-        return loss, jax.lax.stop_gradient(error)
+        abs_td = jnp.abs(target_q - curr_q)
+        loss = (jnp.square(abs_td) * weight).mean()
+        return loss, jax.lax.stop_gradient(abs_td)
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
@@ -214,5 +217,11 @@ class DDPG(OffPolicyActorCritic):
         q = self.critic.apply(params_critic, state, action)
         return -q.mean()
 
-    def __str__(self):
-        return "DDPG"
+    def save_params(self, save_dir):
+        super(DDPG, self).save_params(save_dir)
+        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
+        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
+
+    def load_params(self, save_dir):
+        self.params_critic = self.params_critic_target = load_params(os.path.join(save_dir, "params_critic.npz"))
+        self.params_actor = self.params_actor_target = load_params(os.path.join(save_dir, "params_actor.npz"))
