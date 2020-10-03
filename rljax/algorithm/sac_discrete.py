@@ -12,7 +12,9 @@ from rljax.network import CategoricalPolicy, DiscreteQFunction
 from rljax.util import get_q_at_action
 
 
-class SACDiscrete(OffPolicyActorCritic):
+class SAC_Discrete(OffPolicyActorCritic):
+    name = "SAC-Discrete"
+
     def __init__(
         self,
         num_steps,
@@ -35,7 +37,7 @@ class SACDiscrete(OffPolicyActorCritic):
         target_entropy_ratio=0.98,
         dueling_net=False,
     ):
-        super(SACDiscrete, self).__init__(
+        super(SAC_Discrete, self).__init__(
             num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
@@ -271,6 +273,3 @@ class SACDiscrete(OffPolicyActorCritic):
         mean_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
         return -log_alpha * (self.target_entropy + mean_log_pi)
-
-    def __str__(self):
-        return "SAC-Discrete" if not self.use_per else "SAC-Discrete+PER"

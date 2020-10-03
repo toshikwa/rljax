@@ -13,6 +13,8 @@ from rljax.util import get_q_at_action, huber_fn
 
 
 class DQN(QLearning):
+    name = "DQN"
+
     def __init__(
         self,
         num_steps,
@@ -164,6 +166,3 @@ class DQN(QLearning):
         elif self.loss_type == "huber":
             loss = jnp.mean(huber_fn(td) * weight)
         return loss, jax.lax.stop_gradient(jnp.abs(td))
-
-    def __str__(self):
-        return "DQN" if not self.use_per else "DQN+PER"

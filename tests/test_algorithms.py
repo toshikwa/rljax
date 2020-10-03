@@ -1,7 +1,7 @@
 import gym
 import pytest
 
-from rljax.algorithm import DDPG, DQN, IQN, PPO, QRDQN, SAC, TD3, SACDiscrete
+from rljax.algorithm import DDPG, DQN, IQN, PPO, QRDQN, SAC, TD3, SAC_Discrete
 
 
 def _test_algorithm(env, algo):
@@ -50,7 +50,7 @@ def test_qlearning(use_per, dueling_net, double_q):
 )
 def test_sac_discrete(use_per, dueling_net):
     env = gym.make("CartPole-v0")
-    algo = SACDiscrete(
+    algo = SAC_Discrete(
         num_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,

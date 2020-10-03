@@ -15,6 +15,8 @@ class Algorithm(ABC):
     Base class for algorithms.
     """
 
+    name = None
+
     def __init__(
         self,
         num_steps,
@@ -60,9 +62,8 @@ class Algorithm(ABC):
     def update(self, writer):
         pass
 
-    @abstractmethod
     def __str__(self):
-        pass
+        return self.name
 
 
 class OnPolicyActorCritic(Algorithm):

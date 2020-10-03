@@ -13,6 +13,8 @@ from rljax.util import add_noise
 
 
 class DDPG(OffPolicyActorCritic):
+    name = "DDPG"
+
     def __init__(
         self,
         num_steps,
@@ -213,6 +215,3 @@ class DDPG(OffPolicyActorCritic):
         action = self.actor.apply(params_actor, state)
         q = self.critic.apply(params_critic, state, action)
         return -q.mean()
-
-    def __str__(self):
-        return "DDPG"

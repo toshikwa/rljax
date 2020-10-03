@@ -12,7 +12,9 @@ from rljax.network import ContinuousQFunction
 from rljax.util import reparameterize_gaussian_with_tanh
 
 
-class DisCor(SAC):
+class SAC_DisCor(SAC):
+    name = "SAC-DisCor"
+
     def __init__(
         self,
         num_steps,
@@ -36,7 +38,7 @@ class DisCor(SAC):
         error_init=10.0,
     ):
         assert nstep == 1
-        super(DisCor, self).__init__(
+        super(SAC_DisCor, self).__init__(
             num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
@@ -293,6 +295,3 @@ class DisCor(SAC):
         td1, td2 = jnp.abs(curr_q1 - target_q), jnp.abs(curr_q2 - target_q)
         loss = (jnp.square(td1) * weight1).sum() + (jnp.square(td2) * weight2).sum()
         return loss, (jax.lax.stop_gradient(td1), jax.lax.stop_gradient(td2))
-
-    def __str__(self):
-        return "DisCor"

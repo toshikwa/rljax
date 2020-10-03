@@ -13,6 +13,8 @@ from rljax.util import clip_gradient, evaluate_lop_pi, reparameterize_gaussian_w
 
 
 class PPO(OnPolicyActorCritic):
+    name = "PPO"
+
     def __init__(
         self,
         num_steps,
@@ -220,6 +222,3 @@ class PPO(OnPolicyActorCritic):
             gae.insert(0, delta[t] + self.gamma * self.lambd * (1 - done[t]) * gae[0])
         gae = jnp.array(gae)
         return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
-
-    def __str__(self):
-        return "PPO"

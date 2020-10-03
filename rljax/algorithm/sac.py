@@ -13,6 +13,8 @@ from rljax.util import reparameterize_gaussian_with_tanh
 
 
 class SAC(OffPolicyActorCritic):
+    name = "SAC"
+
     def __init__(
         self,
         num_steps,
@@ -272,6 +274,3 @@ class SAC(OffPolicyActorCritic):
         mean_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
         return -log_alpha * (self.target_entropy + mean_log_pi)
-
-    def __str__(self):
-        return "SAC"

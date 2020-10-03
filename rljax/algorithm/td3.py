@@ -13,6 +13,8 @@ from rljax.util import add_noise
 
 
 class TD3(OffPolicyActorCritic):
+    name = "TD3"
+
     def __init__(
         self,
         num_steps,
@@ -223,6 +225,3 @@ class TD3(OffPolicyActorCritic):
         action = self.actor.apply(params_actor, state)
         q1 = self.critic.apply(params_critic, state, action)[0]
         return -q1.mean()
-
-    def __str__(self):
-        return "TD3"

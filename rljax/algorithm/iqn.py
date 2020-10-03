@@ -13,6 +13,8 @@ from rljax.util import calculate_quantile_loss, get_quantile_at_action
 
 
 class IQN(QLearning):
+    name = "IQN"
+
     def __init__(
         self,
         num_steps,
@@ -189,6 +191,3 @@ class IQN(QLearning):
         loss = calculate_quantile_loss(td, tau, weight, self.loss_type)
         error = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(error)
-
-    def __str__(self):
-        return "IQN" if not self.use_per else "IQN+PER"
