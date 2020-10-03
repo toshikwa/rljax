@@ -21,25 +21,22 @@ If you want to use a [MuJoCo](http://mujoco.org/) physics engine, please install
 pip install mujoco_py==2.0.2.11
 ```
 
-## Algorithms
+## Algorithm
 Currently, following algorithms have been implemented.
 
-- [x] Proximal Policy Optimization(PPO)
-- [x] Deep Deterministic Policy Gradient(DDPG)
-- [x] Twin Delayed DDPG(TD3)
-- [x] Soft Actor-Critic(SAC)
-- [x] Distribution Correction(DisCor) for SAC and DQN
-- [x] Deep Q Network(DQN)
-- [x] N-step return
-- [x] Dueling Network
-- [x] Double Q-Learning
-- [x] Prioritized Experience Replay(PER)
-- [x] Quantile Regression DQN(QR-DQN)
-- [x] Implicit Quantile Network(IQN)
-- [x] Fully-parameterized Quantile Function(FQF)
-- [x] Soft Actor-Critic for Discrete Settings(SAC-Discrete)
+| **Algorithm** | **Action Space** | **Vector State** | **Pixel State** | **PER**[[11]](#reference) | **DisCor**[[12]](#reference) |
+| :--                            | :--                | :--:               | :--:               | :--:                       | - |
+| PPO[[1]](#reference)           | Continuous         | :heavy_check_mark: | -                  | -                          | - |
+| DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | - |
+| TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | - |
+| SAC[[4,5]](#reference)         | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | :heavy_check_mark: |
+| DQN[[6]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | :heavy_check_mark: |
+| QR-DQN[[7]](#reference)        | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
+| IQN[[8]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
+| FQF[[9]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
+| SAC-Discrete[[10]](#reference) | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | - |
 
-## Examples
+## Example
 All algorithms can be trained in a few lines of codes.
 
 <details>
@@ -104,3 +101,29 @@ I benchmarked my implementations in environments from MuJoCo's `-v3` task suites
 <img src="https://user-images.githubusercontent.com/37267851/94887999-b0b0d200-04b2-11eb-9a37-7e2b87dfa71a.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/94888002-b1e1ff00-04b2-11eb-87da-243f39d325b6.png" title="Walker2d-v3" width=400>
 
 </details>
+
+
+## Reference
+[[1]](https://arxiv.org/abs/1707.06347) Schulman, John, et al. "Proximal policy optimization algorithms." arXiv preprint arXiv:1707.06347 (2017).
+
+[[2]](https://arxiv.org/abs/1509.02971) Lillicrap, Timothy P., et al. "Continuous control with deep reinforcement learning." arXiv preprint arXiv:1509.02971 (2015).
+
+[[3]](https://arxiv.org/abs/1802.09477) Fujimoto, Scott, Herke Van Hoof, and David Meger. "Addressing function approximation error in actor-critic methods." arXiv preprint arXiv:1802.09477 (2018).
+
+[[4]](https://arxiv.org/abs/1801.01290) Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy deep reinforcement learning with a stochastic actor." arXiv preprint arXiv:1801.01290 (2018).
+
+[[5]](https://arxiv.org/abs/1812.05905) Haarnoja, Tuomas, et al. "Soft actor-critic algorithms and applications." arXiv preprint arXiv:1812.05905 (2018).
+
+[[6]](https://www.nature.com/articles/nature14236?wm=book_wap_0005) Mnih, Volodymyr, et al. "Human-level control through deep reinforcement learning." nature 518.7540 (2015): 529-533.
+
+[[7]](https://arxiv.org/abs/1710.10044) Dabney, Will, et al. "Distributional reinforcement learning with quantile regression." Thirty-Second AAAI Conference on Artificial Intelligence. 2018.
+
+[[8]](https://arxiv.org/abs/1806.06923) Dabney, Will, et al. "Implicit quantile networks for distributional reinforcement learning." arXiv preprint. 2018.
+
+[[9]](https://arxiv.org/abs/1911.02140) Yang, Derek, et al. "Fully Parameterized Quantile Function for Distributional Reinforcement Learning." Advances in Neural Information Processing Systems. 2019.
+
+[[10]](https://arxiv.org/abs/1910.07207) Christodoulou, Petros. "Soft Actor-Critic for Discrete Action Settings." arXiv preprint arXiv:1910.07207 (2019).
+
+[[11]](https://arxiv.org/abs/1511.05952) Schaul, Tom, et al. "Prioritized experience replay." arXiv preprint arXiv:1511.05952 (2015).
+
+[[12]](https://arxiv.org/abs/2003.07305) Kumar, Aviral, Abhishek Gupta, and Sergey Levine. "Discor: Corrective feedback in reinforcement learning via distribution correction." arXiv preprint arXiv:2003.07305 (2020).
