@@ -93,7 +93,7 @@ class FQF(QLearning):
         fake_cum_p = np.empty((1, num_quantiles), dtype=np.float32)
         self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
         opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
-        self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state, fake_cum_p)
+        self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_feature, fake_cum_p)
         self.opt_state = opt_init(self.params)
 
         # Other parameters.
