@@ -8,25 +8,31 @@ from rljax.trainer import Trainer
 
 config = {
     "dqn": {
-        "nstep": 3,
+        "nstep": 1,
         "loss_type": "l2",
         "dueling_net": True,
         "double_q": True,
     },
     "qrdqn": {
-        "nstep": 3,
+        "nstep": 1,
         "loss_type": "l2",
         "dueling_net": True,
         "double_q": True,
     },
     "iqn": {
-        "nstep": 3,
+        "nstep": 1,
+        "loss_type": "l2",
+        "dueling_net": True,
+        "double_q": True,
+    },
+    "dqn_discor": {
+        "nstep": 1,
         "loss_type": "l2",
         "dueling_net": True,
         "double_q": True,
     },
     "sac_discrete": {
-        "nstep": 3,
+        "nstep": 1,
         "dueling_net": True,
     },
 }
