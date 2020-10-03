@@ -2,10 +2,11 @@
 # https://github.com/hill-a/stable-baselines/blob/master/stable_baselines/common/atari_wrappers.py
 from collections import deque
 
-import cv2
 import gym
 import numpy as np
 from gym import spaces, wrappers
+
+import cv2
 
 cv2.ocl.setUseOpenCL(False)
 
@@ -284,8 +285,7 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False):
 def make_atari_env(env_id, episode_life=True, clip_rewards=True, frame_stack=True):
     env = make_atari(env_id)
     env = wrap_deepmind(env, episode_life, clip_rewards, frame_stack)
-    if not hasattr(env, "_max_episode_steps"):
-        setattr(env, "_max_episode_steps", env.spec.max_episode_steps)
+    setattr(env, "_max_episode_steps", min(env.spec.max_episode_steps, 27000))
     return env
 
 

@@ -32,6 +32,7 @@ class FQF(QLearning):
         update_interval_target=8000,
         eps=0.01,
         eps_eval=0.001,
+        eps_decay_steps=250000,
         lr=5e-5,
         lr_cum_p=2.5e-9,
         units=(512,),
@@ -57,6 +58,7 @@ class FQF(QLearning):
             update_interval_target=update_interval_target,
             eps=eps,
             eps_eval=eps_eval,
+            eps_decay_steps=eps_decay_steps,
         )
 
         def cum_p_fn(s):

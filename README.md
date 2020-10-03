@@ -68,6 +68,8 @@ algo = DQN(
     start_steps=1000,
     update_interval=1,
     update_interval_target=400,
+    eps_decay_steps=0,
+    loss_type="L2",
 )
 
 trainer = Trainer(

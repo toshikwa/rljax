@@ -303,6 +303,7 @@ class QLearning(OffPolicyAlgorithm):
         update_interval_target,
         eps,
         eps_eval,
+        eps_decay_steps,
     ):
         super(QLearning, self).__init__(
             num_steps=num_steps,
@@ -320,6 +321,7 @@ class QLearning(OffPolicyAlgorithm):
         )
         self.eps = eps
         self.eps_eval = eps_eval
+        self.eps_decay_steps = eps_decay_steps
 
     def select_action(self, state):
         if np.random.rand() < self.eps_eval:
@@ -330,7 +332,7 @@ class QLearning(OffPolicyAlgorithm):
         return action
 
     def explore(self, state):
-        if np.random.rand() < self.eps:
+        if np.random.rand() < self.eps_train:
             action = self.action_space.sample()
         else:
             action = self.forward(state[None, ...])
@@ -343,3 +345,9 @@ class QLearning(OffPolicyAlgorithm):
     @abstractmethod
     def _forward(self, params, state):
         pass
+
+    @property
+    def eps_train(self):
+        if self.env_step > self.eps_decay_steps:
+            return self.eps
+        return 1.0 + (self.eps - 1.0) / self.eps_decay_steps * self.env_step
