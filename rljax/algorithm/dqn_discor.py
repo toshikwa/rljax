@@ -75,8 +75,8 @@ class DQN_DisCor(DQN):
 
         # Error model.
         self.error = hk.without_apply_rng(hk.transform(error_fn))
-        opt_init, self.opt_error = optix.adam(lr_error)
         self.params_error = self.params_error_target = self.error.init(next(self.rng), self.fake_state)
+        opt_init, self.opt_error = optix.adam(lr_error)
         self.opt_state_error = opt_init(self.params_error)
 
         # Running mean of errors.

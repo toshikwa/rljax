@@ -70,8 +70,8 @@ class QRDQN(QLearning):
 
         # Quantile network.
         self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
-        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state)
+        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.opt_state = opt_init(self.params)
 
         # Fixed cumulative probabilities for calculating quantile values.

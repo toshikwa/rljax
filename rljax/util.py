@@ -67,7 +67,7 @@ def clip_gradient(
     """
     Clip gradients.
     """
-    return jax.tree_multimap(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad)
+    return jax.tree_map(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad)
 
 
 @jax.jit
@@ -93,7 +93,7 @@ def load_params(path):
     """
     Load parameters.
     """
-    return jax.tree_multimap(lambda x: x, np.load(path))
+    return hk.data_structures.to_immutable_dict(np.load(path))
 
 
 @jax.jit

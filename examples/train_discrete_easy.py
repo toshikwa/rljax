@@ -49,7 +49,7 @@ config = {
         "num_cosines": 32,
         "loss_type": "l2",
         "lr": 1e-3,
-        "lr_cum_p": 1e-5,
+        "lr_cum_p": 1e-3,
     },
     "dqn_discor": {
         "batch_size": 256,

@@ -59,14 +59,14 @@ class PPO(OnPolicyActorCritic):
 
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(critic_fn))
-        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
         self.actor = hk.without_apply_rng(hk.transform(actor_fn))
-        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Other parameters.
@@ -219,7 +219,7 @@ class PPO(OnPolicyActorCritic):
         delta = reward + self.gamma * next_value * (1.0 - done) - value
         # Calculate GAE recursively from behind.
         gae = [delta[-1]]
-        for t in jnp.arange(reward.shape[0] - 2, -1, -1):
+        for t in jnp.arange(self.buffer_size - 2, -1, -1):
             gae.insert(0, delta[t] + self.gamma * self.lambd * (1 - done[t]) * gae[0])
         gae = jnp.array(gae)
         return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
