@@ -18,11 +18,13 @@ class Trainer:
         algo,
         log_dir,
         seed=0,
+        action_repeat=1,
         num_steps=10 ** 6,
         eval_interval=10 ** 4,
         num_eval_episodes=10,
     ):
-        super().__init__()
+        assert num_steps % action_repeat == 0
+        assert eval_interval % action_repeat == 0
 
         # Envs.
         self.env = env
@@ -42,6 +44,7 @@ class Trainer:
         self.writer = SummaryWriter(log_dir=os.path.join(log_dir, "summary"))
 
         # Other parameters.
+        self.action_repeat = action_repeat
         self.num_steps = num_steps
         self.eval_interval = eval_interval
         self.num_eval_episodes = num_eval_episodes
@@ -52,7 +55,7 @@ class Trainer:
         # Initialize the environment.
         state = self.env.reset()
 
-        for step in range(1, self.num_steps + 1):
+        for step in range(self.action_repeat, self.num_steps + 1, self.action_repeat):
             state = self.algo.step(self.env, state)
 
             if self.algo.is_update():

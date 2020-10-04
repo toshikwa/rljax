@@ -5,3 +5,4 @@ pandas==1.1.2
 dm-haiku==0.0.2
 gym[atari]==0.17.2
 tensorboardX==2.1
+git+https://github.com/denisyarats/dmc2gym.git

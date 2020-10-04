@@ -74,22 +74,22 @@ class FQF(QLearning):
         self.use_image = len(state_space.shape) == 3
         if self.use_image:
             self.feature_net = hk.without_apply_rng(hk.transform(lambda s: DQNBody()(s)))
-            self.fake_feature = np.zeros((1, 7 * 7 * 64), dtype=np.float32)
+            fake_feature = np.zeros((1, 7 * 7 * 64), dtype=np.float32)
             params["feature"] = self.feature_net.init(next(self.rng), self.fake_state)
         else:
-            self.fake_feature = self.fake_state
+            fake_feature = self.fake_state
 
         # Quantile network.
         fake_cum_p = np.empty((1, num_quantiles), dtype=np.float32)
         self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
-        params["quantile"] = self.quantile_net.init(next(self.rng), self.fake_feature, fake_cum_p)
+        params["quantile"] = self.quantile_net.init(next(self.rng), fake_feature, fake_cum_p)
         self.params = self.params_target = hk.data_structures.to_immutable_dict(params)
         opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.opt_state = opt_init(self.params)
 
         # Fraction proposal network.
         self.cum_p_net = hk.without_apply_rng(hk.transform(lambda s: CumProbNetwork(num_quantiles=num_quantiles)(s)))
-        self.params_cum_p = self.cum_p_net.init(next(self.rng), self.fake_feature)
+        self.params_cum_p = self.cum_p_net.init(next(self.rng), fake_feature)
         opt_init, self.opt_cum_p = optix.rmsprop(lr_cum_p, decay=0.95, eps=1e-5, centered=True)
         self.opt_state_cum_p = opt_init(self.params_cum_p)
 
