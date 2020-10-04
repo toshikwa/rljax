@@ -1,4 +1,5 @@
 import gym
+import numpy as np
 import pytest
 
 from rljax.algorithm import DDPG, DQN, FQF, IQN, PPO, QRDQN, SAC, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
@@ -9,7 +10,7 @@ def _test_algorithm(env, algo):
 
     # Test step() method.
     _state = algo.step(env, state)
-    assert env.observation_space.contains(_state)
+    assert env.observation_space.contains(np.array(_state))
 
     # Test select_action() method.
     action = algo.select_action(state)
@@ -17,6 +18,10 @@ def _test_algorithm(env, algo):
 
     # Test is_update() method.
     assert isinstance(algo.is_update(), bool)
+
+    # Test saving.
+    algo.save_params("/tmp/rljax/test/algo")
+    algo.load_params("/tmp/rljax/test/algo")
 
 
 @pytest.mark.parametrize(

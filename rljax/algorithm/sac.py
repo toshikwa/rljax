@@ -65,14 +65,14 @@ class SAC(OffPolicyActorCritic):
 
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(critic_fn))
-        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
         self.actor = hk.without_apply_rng(hk.transform(actor_fn))
-        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), self.fake_state)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Entropy coefficient.
@@ -94,11 +94,11 @@ class SAC(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize_gaussian_with_tanh(mean, log_std, rng)[0]
+        return reparameterize_gaussian_with_tanh(mean, log_std, key)[0]
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -119,7 +119,7 @@ class SAC(OffPolicyActorCritic):
             next_state=next_state,
             weight1=weight,
             weight2=weight,
-            rng=next(self.rng),
+            key=next(self.rng),
         )
 
         # Update priority.
@@ -133,7 +133,7 @@ class SAC(OffPolicyActorCritic):
             params_critic=self.params_critic,
             log_alpha=self.log_alpha,
             state=state,
-            rng=next(self.rng),
+            key=next(self.rng),
         )
 
         # Update alpha.
@@ -168,7 +168,7 @@ class SAC(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight1: np.ndarray,
         weight2: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_critic, (abs_td1, abs_td2)), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
@@ -182,7 +182,7 @@ class SAC(OffPolicyActorCritic):
             next_state=next_state,
             weight1=weight1,
             weight2=weight2,
-            rng=rng,
+            key=key,
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
@@ -202,12 +202,12 @@ class SAC(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight1: np.ndarray,
         weight2: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         # Sample next actions.
         next_mean, next_log_std = self.actor.apply(params_actor, next_state)
-        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, rng)
+        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, key)
         # Calculate target soft q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
@@ -227,14 +227,14 @@ class SAC(OffPolicyActorCritic):
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_actor, mean_log_pi), grad_actor = jax.value_and_grad(self._loss_actor, has_aux=True)(
             params_actor,
             params_critic=params_critic,
             log_alpha=log_alpha,
             state=state,
-            rng=rng,
+            key=key,
         )
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
@@ -247,12 +247,12 @@ class SAC(OffPolicyActorCritic):
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
-        rng: np.ndarray,
+        key: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         # Sample actions.
         mean, log_std = self.actor.apply(params_actor, state)
-        action, log_pi = reparameterize_gaussian_with_tanh(mean, log_std, rng)
+        action, log_pi = reparameterize_gaussian_with_tanh(mean, log_std, key)
         # Calculate soft q values with online critic.
         q1, q2 = self.critic.apply(params_critic, state, action)
         mean_log_pi = log_pi.mean()

@@ -40,16 +40,22 @@ class StateDependentGaussianPolicy(hk.Module):
         action_space,
         hidden_units=(256, 256),
         hidden_activation=nn.relu,
+        clip_log_std=True,
     ):
         super(StateDependentGaussianPolicy, self).__init__()
         self.action_space = action_space
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
+        self.clip_log_std = clip_log_std
 
     def __call__(self, x):
         x = MLP(2 * self.action_space.shape[0], self.hidden_units, self.hidden_activation)(x)
         mean, log_std = jnp.split(x, 2, axis=1)
-        return mean, jnp.clip(log_std, -20, 2)
+        if self.clip_log_std:
+            log_std = jnp.clip(log_std, -20, 2)
+        else:
+            log_std = -10 + 0.5 * (2 - (-10)) * (log_std + 1)
+        return mean, log_std
 
 
 class StateIndependentGaussianPolicy(hk.Module):

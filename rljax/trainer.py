@@ -18,11 +18,13 @@ class Trainer:
         algo,
         log_dir,
         seed=0,
+        action_repeat=1,
         num_steps=10 ** 6,
         eval_interval=10 ** 4,
         num_eval_episodes=10,
     ):
-        super().__init__()
+        assert num_steps % action_repeat == 0
+        assert eval_interval % action_repeat == 0
 
         # Envs.
         self.env = env
@@ -42,6 +44,7 @@ class Trainer:
         self.writer = SummaryWriter(log_dir=os.path.join(log_dir, "summary"))
 
         # Other parameters.
+        self.action_repeat = action_repeat
         self.num_steps = num_steps
         self.eval_interval = eval_interval
         self.num_eval_episodes = num_eval_episodes
@@ -77,13 +80,13 @@ class Trainer:
         mean_return = total_return / self.num_eval_episodes
 
         # Log to TensorBoard.
-        self.writer.add_scalar("return/test", mean_return, step)
-        print(f"Num steps: {step:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
-
+        self.writer.add_scalar("return/test", mean_return, step * self.action_repeat)
         # Log to CSV.
-        self.log["step"].append(step)
+        self.log["step"].append(step * self.action_repeat)
         self.log["return"].append(mean_return)
         pd.DataFrame(self.log).to_csv(self.csv_path, index=False)
+        # Log to standard output.
+        print(f"Num steps: {step * self.action_repeat:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
 
     @property
     def time(self):

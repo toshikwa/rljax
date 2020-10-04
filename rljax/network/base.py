@@ -45,11 +45,11 @@ class DQNBody(hk.Module):
         # Floatify the image.
         x = x.astype(jnp.float32) / 255.0
         # Apply CNN.
-        x = hk.Conv2D(32, kernel_shape=(8, 8), stride=(4, 4), padding="VALID", w_init=w_init)(x)
+        x = hk.Conv2D(32, kernel_shape=8, stride=4, padding="VALID", w_init=w_init)(x)
         x = nn.relu(x)
-        x = hk.Conv2D(64, kernel_shape=(4, 4), stride=(2, 2), padding="VALID", w_init=w_init)(x)
+        x = hk.Conv2D(64, kernel_shape=4, stride=2, padding="VALID", w_init=w_init)(x)
         x = nn.relu(x)
-        x = hk.Conv2D(64, kernel_shape=(3, 3), stride=(1, 1), padding="VALID", w_init=w_init)(x)
+        x = hk.Conv2D(64, kernel_shape=3, stride=1, padding="VALID", w_init=w_init)(x)
         x = nn.relu(x)
         # Flatten the feature map.
         return hk.Flatten()(x)

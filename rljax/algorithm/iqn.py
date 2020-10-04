@@ -72,8 +72,8 @@ class IQN(QLearning):
         # Quantile network.
         fake_cum_p = np.empty((1, num_quantiles), dtype=np.float32)
         self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
-        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state, fake_cum_p)
+        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.opt_state = opt_init(self.params)
 
         # Other parameters.
@@ -90,10 +90,10 @@ class IQN(QLearning):
     def _forward(
         self,
         params: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        cum_p = jax.random.uniform(rng, (1, self.num_quantiles_eval))
+        cum_p = jax.random.uniform(key, (1, self.num_quantiles_eval))
         q_s = self.quantile_net.apply(params, state, cum_p).mean(axis=1)
         return jnp.argmax(q_s, axis=1)
 
@@ -112,8 +112,8 @@ class IQN(QLearning):
             done=done,
             next_state=next_state,
             weight=weight,
-            rng1=next(self.rng),
-            rng2=next(self.rng),
+            key1=next(self.rng),
+            key2=next(self.rng),
         )
 
         # Update priority.
@@ -121,7 +121,7 @@ class IQN(QLearning):
             self.buffer.update_priority(abs_td)
 
         # Update target network.
-        if self.env_step % self.update_interval_target == 0:
+        if self.agent_step % self.update_interval_target == 0:
             self.params_target = self._update_target(self.params_target, self.params)
 
         if writer and self.learning_step % 1000 == 0:
@@ -139,8 +139,8 @@ class IQN(QLearning):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-        rng1: np.ndarray,
-        rng2: np.ndarray,
+        key1: np.ndarray,
+        key2: np.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss, abs_td), grad = jax.value_and_grad(self._loss, has_aux=True)(
             params,
@@ -151,8 +151,8 @@ class IQN(QLearning):
             done=done,
             next_state=next_state,
             weight=weight,
-            rng1=rng1,
-            rng2=rng2,
+            key1=key1,
+            key2=key2,
         )
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
@@ -169,16 +169,16 @@ class IQN(QLearning):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-        rng1: np.ndarray,
-        rng2: np.ndarray,
+        key1: np.ndarray,
+        key2: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Sample cumulative probabilities.
-        cum_p1 = jax.random.uniform(rng1, (state.shape[0], self.num_quantiles))
-        cum_p2 = jax.random.uniform(rng2, (state.shape[0], self.num_quantiles))
+        cum_p1 = jax.random.uniform(key1, (state.shape[0], self.num_quantiles))
+        cum_p2 = jax.random.uniform(key2, (state.shape[0], self.num_quantiles))
 
         if self.double_q:
-            # Calculate greedy actions with online network. (NOTE: We reuse cum_p1 here for the simple implementation.)
-            next_action = self._forward(params, rng1, next_state)[..., None]
+            # Calculate greedy actions with online network. (NOTE: We reuse key1 here for the simple implementation.)
+            next_action = self._forward(params, key1, next_state)[..., None]
             # Then calculate max quantile values with target network.
             next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state, cum_p2), next_action)
         else:

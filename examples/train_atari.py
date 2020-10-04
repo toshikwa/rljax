@@ -64,6 +64,7 @@ def run(args):
         algo=algo,
         log_dir=log_dir,
         num_steps=args.num_steps,
+        action_repeat=4,
         eval_interval=args.eval_interval,
         seed=args.seed,
     )

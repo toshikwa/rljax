@@ -7,4 +7,4 @@ from .critic import (
     DiscreteQFunction,
     DiscreteQuantileFunction,
 )
-from .misc import CumProbNetwork
+from .misc import CumProbNetwork, SACDecoder, SACEncoder, SACLinear

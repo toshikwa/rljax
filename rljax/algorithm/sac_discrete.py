@@ -69,14 +69,14 @@ class SAC_Discrete(OffPolicyActorCritic):
 
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(critic_fn))
-        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
         self.actor = hk.without_apply_rng(hk.transform(actor_fn))
-        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.actor.init(next(self.rng), self.fake_state)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Entropy coefficient.
@@ -98,11 +98,11 @@ class SAC_Discrete(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         pi, _ = self.actor.apply(params_actor, state)
-        return jax.random.categorical(rng, pi)
+        return jax.random.categorical(key, pi)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -146,7 +146,7 @@ class SAC_Discrete(OffPolicyActorCritic):
         )
 
         # Update target network.
-        if self.env_step % self.update_interval_target == 0:
+        if self.agent_step % self.update_interval_target == 0:
             self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
         if writer and self.learning_step % 100 == 0:

@@ -66,14 +66,14 @@ class DDPG(OffPolicyActorCritic):
 
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(critic_fn))
-        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
+        opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
         self.actor = hk.without_apply_rng(hk.transform(actor_fn))
-        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
+        opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Other parameters.
@@ -92,11 +92,11 @@ class DDPG(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, state)
-        return add_noise(action, rng, self.std, -1.0, 1.0)
+        return add_noise(action, key, self.std, -1.0, 1.0)
 
     def update(self, writer=None):
         self.learning_step += 1

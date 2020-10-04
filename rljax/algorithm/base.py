@@ -29,7 +29,7 @@ class Algorithm(ABC):
         np.random.seed(seed)
         self.rng = PRNGSequence(seed)
 
-        self.env_step = 0
+        self.agent_step = 0
         self.episode_step = 0
         self.learning_step = 0
         self.num_steps = num_steps
@@ -120,14 +120,14 @@ class OnPolicyActorCritic(Algorithm):
         pass
 
     @abstractmethod
-    def _explore(self, params_actor, rng, state):
+    def _explore(self, params_actor, key, state):
         pass
 
     def is_update(self):
-        return self.env_step % self.buffer_size == 0
+        return self.agent_step % self.buffer_size == 0
 
     def step(self, env, state):
-        self.env_step += 1
+        self.agent_step += 1
         self.episode_step += 1
 
         action, log_pi = self.explore(state)
@@ -202,17 +202,17 @@ class OffPolicyAlgorithm(Algorithm):
             self._update_target = jax.jit(partial(soft_update, tau=tau))
 
     def is_update(self):
-        return self.env_step % self.update_interval == 0 and self.env_step >= self.start_steps
+        return self.agent_step % self.update_interval == 0 and self.agent_step >= self.start_steps
 
     @abstractmethod
     def explore(self, state):
         pass
 
     def step(self, env, state):
-        self.env_step += 1
+        self.agent_step += 1
         self.episode_step += 1
 
-        if self.env_step <= self.start_steps:
+        if self.agent_step <= self.start_steps:
             action = env.action_space.sample()
         else:
             action = self.explore(state)
@@ -278,7 +278,7 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         pass
 
     @abstractmethod
-    def _explore(self, params_actor, rng, state):
+    def _explore(self, params_actor, key, state):
         pass
 
 
@@ -348,6 +348,6 @@ class QLearning(OffPolicyAlgorithm):
 
     @property
     def eps_train(self):
-        if self.env_step > self.eps_decay_steps:
+        if self.agent_step > self.eps_decay_steps:
             return self.eps
-        return 1.0 + (self.eps - 1.0) / self.eps_decay_steps * self.env_step
+        return 1.0 + (self.eps - 1.0) / self.eps_decay_steps * self.agent_step

@@ -67,7 +67,7 @@ def clip_gradient(
     """
     Clip gradients.
     """
-    return jax.tree_multimap(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad)
+    return jax.tree_map(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad)
 
 
 @jax.jit
@@ -93,7 +93,7 @@ def load_params(path):
     """
     Load parameters.
     """
-    return jax.tree_multimap(lambda x: x, np.load(path))
+    return hk.data_structures.to_immutable_dict(np.load(path))
 
 
 @jax.jit
@@ -165,3 +165,22 @@ def calculate_quantile_loss(
     element_wise_loss *= jax.lax.stop_gradient(jnp.abs(cum_p[..., None] - (td < 0)))
     batch_loss = element_wise_loss.sum(axis=1).mean(axis=1, keepdims=True)
     return (batch_loss * weight).mean()
+
+
+@partial(jax.jit, static_argnums=2)
+def preprocess_state(
+    state: np.ndarray,
+    key: jnp.ndarray,
+    bits: float = 5,
+) -> jnp.ndarray:
+    """
+    Preprocess pixel states to fit into [-0.5, 0.5].
+    """
+    state = state.astype(jnp.float32)
+    bins = 2 ** bits
+    if bits < 8:
+        state = jnp.floor(state / 2 ** (8 - bits))
+    state = state / bins
+    state = state + jax.random.uniform(key, state.shape) / bins
+    state = state - 0.5
+    return state
