@@ -1,4 +1,5 @@
 import haiku as hk
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import nn
@@ -21,6 +22,25 @@ class CumProbNetwork(hk.Module):
         return cum_p, cum_p_prime
 
 
+class DeltaOrthogonal(hk.initializers.Initializer):
+    def __init__(self, scale=1.0):
+        self.scale = scale
+
+    def __call__(self, shape, dtype) -> jnp.ndarray:
+        assert len(shape) == 4 and shape[0] == shape[1]
+
+        def fn(shape, dtype):
+            w_mat = jnp.zeros(shape, dtype=dtype)
+            w_ortho = hk.initializers.Orthogonal(self.scale)(shape[-2:], dtype)
+            return jax.ops.index_update(
+                w_mat,
+                jax.ops.index[(shape[0] - 1) // 2, (shape[1] - 1) // 2, ...],
+                w_ortho,
+            )
+
+        return fn(shape, dtype)
+
+
 class SACEncoder(hk.Module):
     """
     Encoder for SAC+AE.
@@ -35,10 +55,11 @@ class SACEncoder(hk.Module):
         # Floatify the image.
         x = x.astype(jnp.float32) / 255.0
         # Apply CNN.
-        x = hk.Conv2D(self.num_filters, kernel_shape=4, stride=2, padding="VALID")(x)
+        w_init = DeltaOrthogonal(scale=np.sqrt(2))
+        x = hk.Conv2D(self.num_filters, kernel_shape=4, stride=2, padding="VALID", w_init=w_init)(x)
         x = nn.relu(x)
         for _ in range(self.num_layers - 1):
-            x = hk.Conv2D(self.num_filters, kernel_shape=3, stride=1, padding="VALID")(x)
+            x = hk.Conv2D(self.num_filters, kernel_shape=3, stride=1, padding="VALID", w_init=w_init)(x)
             x = nn.relu(x)
         # Flatten the feature map.
         return hk.Flatten()(x)
@@ -59,13 +80,15 @@ class SACDecoder(hk.Module):
 
     def __call__(self, x):
         # Apply linear layer.
-        x = hk.Linear(self.last_conv_dim)(x)
+        w_init = hk.initializers.Orthogonal(scale=np.sqrt(2))
+        x = hk.Linear(self.last_conv_dim, w_init=w_init)(x)
         x = nn.relu(x).reshape(-1, self.map_size, self.map_size, self.num_filters)
         # Apply Transposed CNN.
+        w_init = DeltaOrthogonal(scale=np.sqrt(2))
         for _ in range(self.num_layers - 1):
-            x = hk.Conv2DTranspose(self.num_filters, kernel_shape=3, stride=1, padding="VALID")(x)
+            x = hk.Conv2DTranspose(self.num_filters, kernel_shape=3, stride=1, padding="VALID", w_init=w_init)(x)
             x = nn.relu(x)
-        x = hk.Conv2DTranspose(self.state_space.shape[2], kernel_shape=4, stride=2, padding="VALID")(x)
+        x = hk.Conv2DTranspose(self.state_space.shape[2], kernel_shape=4, stride=2, padding="VALID", w_init=w_init)(x)
         return x
 
 
@@ -79,7 +102,8 @@ class SACLinear(hk.Module):
         self.feature_dim = feature_dim
 
     def __call__(self, x):
-        x = hk.Linear(self.feature_dim)(x)
-        x = hk.LayerNorm(axis=0, create_scale=False, create_offset=False)(x)
+        w_init = hk.initializers.Orthogonal(scale=np.sqrt(2))
+        x = hk.Linear(self.feature_dim, w_init=w_init)(x)
+        x = hk.LayerNorm(axis=1, create_scale=True, create_offset=True)(x)
         x = jnp.tanh(x)
         return x

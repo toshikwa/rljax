@@ -13,7 +13,6 @@ def run(args):
 
     algo = SAC_AE(
         num_steps=args.num_steps,
-        action_repeat=args.action_repeat,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=args.seed,

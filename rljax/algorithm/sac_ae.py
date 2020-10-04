@@ -19,7 +19,6 @@ class SAC_AE(OffPolicyActorCritic):
     def __init__(
         self,
         num_steps,
-        action_repeat,
         state_space,
         action_space,
         seed,
@@ -46,7 +45,7 @@ class SAC_AE(OffPolicyActorCritic):
     ):
         assert len(state_space.shape) == 3
         super(SAC_AE, self).__init__(
-            num_steps=num_steps / action_repeat,
+            num_steps=num_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
@@ -73,6 +72,7 @@ class SAC_AE(OffPolicyActorCritic):
             return StateDependentGaussianPolicy(
                 action_space=action_space,
                 hidden_units=units_actor,
+                clip_log_std=False,
             )(x)
 
         # Encoder.
@@ -107,7 +107,7 @@ class SAC_AE(OffPolicyActorCritic):
         # Entropy coefficient.
         self.target_entropy = -float(action_space.shape[0])
         self.log_alpha = jnp.array(np.log(alpha_init), dtype=jnp.float32)
-        opt_init, self.opt_alpha = optix.adam(lr_alpha)
+        opt_init, self.opt_alpha = optix.adam(lr_alpha, b1=0.5)
         self.opt_state_alpha = opt_init(self.log_alpha)
 
         # Other parameters.
