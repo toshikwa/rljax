@@ -54,7 +54,7 @@ class StateDependentGaussianPolicy(hk.Module):
         if self.clip_log_std:
             log_std = jnp.clip(log_std, -20, 2)
         else:
-            log_std = -10 + 0.5 * (2 - (-10)) * (log_std + 1)
+            log_std = -10 + 0.5 * (2 - (-10)) * (jnp.tanh(log_std) + 1)
         return mean, log_std
 
 
