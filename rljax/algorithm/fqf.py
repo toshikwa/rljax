@@ -151,7 +151,7 @@ class FQF(QLearning):
             self.buffer.update_priority(abs_td)
 
         # Update target network.
-        if self.env_step % self.update_interval_target == 0:
+        if self.agent_step % self.update_interval_target == 0:
             self.params_target = self._update_target(self.params_target, self.params)
 
         if writer and self.learning_step % 1000 == 0:

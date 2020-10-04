@@ -121,7 +121,7 @@ class DQN_DisCor(DQN):
 
         # Update target network.
         self.rm_error = self._update_target_error(self.rm_error, mean_error)
-        if self.env_step % self.update_interval_target == 0:
+        if self.agent_step % self.update_interval_target == 0:
             self.params_target = self._update_target(self.params_target, self.params)
             self.params_error_target = self._update_target(self.params_error_target, self.params_error)
 

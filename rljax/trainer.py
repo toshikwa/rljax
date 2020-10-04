@@ -55,7 +55,7 @@ class Trainer:
         # Initialize the environment.
         state = self.env.reset()
 
-        for step in range(self.action_repeat, self.num_steps + 1, self.action_repeat):
+        for step in range(1, self.num_steps + 1):
             state = self.algo.step(self.env, state)
 
             if self.algo.is_update():
@@ -80,13 +80,13 @@ class Trainer:
         mean_return = total_return / self.num_eval_episodes
 
         # Log to TensorBoard.
-        self.writer.add_scalar("return/test", mean_return, step)
-        print(f"Num steps: {step:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
-
+        self.writer.add_scalar("return/test", mean_return, step * self.action_repeat)
         # Log to CSV.
-        self.log["step"].append(step)
+        self.log["step"].append(step * self.action_repeat)
         self.log["return"].append(mean_return)
         pd.DataFrame(self.log).to_csv(self.csv_path, index=False)
+        # Log to standard output.
+        print(f"Num steps: {step * self.action_repeat:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
 
     @property
     def time(self):

@@ -146,7 +146,7 @@ class SAC_Discrete(OffPolicyActorCritic):
         )
 
         # Update target network.
-        if self.env_step % self.update_interval_target == 0:
+        if self.agent_step % self.update_interval_target == 0:
             self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
         if writer and self.learning_step % 100 == 0:
