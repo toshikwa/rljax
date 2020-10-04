@@ -100,7 +100,8 @@ Below shows that our algorithms successfully learning the discrete action enviro
 I benchmarked my implementations in some environments from MuJoCo's `-v3` task suites, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/train_mujoco.py)).
 
 <img src="https://user-images.githubusercontent.com/37267851/95005023-f04ff900-062d-11eb-8dfd-78a488837c93.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/95005020-eded9f00-062d-11eb-9fd9-a82346aa6c11.png" title="Walker2d-v3" width=400>
-<img src="https://user-images.githubusercontent.com/37267851/95005021-efb76280-062d-11eb-8bfb-249cd87066ea.png" title="Ant-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/95014273-c542c500-0680-11eb-8233-89d1ace6ba33.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/95005021-efb76280-062d-11eb-8bfb-249cd87066ea.png" title="Ant-v3" width=400>
+
 </details>
 
 
