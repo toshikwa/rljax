@@ -1,8 +1,9 @@
 import haiku as hk
-import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import nn
+
+from .initializer import DeltaOrthogonal
 
 
 class CumProbNetwork(hk.Module):
@@ -20,25 +21,6 @@ class CumProbNetwork(hk.Module):
         cum_p = jnp.concatenate([jnp.zeros((p.shape[0], 1)), jnp.cumsum(p, axis=1)], axis=1)
         cum_p_prime = (cum_p[:, 1:] + cum_p[:, :-1]) / 2.0
         return cum_p, cum_p_prime
-
-
-class DeltaOrthogonal(hk.initializers.Initializer):
-    def __init__(self, scale=1.0):
-        self.scale = scale
-
-    def __call__(self, shape, dtype) -> jnp.ndarray:
-        assert len(shape) == 4 and shape[0] == shape[1]
-
-        def fn(shape, dtype):
-            w_mat = jnp.zeros(shape, dtype=dtype)
-            w_ortho = hk.initializers.Orthogonal(self.scale)(shape[-2:], dtype)
-            return jax.ops.index_update(
-                w_mat,
-                jax.ops.index[(shape[0] - 1) // 2, (shape[1] - 1) // 2, ...],
-                w_ortho,
-            )
-
-        return fn(shape, dtype)
 
 
 class SACEncoder(hk.Module):
