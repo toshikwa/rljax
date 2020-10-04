@@ -3,7 +3,6 @@ import numpy as np
 import pytest
 
 from rljax.algorithm import DDPG, DQN, FQF, IQN, PPO, QRDQN, SAC, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
-from rljax.env import make_dmc_env
 
 
 def _test_algorithm(env, algo):

@@ -6,7 +6,7 @@ from dm_control import suite
 from dm_env import specs
 from gym import core, spaces
 
-from .atari import FrameStack
+from rljax.env.atari import FrameStack
 
 gym.logger.set_level(40)
 
