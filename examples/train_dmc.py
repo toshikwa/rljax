@@ -42,7 +42,6 @@ if __name__ == "__main__":
     p.add_argument('--domain_name', type=str, default='cheetah')
     p.add_argument('--task_name', type=str, default='run')
     p.add_argument('--action_repeat', type=int, default=4)
-    p.add_argument("--env_id", type=str, default="HalfCheetah-v3")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
     run(args)

@@ -1,7 +1,9 @@
 import gym
+import numpy as np
 import pytest
 
-from rljax.algorithm import DDPG, DQN, FQF, IQN, PPO, QRDQN, SAC, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
+from rljax.algorithm import DDPG, DQN, FQF, IQN, PPO, QRDQN, SAC, SAC_AE, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
+from rljax.env import make_dmc_env
 
 
 def _test_algorithm(env, algo):
@@ -9,7 +11,7 @@ def _test_algorithm(env, algo):
 
     # Test step() method.
     _state = algo.step(env, state)
-    assert env.observation_space.contains(_state)
+    assert env.observation_space.contains(np.array(_state))
 
     # Test select_action() method.
     action = algo.select_action(state)
@@ -193,6 +195,18 @@ def test_sac_discor():
     env = gym.make("MountainCarContinuous-v0")
     algo = SAC_DisCor(
         num_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+    )
+    _test_algorithm(env, algo)
+
+
+def test_sac_ae():
+    env = make_dmc_env("cheetah", "run", 4)
+    algo = SAC_AE(
+        num_steps=100000,
+        action_repeat=4,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
