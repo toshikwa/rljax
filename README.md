@@ -84,22 +84,22 @@ trainer.train()
 
 </details>
 
-<details>
+<!-- <details>
 <summary>Simple examples</summary>
 
 Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_continuous_easy.py)) and the continuous action environment `InvertedPendulum-v2` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_discrete_easy.py)).
 
 <img src="https://user-images.githubusercontent.com/37267851/94993592-08dbf700-05cd-11eb-8bf0-a40f8e0567d0.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94993625-4fc9ec80-05cd-11eb-8c2d-a0bf0c791086.png" title="InvertedPendulum-v2" width=400>
 
-</details>
+</details> -->
 
 <details>
 <summary>MuJoCo(Gym)</summary>
 
-I benchmarked my implementations in environments from MuJoCo's `-v3` task suites, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/train_mujoco.py)).
+I benchmarked my implementations in some environments from MuJoCo's `-v3` task suites, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/train_mujoco.py)).
 
-<img src="https://user-images.githubusercontent.com/37267851/94887999-b0b0d200-04b2-11eb-9a37-7e2b87dfa71a.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/94888002-b1e1ff00-04b2-11eb-87da-243f39d325b6.png" title="Walker2d-v3" width=400>
-
+<img src="https://user-images.githubusercontent.com/37267851/95005023-f04ff900-062d-11eb-8dfd-78a488837c93.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/95005020-eded9f00-062d-11eb-9fd9-a82346aa6c11.png" title="Walker2d-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/95005021-efb76280-062d-11eb-8bfb-249cd87066ea.png" title="Ant-v3" width=400>
 </details>
 
 

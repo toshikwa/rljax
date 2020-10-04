@@ -98,11 +98,11 @@ class SAC_Discrete(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         pi, _ = self.actor.apply(params_actor, state)
-        return jax.random.categorical(rng, pi)
+        return jax.random.categorical(key, pi)
 
     def update(self, writer=None):
         self.learning_step += 1

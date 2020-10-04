@@ -96,11 +96,11 @@ class TD3(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, state)
-        return add_noise(action, rng, self.std, -1.0, 1.0)
+        return add_noise(action, key, self.std, -1.0, 1.0)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -120,7 +120,7 @@ class TD3(OffPolicyActorCritic):
             next_state=next_state,
             weight1=weight,
             weight2=weight,
-            rng=next(self.rng),
+            key=next(self.rng),
         )
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
@@ -156,7 +156,7 @@ class TD3(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight1: np.ndarray,
         weight2: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_critic, (abs_td1, abs_td2)), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
             params_critic,
@@ -169,7 +169,7 @@ class TD3(OffPolicyActorCritic):
             next_state=next_state,
             weight1=weight1,
             weight2=weight2,
-            rng=rng,
+            key=key,
         )
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
@@ -188,11 +188,11 @@ class TD3(OffPolicyActorCritic):
         next_state: np.ndarray,
         weight1: np.ndarray,
         weight2: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Calculate next actions and add clipped noises.
         next_action = self.actor.apply(params_actor_target, next_state)
-        noise = jax.random.normal(rng, next_action.shape) * self.std_target
+        noise = jax.random.normal(key, next_action.shape) * self.std_target
         next_action = jnp.clip(next_action + jnp.clip(noise, -self.clip_noise, self.clip_noise), -1.0, 1.0)
         # Calculate target q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)

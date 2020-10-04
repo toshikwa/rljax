@@ -88,7 +88,7 @@ class SAC_DisCor(SAC):
             rm_error2=self.rm_error2,
             done=done,
             next_state=next_state,
-            rng=next(self.rng),
+            key=next(self.rng),
         )
 
         # Update critic.
@@ -105,7 +105,7 @@ class SAC_DisCor(SAC):
             next_state=next_state,
             weight1=weight1,
             weight2=weight2,
-            rng=next(self.rng),
+            key=next(self.rng),
         )
 
         # Update error model.
@@ -120,7 +120,7 @@ class SAC_DisCor(SAC):
             next_state=next_state,
             abs_td1=abs_td1,
             abs_td2=abs_td2,
-            rng=next(self.rng),
+            key=next(self.rng),
         )
 
         # Update actor.
@@ -130,7 +130,7 @@ class SAC_DisCor(SAC):
             params_critic=self.params_critic,
             log_alpha=self.log_alpha,
             state=state,
-            rng=next(self.rng),
+            key=next(self.rng),
         )
 
         # Update alpha.
@@ -162,10 +162,10 @@ class SAC_DisCor(SAC):
         params_actor: hk.Params,
         params_error_target: hk.Params,
         next_state: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Calculate actions.
-        next_action = self._explore(params_actor, rng, next_state)
+        next_action = self._explore(params_actor, key, next_state)
         # Calculate errors.
         return self.error.apply(params_error_target, next_state, next_action)
 
@@ -178,10 +178,10 @@ class SAC_DisCor(SAC):
         rm_error2: jnp.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Calculate next errors.
-        next_error1, next_error2 = self.sample_next_error(params_actor, params_error_target, next_state, rng)
+        next_error1, next_error2 = self.sample_next_error(params_actor, params_error_target, next_state, key)
         # Terms inside the exponent of importance weights.
         x1 = -(1.0 - done) * self.gamma * next_error1 / rm_error1
         x2 = -(1.0 - done) * self.gamma * next_error2 / rm_error2
@@ -203,7 +203,7 @@ class SAC_DisCor(SAC):
         next_state: np.ndarray,
         abs_td1: jnp.ndarray,
         abs_td2: jnp.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
         (loss_error, (mean_error1, mean_error2)), grad_error = jax.value_and_grad(self._loss_error, has_aux=True)(
             params_error,
@@ -215,7 +215,7 @@ class SAC_DisCor(SAC):
             next_state=next_state,
             abs_td1=abs_td1,
             abs_td2=abs_td2,
-            rng=rng,
+            key=key,
         )
         update, opt_state_error = self.opt_error(grad_error, opt_state_error)
         params_error = optix.apply_updates(params_error, update)
@@ -233,10 +233,10 @@ class SAC_DisCor(SAC):
         next_state: np.ndarray,
         abs_td1: np.ndarray,
         abs_td2: np.ndarray,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
     ) -> jnp.ndarray:
         # Calculate next errors.
-        next_error1, next_error2 = self.sample_next_error(params_actor, params_error_target, next_state, rng)
+        next_error1, next_error2 = self.sample_next_error(params_actor, params_error_target, next_state, key)
         # Calculate target errors.
         target_error1 = jax.lax.stop_gradient(abs_td1 + (1.0 - done) * self.gamma * next_error1)
         target_error2 = jax.lax.stop_gradient(abs_td2 + (1.0 - done) * self.gamma * next_error2)

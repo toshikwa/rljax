@@ -120,7 +120,7 @@ class OnPolicyActorCritic(Algorithm):
         pass
 
     @abstractmethod
-    def _explore(self, params_actor, rng, state):
+    def _explore(self, params_actor, key, state):
         pass
 
     def is_update(self):
@@ -278,7 +278,7 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         pass
 
     @abstractmethod
-    def _explore(self, params_actor, rng, state):
+    def _explore(self, params_actor, key, state):
         pass
 
 

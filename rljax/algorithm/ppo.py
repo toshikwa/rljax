@@ -89,11 +89,11 @@ class PPO(OnPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize_gaussian_with_tanh(mean, log_std, rng)
+        return reparameterize_gaussian_with_tanh(mean, log_std, key)
 
     def update(self, writer=None):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()

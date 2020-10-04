@@ -92,11 +92,11 @@ class DDPG(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        rng: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, state)
-        return add_noise(action, rng, self.std, -1.0, 1.0)
+        return add_noise(action, key, self.std, -1.0, 1.0)
 
     def update(self, writer=None):
         self.learning_step += 1
