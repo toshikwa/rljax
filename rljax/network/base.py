@@ -1,5 +1,6 @@
 import haiku as hk
 import jax.numpy as jnp
+import numpy as np
 from jax import nn
 
 
@@ -41,7 +42,7 @@ class DQNBody(hk.Module):
 
     def __call__(self, x):
         # He's initializer.
-        w_init = hk.initializers.VarianceScaling(scale=2.0, distribution="uniform")
+        w_init = hk.initializers.VarianceScaling(scale=np.square(2), distribution="uniform")
         # Floatify the image.
         x = x.astype(jnp.float32) / 255.0
         # Apply CNN.

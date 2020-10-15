@@ -6,6 +6,8 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax import nn
+from jax.tree_util import tree_flatten
 
 
 @jax.jit
@@ -28,7 +30,9 @@ def calculate_log_pi(
     """
     Calculate log probabilities of the policies, which is diagonal gaussian distributions followed by tanh transformation.
     """
-    return calculate_gaussian_log_prob(log_std, noise) - jnp.log(1 - jnp.square(action) + 1e-6).sum(axis=1, keepdims=True)
+    log_prob = calculate_gaussian_log_prob(log_std, noise)
+    log_prob -= jnp.log(nn.relu(1 - jnp.square(action)) + 1e-6).sum(axis=1, keepdims=True)
+    return log_prob
 
 
 @jax.jit
@@ -184,3 +188,9 @@ def preprocess_state(
     state = state + jax.random.uniform(key, state.shape) / bins
     state = state - 0.5
     return state
+
+
+@jax.jit
+def weight_decay(params: hk.Params) -> jnp.ndarray:
+    leaves, _ = tree_flatten(params)
+    return 0.5 * sum(jnp.vdot(x, x) for x in leaves)
