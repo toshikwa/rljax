@@ -18,7 +18,7 @@ class SAC_Discrete(OffPolicyActorCritic):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
@@ -39,7 +39,7 @@ class SAC_Discrete(OffPolicyActorCritic):
         dueling_net=False,
     ):
         super(SAC_Discrete, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,

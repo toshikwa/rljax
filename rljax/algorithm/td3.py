@@ -18,7 +18,7 @@ class TD3(OffPolicyActorCritic):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
@@ -40,7 +40,7 @@ class TD3(OffPolicyActorCritic):
         update_interval_policy=2,
     ):
         super(TD3, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,

@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, SACDecoder, SACEncoder, SACLinear, StateDependentGaussianPolicy
-from rljax.util import load_params, preprocess_state, reparameterize_gaussian_with_tanh, save_params, soft_update
+from rljax.util import load_params, preprocess_state, reparameterize_gaussian_with_tanh, save_params, soft_update, weight_decay
 
 
 class SAC_AE(OffPolicyActorCritic):
@@ -18,7 +18,7 @@ class SAC_AE(OffPolicyActorCritic):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
@@ -45,7 +45,7 @@ class SAC_AE(OffPolicyActorCritic):
     ):
         assert len(state_space.shape) == 3
         super(SAC_AE, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
@@ -387,7 +387,7 @@ class SAC_AE(OffPolicyActorCritic):
             state=state,
             key=key,
         )
-        update, opt_state_ae = self.opt_actor(grad_ae, opt_state_ae)
+        update, opt_state_ae = self.opt_ae(grad_ae, opt_state_ae)
         params_ae = optix.apply_updates(params_ae, update)
         params_ae = (params_ae["encoder"], params_ae["linear"], params_ae["decoder"])
         return opt_state_ae, params_ae, loss_ae
@@ -410,9 +410,11 @@ class SAC_AE(OffPolicyActorCritic):
         loss_reconst = jnp.square(target - reconst).mean()
         # L2 penalty of latent representations following RAE.
         loss_latent = 0.5 * jnp.square(feature).sum(axis=1).mean()
+        # Weight decay for the decoder.
+        loss_weight = weight_decay(params_ae["decoder"])
         # RAE loss is reconstruction loss plus the reglarizations.
         # (i.e. L2 penalty of latent representations + weight decay.)
-        return loss_reconst + 1e-6 * loss_latent
+        return loss_reconst + 1e-6 * loss_latent + 1e-7 * loss_weight
 
     def save_params(self, save_dir):
         super(SAC_AE, self).save_params(save_dir)

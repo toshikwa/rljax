@@ -3,40 +3,34 @@ import os
 from datetime import datetime
 
 from rljax.algorithm import CONTINUOUS_ALGORITHM
-from rljax.env import make_continuous_env
+from rljax.env.mujoco import make_metaworld_env
 from rljax.trainer import Trainer
 
 config = {
-    "ppo": {
-        "buffer_size": 500,
-        "batch_size": 500,
-        "epoch_ppo": 32,
-    },
-    "ddpg": {
-        "start_steps": 5000,
-    },
-    "td3": {
-        "start_steps": 5000,
-    },
     "sac": {
-        "start_steps": 5000,
+        "start_steps": 1000,
+        "units_critic": [256, 256, 256],
+        "units_actor": [256, 256, 256],
     },
     "sac_discor": {
-        "start_steps": 5000,
+        "start_steps": 1000,
+        "units_critic": [256, 256, 256],
+        "units_actor": [256, 256, 256],
+        "units_error": [256, 256, 256, 256],
     },
 }
 
 
 def run(args):
-    env = make_continuous_env(args.env_id)
-    env_test = make_continuous_env(args.env_id)
+    env = make_metaworld_env(args.env_id, seed=args.seed)
+    env_test = make_metaworld_env(args.env_id, seed=args.seed)
 
     algo = CONTINUOUS_ALGORITHM[args.algo](
         num_agent_steps=args.num_agent_steps,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=args.seed,
-        **config[args.algo],
+        **config[args.algo]
     )
 
     time = datetime.now().strftime("%Y%m%d-%H%M")
@@ -57,9 +51,9 @@ def run(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--algo", type=str, default="sac")
-    p.add_argument("--num_agent_steps", type=int, default=50000)
-    p.add_argument("--eval_interval", type=int, default=1000)
-    p.add_argument("--env_id", type=str, default="InvertedPendulum-v2")
+    p.add_argument("--num_agent_steps", type=int, default=2 * 10 ** 6)
+    p.add_argument("--eval_interval", type=int, default=10000)
+    p.add_argument("--env_id", type=str, default="hammer-v1")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
     run(args)

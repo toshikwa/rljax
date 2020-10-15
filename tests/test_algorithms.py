@@ -34,7 +34,7 @@ def _test_algorithm(env, algo):
 def test_dqn(nstep, use_per, dueling_net, double_q):
     env = gym.make("CartPole-v0")
     algo = DQN(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -56,7 +56,7 @@ def test_dqn(nstep, use_per, dueling_net, double_q):
 def test_qrdqn(use_per, dueling_net, double_q):
     env = gym.make("CartPole-v0")
     algo = QRDQN(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -77,7 +77,7 @@ def test_qrdqn(use_per, dueling_net, double_q):
 def test_iqn(use_per, dueling_net, double_q):
     env = gym.make("CartPole-v0")
     algo = IQN(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -98,7 +98,7 @@ def test_iqn(use_per, dueling_net, double_q):
 def test_fqf(use_per, dueling_net, double_q):
     env = gym.make("CartPole-v0")
     algo = FQF(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -119,7 +119,7 @@ def test_fqf(use_per, dueling_net, double_q):
 def test_sac_discrete(use_per, dueling_net):
     env = gym.make("CartPole-v0")
     algo = SAC_Discrete(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -132,7 +132,7 @@ def test_sac_discrete(use_per, dueling_net):
 def test_dqn_discor():
     env = gym.make("CartPole-v0")
     algo = DQN_DisCor(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -143,7 +143,7 @@ def test_dqn_discor():
 def test_ppo():
     env = gym.make("MountainCarContinuous-v0")
     algo = PPO(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -155,7 +155,7 @@ def test_ppo():
 def test_ddpg(use_per):
     env = gym.make("MountainCarContinuous-v0")
     algo = DDPG(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -168,7 +168,7 @@ def test_ddpg(use_per):
 def test_td3(use_per):
     env = gym.make("MountainCarContinuous-v0")
     algo = TD3(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -181,7 +181,7 @@ def test_td3(use_per):
 def test_sac(use_per):
     env = gym.make("MountainCarContinuous-v0")
     algo = SAC(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
@@ -193,7 +193,7 @@ def test_sac(use_per):
 def test_sac_discor():
     env = gym.make("MountainCarContinuous-v0")
     algo = SAC_DisCor(
-        num_steps=100000,
+        num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,

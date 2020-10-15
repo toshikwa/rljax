@@ -18,7 +18,7 @@ class QRDQN(QLearning):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
@@ -42,7 +42,7 @@ class QRDQN(QLearning):
     ):
         assert loss_type in ["l2", "huber"]
         super(QRDQN, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,

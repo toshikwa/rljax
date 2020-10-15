@@ -49,7 +49,7 @@ def run(args):
     env_test = make_atari_env(args.env_id, episode_life=False, clip_rewards=False)
 
     algo = DISCRETE_ALGORITHM[args.algo](
-        num_steps=args.num_steps,
+        num_agent_steps=args.num_agent_steps,
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=args.seed,
@@ -63,7 +63,7 @@ def run(args):
         env_test=env_test,
         algo=algo,
         log_dir=log_dir,
-        num_steps=args.num_steps,
+        num_agent_steps=args.num_agent_steps,
         action_repeat=4,
         eval_interval=args.eval_interval,
         seed=args.seed,
@@ -74,7 +74,7 @@ def run(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--algo", type=str, default="dqn")
-    p.add_argument("--num_steps", type=int, default=10 ** 7)
+    p.add_argument("--num_agent_steps", type=int, default=10 ** 7)
     p.add_argument("--eval_interval", type=int, default=50000)
     p.add_argument("--env_id", type=str, default="MsPacmanNoFrameskip-v4")
     p.add_argument("--seed", type=int, default=0)
