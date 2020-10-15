@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, SACDecoder, SACEncoder, SACLinear, StateDependentGaussianPolicy
-from rljax.util import load_params, preprocess_state, reparameterize_gaussian_with_tanh, save_params, soft_update, weight_decay
+from rljax.util import load_params, preprocess_state, reparameterize_gaussian_and_tanh, save_params, soft_update, weight_decay
 
 
 class SAC_AE(OffPolicyActorCritic):
@@ -169,7 +169,7 @@ class SAC_AE(OffPolicyActorCritic):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         last_conv = self.encoder.apply(params_encoder, state)
         mean, log_std = self.actor.apply(params_actor, last_conv)
-        return reparameterize_gaussian_with_tanh(mean, log_std, key)[0]
+        return reparameterize_gaussian_and_tanh(mean, log_std, key, False)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -294,7 +294,7 @@ class SAC_AE(OffPolicyActorCritic):
         # Sample next actions.
         next_last_conv = self.encoder.apply(params_critic["encoder"], next_state)
         next_mean, next_log_std = self.actor.apply(params_actor, next_last_conv)
-        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, key)
+        next_action, next_log_pi = reparameterize_gaussian_and_tanh(next_mean, next_log_std, key, True)
         # Calculate target soft q values (clipped double q) with target critic.
         next_last_conv = self.encoder.apply(params_critic_target["encoder"], next_state)
         next_feature = self.linear.apply(params_critic_target["linear"], next_last_conv)
@@ -344,7 +344,7 @@ class SAC_AE(OffPolicyActorCritic):
         # Sample actions.
         last_conv = jax.lax.stop_gradient(self.encoder.apply(params_critic["encoder"], state))
         mean, log_std = self.actor.apply(params_actor, last_conv)
-        action, log_pi = reparameterize_gaussian_with_tanh(mean, log_std, key)
+        action, log_pi = reparameterize_gaussian_and_tanh(mean, log_std, key, True)
         # Calculate soft q values with online critic.
         feature = self.linear.apply(params_critic["linear"], last_conv)
         q1, q2 = self.critic.apply(params_critic["critic"], feature, action)

@@ -11,7 +11,7 @@ from jax.tree_util import tree_flatten
 
 
 @jax.jit
-def calculate_gaussian_log_prob(
+def gaussian_log_prob(
     log_std: jnp.ndarray,
     noise: jnp.ndarray,
 ) -> jnp.ndarray:
@@ -22,7 +22,7 @@ def calculate_gaussian_log_prob(
 
 
 @jax.jit
-def calculate_log_pi(
+def gaussian_and_tanh_log_prob(
     log_std: jnp.ndarray,
     noise: jnp.ndarray,
     action: jnp.ndarray,
@@ -30,13 +30,13 @@ def calculate_log_pi(
     """
     Calculate log probabilities of the policies, which is diagonal gaussian distributions followed by tanh transformation.
     """
-    log_prob = calculate_gaussian_log_prob(log_std, noise)
+    log_prob = gaussian_log_prob(log_std, noise)
     log_prob -= jnp.log(nn.relu(1 - jnp.square(action)) + 1e-6).sum(axis=1, keepdims=True)
     return log_prob
 
 
 @jax.jit
-def evaluate_lop_pi(
+def evaluate_gaussian_and_tanh_log_prob(
     mean: jnp.ndarray,
     log_std: jnp.ndarray,
     action: jnp.ndarray,
@@ -45,14 +45,34 @@ def evaluate_lop_pi(
     Calculate log probabilities of the policies given sampled actions.
     """
     noise = (jnp.arctanh(action) - mean) / (jnp.exp(log_std) + 1e-8)
-    return calculate_log_pi(log_std, noise, action)
+    return gaussian_and_tanh_log_prob(log_std, noise, action)
 
 
-@jax.jit
-def reparameterize_gaussian_with_tanh(
+@partial(jax.jit, static_argnums=3)
+def reparameterize_gaussian(
     mean: jnp.ndarray,
     log_std: jnp.ndarray,
     key: jnp.ndarray,
+    return_log_pi: bool = True,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Calculate stochastic actions and log probabilities.
+    """
+    std = jnp.exp(log_std)
+    noise = jax.random.normal(key, std.shape)
+    action = mean + noise * std
+    if return_log_pi:
+        return action, gaussian_log_prob(log_std, noise)
+    else:
+        return action
+
+
+@partial(jax.jit, static_argnums=3)
+def reparameterize_gaussian_and_tanh(
+    mean: jnp.ndarray,
+    log_std: jnp.ndarray,
+    key: jnp.ndarray,
+    return_log_pi: bool = True,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Calculate stochastic actions and log probabilities.
@@ -60,7 +80,10 @@ def reparameterize_gaussian_with_tanh(
     std = jnp.exp(log_std)
     noise = jax.random.normal(key, std.shape)
     action = jnp.tanh(mean + noise * std)
-    return action, calculate_log_pi(log_std, noise, action)
+    if return_log_pi:
+        return action, gaussian_and_tanh_log_prob(log_std, noise, action)
+    else:
+        return action
 
 
 @jax.jit
