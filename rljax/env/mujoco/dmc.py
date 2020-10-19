@@ -3,9 +3,9 @@
 import gym
 import numpy as np
 from dm_control import suite
-from dm_env import specs
 from gym import core, spaces
 
+from dm_env import specs
 from rljax.env.atari import FrameStack
 
 gym.logger.set_level(40)
@@ -196,7 +196,7 @@ class DMCWrapper(core.Env):
         self._observation_space.seed(seed)
 
     def step(self, action):
-        assert self._norm_action_space.contains(action)
+        assert self._norm_action_space.contains(action), f"Invalid action: {action}"
         action = self._convert_action(action)
         assert self._true_action_space.contains(action)
         reward = 0

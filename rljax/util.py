@@ -31,7 +31,7 @@ def gaussian_and_tanh_log_prob(
     Calculate log probabilities of the policies, which is diagonal gaussian distributions followed by tanh transformation.
     """
     log_prob = gaussian_log_prob(log_std, noise)
-    log_prob -= jnp.log(nn.relu(1 - jnp.square(action)) + 1e-6).sum(axis=1, keepdims=True)
+    log_prob -= jnp.log(nn.relu(1.0 - jnp.square(action)) + 1e-6).sum(axis=1, keepdims=True)
     return log_prob
 
 

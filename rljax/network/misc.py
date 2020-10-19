@@ -16,7 +16,7 @@ class CumProbNetwork(hk.Module):
         self.num_quantiles = num_quantiles
 
     def __call__(self, x):
-        w_init = hk.initializers.VarianceScaling(scale=1.0 / np.sqrt(3.0), distribution="uniform")
+        w_init = hk.initializers.Orthogonal(scale=1.0 / np.sqrt(3.0))
         p = nn.softmax(hk.Linear(self.num_quantiles, w_init=w_init)(x))
         cum_p = jnp.concatenate([jnp.zeros((p.shape[0], 1)), jnp.cumsum(p, axis=1)], axis=1)
         cum_p_prime = (cum_p[:, 1:] + cum_p[:, :-1]) / 2.0
