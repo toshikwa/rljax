@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 from rljax.algorithm import CONTINUOUS_ALGORITHM
-from rljax.env.mujoco import make_metaworld_env
+from rljax.env.mujoco.metaworld import make_metaworld_env
 from rljax.trainer import Trainer
 
 config = {

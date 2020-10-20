@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 from rljax.algorithm import SAC_AE
-from rljax.env.mujoco import make_dmc_env
+from rljax.env.mujoco.dmc import make_dmc_env
 from rljax.trainer import Trainer
 
 

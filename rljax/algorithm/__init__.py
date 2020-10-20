@@ -9,6 +9,7 @@ from .sac import SAC
 from .sac_ae import SAC_AE
 from .sac_discor import SAC_DisCor
 from .sac_discrete import SAC_Discrete
+from .slac import SLAC
 from .td3 import TD3
 
 CONTINUOUS_ALGORITHM = {
@@ -17,6 +18,7 @@ CONTINUOUS_ALGORITHM = {
     "td3": TD3,
     "sac": SAC,
     "sac_ae": SAC_AE,
+    "slac": SLAC,
     "sac_discor": SAC_DisCor,
 }
 DISCRETE_ALGORITHM = {

@@ -217,3 +217,10 @@ def preprocess_state(
 def weight_decay(params: hk.Params) -> jnp.ndarray:
     leaves, _ = tree_flatten(params)
     return 0.5 * sum(jnp.vdot(x, x) for x in leaves)
+
+
+@jax.jit
+def calculate_kl_divergence(p_mean, p_std, q_mean, q_std):
+    var_ratio = jnp.square(p_std / q_std)
+    t1 = jnp.square((p_mean - q_mean) / q_std)
+    return 0.5 * (var_ratio + t1 - 1 - jnp.log(var_ratio))

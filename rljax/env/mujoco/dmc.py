@@ -3,9 +3,9 @@
 import gym
 import numpy as np
 from dm_control import suite
+from dm_env import specs
 from gym import core, spaces
 
-from dm_env import specs
 from rljax.env.atari import FrameStack
 
 gym.logger.set_level(40)
@@ -22,8 +22,10 @@ def make_dmc_env(domain_name, task_name, action_repeat, n_frames=3, image_size=8
         frame_skip=action_repeat,
         channels_first=False,
     )
-    env = FrameStack(env, n_frames=n_frames)
-    setattr(env, "_max_episode_steps", env.env._max_episode_steps)
+    if n_frames != 1:
+        env = FrameStack(env, n_frames=n_frames)
+    if not hasattr(env, "_max_episode_steps"):
+        setattr(env, "_max_episode_steps", env.env._max_episode_steps)
     return env
 
 
