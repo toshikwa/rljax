@@ -11,6 +11,7 @@ class MLP(hk.Module):
         hidden_units,
         hidden_activation=nn.relu,
         output_activation=None,
+        hidden_scale=1.0,
         output_scale=1.0,
     ):
         super(MLP, self).__init__()
@@ -18,13 +19,12 @@ class MLP(hk.Module):
         self.hidden_units = hidden_units
         self.hidden_activation = hidden_activation
         self.output_activation = output_activation
-        self.output_kwargs = {}
-        if output_scale != 1.0:
-            self.output_kwargs["w_init"] = hk.initializers.VarianceScaling(scale=output_scale)
+        self.hidden_kwargs = {"w_init": hk.initializers.Orthogonal(scale=hidden_scale)}
+        self.output_kwargs = {"w_init": hk.initializers.Orthogonal(scale=output_scale)}
 
     def __call__(self, x):
         for unit in self.hidden_units:
-            x = hk.Linear(unit)(x)
+            x = hk.Linear(unit, **self.hidden_kwargs)(x)
             x = self.hidden_activation(x)
         x = hk.Linear(self.output_dim, **self.output_kwargs)(x)
         if self.output_activation is not None:
@@ -42,7 +42,7 @@ class DQNBody(hk.Module):
 
     def __call__(self, x):
         # He's initializer.
-        w_init = hk.initializers.VarianceScaling(scale=np.square(2), distribution="uniform")
+        w_init = hk.initializers.Orthogonal(scale=np.sqrt(2), distribution="uniform")
         # Floatify the image.
         x = x.astype(jnp.float32) / 255.0
         # Apply CNN.

@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
-from rljax.util import load_params, reparameterize_gaussian_with_tanh, save_params
+from rljax.util import load_params, reparameterize_gaussian_and_tanh, save_params
 
 
 class SAC(OffPolicyActorCritic):
@@ -98,7 +98,7 @@ class SAC(OffPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize_gaussian_with_tanh(mean, log_std, key)[0]
+        return reparameterize_gaussian_and_tanh(mean, log_std, key, False)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -207,7 +207,7 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         # Sample next actions.
         next_mean, next_log_std = self.actor.apply(params_actor, next_state)
-        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, key)
+        next_action, next_log_pi = reparameterize_gaussian_and_tanh(next_mean, next_log_std, key, True)
         # Calculate target soft q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
@@ -252,7 +252,7 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         # Sample actions.
         mean, log_std = self.actor.apply(params_actor, state)
-        action, log_pi = reparameterize_gaussian_with_tanh(mean, log_std, key)
+        action, log_pi = reparameterize_gaussian_and_tanh(mean, log_std, key, True)
         # Calculate soft q values with online critic.
         q1, q2 = self.critic.apply(params_critic, state, action)
         mean_log_pi = log_pi.mean()

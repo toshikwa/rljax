@@ -10,7 +10,13 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
-from rljax.util import clip_gradient, evaluate_lop_pi, load_params, reparameterize_gaussian_with_tanh, save_params
+from rljax.util import (
+    clip_gradient,
+    evaluate_gaussian_and_tanh_log_prob,
+    load_params,
+    reparameterize_gaussian_and_tanh,
+    save_params,
+)
 
 
 class PPO(OnPolicyActorCritic):
@@ -93,7 +99,7 @@ class PPO(OnPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize_gaussian_with_tanh(mean, log_std, key)
+        return reparameterize_gaussian_and_tanh(mean, log_std, key, True)
 
     def update(self, writer=None):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()
@@ -195,7 +201,7 @@ class PPO(OnPolicyActorCritic):
     ) -> jnp.ndarray:
         # Calculate log(\pi) at current policy.
         mean, log_std = self.actor.apply(params_actor, state)
-        log_pi = evaluate_lop_pi(mean, log_std, action)
+        log_pi = evaluate_gaussian_and_tanh_log_prob(mean, log_std, action)
         # Calculate importance ratio.
         ratio = jnp.exp(log_pi - log_pi_old)
         loss_actor1 = -ratio * gae
