@@ -220,7 +220,12 @@ def weight_decay(params: hk.Params) -> jnp.ndarray:
 
 
 @jax.jit
-def calculate_kl_divergence(p_mean, p_std, q_mean, q_std):
+def calculate_kl_divergence(
+    p_mean: np.ndarray,
+    p_std: np.ndarray,
+    q_mean: np.ndarray,
+    q_std: np.ndarray,
+) -> jnp.ndarray:
     var_ratio = jnp.square(p_std / q_std)
     t1 = jnp.square((p_mean - q_mean) / q_std)
     return 0.5 * (var_ratio + t1 - 1 - jnp.log(var_ratio))

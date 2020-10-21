@@ -1,6 +1,7 @@
 from functools import partial
 
 import haiku as hk
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import nn
@@ -114,7 +115,7 @@ class ConstantGaussian(hk.Module):
     def __call__(self, x):
         mean = jnp.zeros((x.shape[0], self.output_dim))
         std = jnp.ones((x.shape[0], self.output_dim)) * self.std
-        return mean, std
+        return jax.lax.stop_gradient(mean), jax.lax.stop_gradient(std)
 
 
 class Gaussian(hk.Module):
@@ -182,10 +183,9 @@ class SLACDecoder(hk.Module):
     Decoder for SLAC.
     """
 
-    def __init__(self, state_space, input_dim=288, std=1.0, negative_slope=0.2):
+    def __init__(self, state_space, std=1.0, negative_slope=0.2):
         super().__init__()
         self.state_space = state_space
-        self.input_dim = input_dim
         self.std = std
         self.negative_slope = negative_slope
 
@@ -223,4 +223,4 @@ class SLACDecoder(hk.Module):
 
         _, W, H, C = x.shape
         x = x.reshape([B, S, W, H, C])
-        return x, jnp.ones_like(x) * self.std
+        return x, jax.lax.stop_gradient(jnp.ones_like(x) * self.std)

@@ -1,4 +1,3 @@
-import math
 import os
 from functools import partial
 from typing import Any, List, Tuple
@@ -69,8 +68,8 @@ class SLAC(Algorithm):
 
         fake_state_ = jnp.empty((1, num_sequences, *state_space.shape), dtype=jnp.uint8)
         fake_action_ = jnp.empty((1, num_sequences, *action_space.shape))
-        fake_feature_action = jnp.empty((1, num_sequences * feature_dim + (num_sequences - 1) * action_space.shape[0]))
         fake_feature = jnp.empty((1, feature_dim))
+        fake_feature_action = jnp.empty((1, num_sequences * feature_dim + (num_sequences - 1) * action_space.shape[0]))
         fake_z = jnp.empty((1, z1_dim + z2_dim))
         fake_z1 = jnp.empty((1, z1_dim))
         fake_z2 = jnp.empty((1, z2_dim))
@@ -79,25 +78,25 @@ class SLAC(Algorithm):
         fake_z2_ = jnp.empty((1, num_sequences, z2_dim))
 
         def z1_prior_fn(z2, a):
-            return Gaussian(z1_dim, units_latent)(jnp.concatenate([z2, a], axis=1))
+            return Gaussian(output_dim=z1_dim, hidden_units=units_latent)(jnp.concatenate([z2, a], axis=1))
 
         def z1_post_fn(f, z2, a):
-            return Gaussian(z1_dim, units_latent)(jnp.concatenate([f, z2, a], axis=1))
+            return Gaussian(output_dim=z1_dim, hidden_units=units_latent)(jnp.concatenate([f, z2, a], axis=1))
 
         def z2_fn(z1, z2, a):
-            return Gaussian(z2_dim, units_latent)(jnp.concatenate([z1, z2, a], axis=1))
+            return Gaussian(output_dim=z2_dim, hidden_units=units_latent)(jnp.concatenate([z1, z2, a], axis=1))
 
         def reward_fn(z_, a_, n_z_):
             x = jnp.concatenate([z_, a_, n_z_], axis=-1)
-            B, S, D = x.shape
-            mean, std = Gaussian(1, units_latent)(x.reshape([B * S, D]))
+            B, S, X = x.shape
+            mean, std = Gaussian(output_dim=1, hidden_units=units_latent)(x.reshape([B * S, X]))
             return mean.reshape([B, S, 1]), std.reshape([B, S, 1])
 
         def encoder_fn(x):
-            return SLACEncoder(feature_dim)(x)
+            return SLACEncoder(output_dim=feature_dim)(x)
 
         def decoder_fn(z1_, z2_):
-            return SLACDecoder(state_space, z1_dim + z2_dim, np.sqrt(0.1))(jnp.concatenate([z1_, z2_], axis=-1))
+            return SLACDecoder(state_space=state_space, std=np.sqrt(0.1))(jnp.concatenate([z1_, z2_], axis=-1))
 
         # p(z1(0)) = N(0, I)
         self.z1_prior_init = hk.without_apply_rng(hk.transform(lambda x: ConstantGaussian(z1_dim, 1.0)(x)))
@@ -216,10 +215,6 @@ class SLAC(Algorithm):
 
         return None
 
-    def _preprocess(self, params_encoder, state, action):
-        feature = self.encoder.apply(params_encoder, state).reshape([1, -1])
-        return jnp.concatenate([feature, action], axis=1)
-
     def select_action(self, input):
         feature_action = self._preprocess(self.params_latent["encoder"], input.state, input.action)
         action = self._select_action(self.params_actor, feature_action)
@@ -229,6 +224,16 @@ class SLAC(Algorithm):
         feature_action = self._preprocess(self.params_latent["encoder"], input.state, input.action)
         action = self._explore(self.params_actor, next(self.rng), feature_action)
         return np.array(action[0])
+
+    @partial(jax.jit, static_argnums=0)
+    def _preprocess(
+        self,
+        params_encoder: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+    ) -> jnp.ndarray:
+        feature = self.encoder.apply(params_encoder, state).reshape([1, -1])
+        return jnp.concatenate([feature, action], axis=1)
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(
@@ -249,26 +254,14 @@ class SLAC(Algorithm):
         mean, log_std = self.actor.apply(params_actor, feature_action)
         return reparameterize_gaussian_and_tanh(mean, log_std, key, False)
 
-    def update_latent(self, writer=None):
-        self.learning_step_latent += 1
-        state_, action_, reward_, done_ = self.buffer.sample_latent(self.batch_size_latent)
-
-        self.opt_state_latent, self.params_latent, loss_latent = self._update_latent(
-            opt_state_latent=self.opt_state_latent,
-            params_latent=self.params_latent,
-            state_=state_,
-            action_=action_,
-            reward_=reward_,
-            done_=done_,
-            keys1=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
-            keys2=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
-        )
-
-        if writer and self.learning_step_latent % 1000 == 0:
-            writer.add_scalar("loss/latent", loss_latent, self.learning_step_latent)
-
     @partial(jax.jit, static_argnums=0)
-    def get_batch(self, params_latent, state_, action_, keys):
+    def get_latent_batch(
+        self,
+        params_latent: hk.Params,
+        state_: np.ndarray,
+        action_: np.ndarray,
+        keys: List[np.ndarray],
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         N = state_.shape[0]
         # feature(1:t+1)
         feature_ = self.encoder.apply(params_latent["encoder"], state_)
@@ -287,7 +280,7 @@ class SLAC(Algorithm):
     def update_sac(self, writer=None):
         self.learning_step_sac += 1
         state_, action_, reward, done = self.buffer.sample_sac(self.batch_size_sac)
-        z, next_z, action, feature_action, next_feature_action = self.get_batch(
+        z, next_z, action, feature_action, next_feature_action = self.get_latent_batch(
             params_latent=self.params_latent,
             state_=state_,
             action_=action_,
@@ -335,6 +328,24 @@ class SLAC(Algorithm):
             writer.add_scalar("loss/alpha", loss_alpha, self.learning_step_sac)
             writer.add_scalar("stat/alpha", jnp.exp(self.log_alpha), self.learning_step_sac)
             writer.add_scalar("stat/entropy", -mean_log_pi, self.learning_step_sac)
+
+    def update_latent(self, writer=None):
+        self.learning_step_latent += 1
+        state_, action_, reward_, done = self.buffer.sample_latent(self.batch_size_latent)
+
+        self.opt_state_latent, self.params_latent, loss_latent = self._update_latent(
+            opt_state_latent=self.opt_state_latent,
+            params_latent=self.params_latent,
+            state_=state_,
+            action_=action_,
+            reward_=reward_,
+            done=done,
+            keys1=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
+            keys2=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
+        )
+
+        if writer and self.learning_step_latent % 1000 == 0:
+            writer.add_scalar("loss/latent", loss_latent, self.learning_step_latent)
 
     @partial(jax.jit, static_argnums=0)
     def _update_critic(
@@ -469,7 +480,7 @@ class SLAC(Algorithm):
         state_: np.ndarray,
         action_: np.ndarray,
         reward_: np.ndarray,
-        done_: np.ndarray,
+        done: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[Any, hk.Params, jnp.ndarray]:
@@ -478,7 +489,7 @@ class SLAC(Algorithm):
             state_=state_,
             action_=action_,
             reward_=reward_,
-            done_=done_,
+            done=done,
             keys1=keys1,
             keys2=keys2,
         )
@@ -493,7 +504,7 @@ class SLAC(Algorithm):
         state_: np.ndarray,
         action_: np.ndarray,
         reward_: np.ndarray,
-        done_: np.ndarray,
+        done: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -510,17 +521,17 @@ class SLAC(Algorithm):
         # Prediction loss of images.
         state_mean_, state_std_ = self.decoder.apply(params_latent["decoder"], z1_, z2_)
         state_noise_ = (state_ - state_mean_) / (state_std_ + 1e-8)
-        log_likelihood_ = (-0.5 * jnp.square(state_noise_) - jnp.log(state_std_)) - 0.5 * jnp.log(2 * math.pi)
+        log_likelihood_ = 0.5 * (jnp.square(state_noise_) - 2 * jnp.log(state_std_))
         loss_image = -log_likelihood_.mean(axis=0).sum()
 
         # Prediction loss of rewards.
         z_ = jnp.concatenate([z1_, z2_], axis=-1)
-        r_mean_, r_std_ = self.reward.apply(params_latent["reward"], z_[:, :-1], action_, z_[:, 1:])
-        r_noise_ = (reward_ - r_mean_) / (r_std_ + 1e-8)
-        log_likelihood_r_ = (-0.5 * jnp.square(r_noise_) - jnp.log(r_std_)) - 0.5 * jnp.log(2 * math.pi)
-        loss_r = -(log_likelihood_r_ * (1 - done_)).mean(axis=0).sum()
+        reward_mean_, reward_std_ = self.reward.apply(params_latent["reward"], z_[:, :-1], action_, z_[:, 1:])
+        reward_noise_ = (reward_ - reward_mean_) / (reward_std_ + 1e-8)
+        log_likelihood_reward_ = 0.5 * (jnp.square(reward_noise_) - 2 * jnp.log(reward_std_))
+        loss_reward = -(log_likelihood_reward_.sum(axis=1) * (1 - done)).mean(axis=0).sum()
 
-        return loss_kld + loss_image + loss_r
+        return loss_kld + loss_image + loss_reward
 
     @partial(jax.jit, static_argnums=0)
     def sample_prior(
@@ -584,10 +595,10 @@ class SLAC(Algorithm):
 
         for t in range(1, action_.shape[1] + 1):
             # q(z1(t+1) | feat(t+1), z2(t), a(t))
-            z1_mean, z1_std = self.z1_post.apply(params_latent["z1_post"], feature_[:, t], z2_[t - 1], action_[:, t - 1])
+            z1_mean, z1_std = self.z1_post.apply(params_latent["z1_post"], feature_[:, t], z2, action_[:, t - 1])
             z1 = z1_mean + jax.random.normal(keys[2 * t], z1_std.shape) * z1_std
             # q(z2(t+1) | z1(t+1), z2(t), a(t))
-            z2_mean, z2_std = self.z2.apply(params_latent["z2"], z1, z2_[t - 1], action_[:, t - 1])
+            z2_mean, z2_std = self.z2.apply(params_latent["z2"], z1, z2, action_[:, t - 1])
             z2 = z2_mean + jax.random.normal(keys[2 * t + 1], z2_std.shape) * z2_std
 
             z1_mean_.append(z1_mean)

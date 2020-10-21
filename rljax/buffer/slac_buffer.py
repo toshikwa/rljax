@@ -30,38 +30,35 @@ class SequenceBuffer:
 
     def reset(self):
         self._reset_episode = False
-        self.state = deque(maxlen=self.num_sequences + 1)
-        self.action = deque(maxlen=self.num_sequences)
-        self.reward = deque(maxlen=self.num_sequences)
-        self.done = deque(maxlen=self.num_sequences)
+        self.state_ = deque(maxlen=self.num_sequences + 1)
+        self.action_ = deque(maxlen=self.num_sequences)
+        self.reward_ = deque(maxlen=self.num_sequences)
 
     def reset_episode(self, state):
         assert not self._reset_episode
         self._reset_episode = True
-        self.state.append(state)
+        self.state_.append(state)
 
-    def append(self, action, reward, done, next_state):
+    def append(self, action, reward, next_state):
         assert self._reset_episode
-        self.action.append(action)
-        self.reward.append([reward])
-        self.done.append([done])
-        self.state.append(next_state)
+        self.action_.append(action)
+        self.reward_.append([reward])
+        self.state_.append(next_state)
 
     def get(self):
-        state = LazyFrames(self.state)
-        action = np.array(self.action, dtype=np.float32)
-        reward = np.array(self.reward, dtype=np.float32)
-        done = np.array(self.done, dtype=np.float32)
-        return state, action, reward, done
+        state_ = LazyFrames(self.state_)
+        action_ = np.array(self.action_, dtype=np.float32)
+        reward_ = np.array(self.reward_, dtype=np.float32)
+        return state_, action_, reward_
 
     def is_empty(self):
-        return len(self.reward) == 0
+        return len(self.reward_) == 0
 
     def is_full(self):
-        return len(self.reward) == self.num_sequences
+        return len(self.reward_) == self.num_sequences
 
     def __len__(self):
-        return len(self.reward)
+        return len(self.reward_)
 
 
 class SLACReplayBuffer:
@@ -87,19 +84,19 @@ class SLACReplayBuffer:
 
         if self.use_image:
             # Store images as a list of LazyFrames, which uses 4 times less memory.
-            self.state = [None] * buffer_size
+            self.state_ = [None] * buffer_size
         else:
-            self.state = np.empty((buffer_size, num_sequences + 1, *state_space.shape), dtype=np.float32)
+            self.state_ = np.empty((buffer_size, num_sequences + 1, *state_space.shape), dtype=np.float32)
 
         if type(action_space) == Box:
-            self.action = np.empty((buffer_size, num_sequences, *action_space.shape), dtype=np.float32)
+            self.action_ = np.empty((buffer_size, num_sequences, *action_space.shape), dtype=np.float32)
         elif type(action_space) == Discrete:
-            self.action = np.empty((buffer_size, num_sequences, 1), dtype=np.int32)
+            self.action_ = np.empty((buffer_size, num_sequences, 1), dtype=np.int32)
         else:
             NotImplementedError
 
-        self.reward = np.empty((buffer_size, num_sequences, 1), dtype=np.float32)
-        self.done = np.empty((buffer_size, num_sequences, 1), dtype=np.float32)
+        self.reward_ = np.empty((buffer_size, num_sequences, 1), dtype=np.float32)
+        self.done = np.empty((buffer_size, 1), dtype=np.float32)
 
         # Buffer to store a sequence of trajectories.
         self.seq_buffer = SequenceBuffer(num_sequences)
@@ -111,20 +108,20 @@ class SLACReplayBuffer:
         self.seq_buffer.reset_episode(state)
 
     def append(self, action, reward, done, next_state, episode_done=None):
-        self.seq_buffer.append(action, reward, done, next_state)
+        self.seq_buffer.append(action, reward, next_state)
 
         if self.seq_buffer.is_full():
-            state, action, reward, done = self.seq_buffer.get()
-            self._append(state, action, reward, done)
+            state_, action_, reward_ = self.seq_buffer.get()
+            self._append(state_, action_, reward_, done)
 
         if episode_done:
             self.seq_buffer.reset()
 
-    def _append(self, state, action, reward, done):
-        self.state[self._p] = state
-        self.action[self._p] = action
-        self.reward[self._p] = reward
-        self.done[self._p] = done
+    def _append(self, state_, action_, reward_, done):
+        self.state_[self._p] = state_
+        self.action_[self._p] = action_
+        self.reward_[self._p] = reward_
+        self.done[self._p] = float(done)
 
         self._p = (self._p + 1) % self.buffer_size
         self._n = min(self._n + 1, self.buffer_size)
@@ -134,17 +131,17 @@ class SLACReplayBuffer:
 
     def _sample_state(self, idxes):
         if self.use_image:
-            state = np.empty((len(idxes), self.num_sequences + 1, *self.state_shape), dtype=np.uint8)
+            state_ = np.empty((len(idxes), self.num_sequences + 1, *self.state_shape), dtype=np.uint8)
             for i, idx in enumerate(idxes):
-                state[i, ...] = self.state[idx]
+                state_[i, ...] = self.state_[idx]
         else:
-            state = self.state[idxes]
-        return state
+            state_ = self.state_[idxes]
+        return state_
 
     def sample_latent(self, batch_size):
         idxes = self._sample_idx(batch_size)
-        return (self._sample_state(idxes), self.action[idxes], self.reward[idxes], self.done[idxes])
+        return (self._sample_state(idxes), self.action_[idxes], self.reward_[idxes], self.done[idxes])
 
     def sample_sac(self, batch_size):
         idxes = self._sample_idx(batch_size)
-        return (self._sample_state(idxes), self.action[idxes], self.reward[idxes, -1], self.done[idxes, -1])
+        return (self._sample_state(idxes), self.action_[idxes], self.reward_[idxes, -1], self.done[idxes])
