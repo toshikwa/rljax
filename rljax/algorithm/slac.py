@@ -331,7 +331,7 @@ class SLAC(Algorithm):
 
     def update_latent(self, writer=None):
         self.learning_step_latent += 1
-        state_, action_, reward_, done = self.buffer.sample_latent(self.batch_size_latent)
+        state_, action_, reward_, done_ = self.buffer.sample_latent(self.batch_size_latent)
 
         self.opt_state_latent, self.params_latent, loss_latent = self._update_latent(
             opt_state_latent=self.opt_state_latent,
@@ -339,7 +339,7 @@ class SLAC(Algorithm):
             state_=state_,
             action_=action_,
             reward_=reward_,
-            done=done,
+            done_=done_,
             keys1=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
             keys2=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
         )
@@ -480,7 +480,7 @@ class SLAC(Algorithm):
         state_: np.ndarray,
         action_: np.ndarray,
         reward_: np.ndarray,
-        done: np.ndarray,
+        done_: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[Any, hk.Params, jnp.ndarray]:
@@ -489,7 +489,7 @@ class SLAC(Algorithm):
             state_=state_,
             action_=action_,
             reward_=reward_,
-            done=done,
+            done_=done_,
             keys1=keys1,
             keys2=keys2,
         )
@@ -504,7 +504,7 @@ class SLAC(Algorithm):
         state_: np.ndarray,
         action_: np.ndarray,
         reward_: np.ndarray,
-        done: np.ndarray,
+        done_: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -529,7 +529,7 @@ class SLAC(Algorithm):
         reward_mean_, reward_std_ = self.reward.apply(params_latent["reward"], z_[:, :-1], action_, z_[:, 1:])
         reward_noise_ = (reward_ - reward_mean_) / (reward_std_ + 1e-8)
         log_likelihood_reward_ = 0.5 * (jnp.square(reward_noise_) - 2 * jnp.log(reward_std_))
-        loss_reward = -(log_likelihood_reward_.sum(axis=1) * (1 - done)).mean(axis=0).sum()
+        loss_reward = -(log_likelihood_reward_ * (1 - done_)).mean(axis=0).sum()
 
         return loss_kld + loss_image + loss_reward
 
