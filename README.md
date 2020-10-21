@@ -99,7 +99,7 @@ I benchmarked my implementations in some environments from MuJoCo's `-v3` task s
 <details>
 <summary>DeepMind Control Suite</summary>
 
-I benchmarked SAC+AE implementation in some environments from DeepMind Control Suite, following the paper([code](https://github.com/ku2482/rljax/blob/master/examples/train_sac_ae.py)).
+I benchmarked SAC+AE implementation in some environments from DeepMind Control Suite ([code](https://github.com/ku2482/rljax/blob/master/examples/train_sac_ae.py)).
 
 <img src="https://user-images.githubusercontent.com/37267851/96671914-f23fe900-139d-11eb-9ca5-ff1e3ad39bd8.png" title="cheetah-run" width=400><img src="https://user-images.githubusercontent.com/37267851/96671916-f409ac80-139d-11eb-8daa-2978e93876ea.png" title="walker-walk" width=400>
 
