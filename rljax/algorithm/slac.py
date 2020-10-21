@@ -1,3 +1,4 @@
+import math
 import os
 from functools import partial
 from typing import Any, List, Tuple
@@ -520,15 +521,13 @@ class SLAC(Algorithm):
 
         # Prediction loss of images.
         state_mean_, state_std_ = self.decoder.apply(params_latent["decoder"], z1_, z2_)
-        state_noise_ = (state_ - state_mean_) / (state_std_ + 1e-8)
-        log_likelihood_ = 0.5 * (jnp.square(state_noise_) - 2 * jnp.log(state_std_))
+        log_likelihood_ = -0.5 * (jnp.square((state_ - state_mean_) / state_std_) + 2 * jnp.log(state_std_))
         loss_image = -log_likelihood_.mean(axis=0).sum()
 
         # Prediction loss of rewards.
         z_ = jnp.concatenate([z1_, z2_], axis=-1)
         reward_mean_, reward_std_ = self.reward.apply(params_latent["reward"], z_[:, :-1], action_, z_[:, 1:])
-        reward_noise_ = (reward_ - reward_mean_) / (reward_std_ + 1e-8)
-        log_likelihood_reward_ = 0.5 * (jnp.square(reward_noise_) - 2 * jnp.log(reward_std_))
+        log_likelihood_reward_ = -0.5 * (jnp.square((reward_ - reward_mean_) / reward_std_) + 2 * jnp.log(reward_std_))
         loss_reward = -(log_likelihood_reward_ * (1 - done_)).mean(axis=0).sum()
 
         return loss_kld + loss_image + loss_reward
@@ -538,7 +537,7 @@ class SLAC(Algorithm):
         self,
         params_latent: hk.Params,
         action_: jnp.ndarray,
-        keys: hk.PRNGSequence,
+        keys: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         z1_mean_ = []
         z1_std_ = []
@@ -574,7 +573,7 @@ class SLAC(Algorithm):
         params_latent: hk.Params,
         feature_: jnp.ndarray,
         action_: jnp.ndarray,
-        keys: hk.PRNGSequence,
+        keys: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         z1_mean_ = []
         z1_std_ = []
