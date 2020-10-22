@@ -17,7 +17,6 @@ def test_nstep_buffer():
     for i in range(2, 5):
         buffer.append(state[i], action[i], reward[i])
         assert buffer.is_full() and not buffer.is_empty()
-
         s, a, r = buffer.get()
         assert not buffer.is_full() and not buffer.is_empty()
         assert r == reward[i - 2, 0] + reward[i - 1, 0] * 0.99 + reward[i, 0] * (0.99 ** 2)
@@ -61,10 +60,10 @@ def test_replay_buffer():
             assert (float(buffer.done[i - 5]) == done[i]).all()
             assert (np.array(buffer.next_state[i - 5]) == state[i + 1]).all()
 
-        weight, (state, action, reward, done, next_state) = buffer.sample(3)
-        assert weight == 1.0
-        assert state.shape == (3,) + state_shape and state.dtype == state_dtype
-        assert action.shape == (3,) + action_shape and action.dtype == action_dtype
-        assert reward.shape == (3, 1)
-        assert done.shape == (3, 1)
-        assert next_state.shape == (3,) + state_shape and next_state.dtype == state_dtype
+        w, (s, a, r, d, n_s) = buffer.sample(3)
+        assert w == 1.0
+        assert s.shape == (3,) + state_shape and s.dtype == state_dtype
+        assert a.shape == (3,) + action_shape and a.dtype == action_dtype
+        assert r.shape == (3, 1)
+        assert d.shape == (3, 1)
+        assert n_s.shape == (3,) + state_shape and n_s.dtype == state_dtype
