@@ -18,7 +18,7 @@ def gaussian_log_prob(
     """
     Calculate log probabilities of diagonal gaussian distributions.
     """
-    return (-0.5 * jnp.square(noise) - log_std).sum(axis=1, keepdims=True) - 0.5 * jnp.log(2 * math.pi) * log_std.shape[1]
+    return -0.5 * (jnp.square(noise) + 2 * log_std + jnp.log(2 * math.pi))
 
 
 @jax.jit
@@ -31,7 +31,7 @@ def gaussian_and_tanh_log_prob(
     Calculate log probabilities of the policies, which is diagonal gaussian distributions followed by tanh transformation.
     """
     log_prob = gaussian_log_prob(log_std, noise)
-    log_prob -= jnp.log(nn.relu(1.0 - jnp.square(action)) + 1e-6).sum(axis=1, keepdims=True)
+    log_prob -= jnp.log(nn.relu(1.0 - jnp.square(action)) + 1e-6)
     return log_prob
 
 
@@ -45,7 +45,7 @@ def evaluate_gaussian_and_tanh_log_prob(
     Calculate log probabilities of the policies given sampled actions.
     """
     noise = (jnp.arctanh(action) - mean) / (jnp.exp(log_std) + 1e-8)
-    return gaussian_and_tanh_log_prob(log_std, noise, action)
+    return gaussian_and_tanh_log_prob(log_std, noise, action).sum(axis=1, keepdims=True)
 
 
 @partial(jax.jit, static_argnums=3)
@@ -62,7 +62,7 @@ def reparameterize_gaussian(
     noise = jax.random.normal(key, std.shape)
     action = mean + noise * std
     if return_log_pi:
-        return action, gaussian_log_prob(log_std, noise)
+        return action, gaussian_log_prob(log_std, noise).sum(axis=1, keepdims=True)
     else:
         return action
 
@@ -81,7 +81,7 @@ def reparameterize_gaussian_and_tanh(
     noise = jax.random.normal(key, std.shape)
     action = jnp.tanh(mean + noise * std)
     if return_log_pi:
-        return action, gaussian_and_tanh_log_prob(log_std, noise, action)
+        return action, gaussian_and_tanh_log_prob(log_std, noise, action).sum(axis=1, keepdims=True)
     else:
         return action
 

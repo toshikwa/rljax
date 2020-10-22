@@ -19,7 +19,14 @@ from rljax.network import (
     SLACEncoder,
     StateDependentGaussianPolicy,
 )
-from rljax.util import calculate_kl_divergence, load_params, reparameterize_gaussian_and_tanh, save_params, soft_update
+from rljax.util import (
+    calculate_kl_divergence,
+    gaussian_log_prob,
+    load_params,
+    reparameterize_gaussian_and_tanh,
+    save_params,
+    soft_update,
+)
 
 
 class SLAC(Algorithm):
@@ -509,6 +516,8 @@ class SLAC(Algorithm):
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        # Floatify the sequence of images.
+        img_ = state_.astype(jnp.float32) / 255.0
         # Calculate the sequence of features.
         feature_ = self.encoder.apply(params_latent["encoder"], state_)
 
@@ -520,17 +529,15 @@ class SLAC(Algorithm):
         loss_kld = calculate_kl_divergence(z1_mean_post_, z1_std_post_, z1_mean_pri_, z1_std_pri_).mean(axis=0).sum()
 
         # Prediction loss of images.
-        state_mean_, state_std_ = self.decoder.apply(params_latent["decoder"], z1_, z2_)
-        log_likelihood_ = -0.5 * (jnp.square((state_ - state_mean_) / state_std_) + 2 * jnp.log(state_std_))
-        loss_image = -log_likelihood_.mean(axis=0).sum()
+        img_mean_, img_std_ = self.decoder.apply(params_latent["decoder"], z1_, z2_)
+        loss_img = -gaussian_log_prob(jnp.log(img_std_), (img_ - img_mean_) / img_std_).mean(axis=0).sum()
 
         # Prediction loss of rewards.
         z_ = jnp.concatenate([z1_, z2_], axis=-1)
-        reward_mean_, reward_std_ = self.reward.apply(params_latent["reward"], z_[:, :-1], action_, z_[:, 1:])
-        log_likelihood_reward_ = -0.5 * (jnp.square((reward_ - reward_mean_) / reward_std_) + 2 * jnp.log(reward_std_))
-        loss_reward = -(log_likelihood_reward_ * (1 - done_)).mean(axis=0).sum()
+        rew_mean_, rew_std_ = self.reward.apply(params_latent["reward"], z_[:, :-1], action_, z_[:, 1:])
+        loss_rew = -(gaussian_log_prob(jnp.log(rew_std_), (reward_ - rew_mean_) / rew_std_) * (1 - done_)).mean(axis=0).sum()
 
-        return loss_kld + loss_image + loss_reward
+        return loss_kld + loss_img + loss_rew
 
     @partial(jax.jit, static_argnums=0)
     def sample_prior(
