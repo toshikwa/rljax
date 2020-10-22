@@ -404,7 +404,7 @@ class SAC_AE(OffPolicyActorCritic):
         key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Preprocess states.
-        target = preprocess_state(state, key, 5)
+        target = preprocess_state(state, key)
         # Reconstruct states.
         last_conv = self.encoder.apply(params_ae["encoder"], state)
         feature = self.linear.apply(params_ae["linear"], last_conv)
@@ -421,7 +421,6 @@ class SAC_AE(OffPolicyActorCritic):
         return loss_reconst + self.lambda_latent * loss_latent + self.lambda_weight * loss_weight
 
     def save_params(self, save_dir):
-        super(SAC_AE, self).save_params(save_dir)
         save_params(self.params_encoder, os.path.join(save_dir, "params_encoder.npz"))
         save_params(self.params_linear, os.path.join(save_dir, "params_linear.npz"))
         save_params(self.params_decoder, os.path.join(save_dir, "params_decoder.npz"))

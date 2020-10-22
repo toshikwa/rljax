@@ -192,8 +192,7 @@ class TD3(OffPolicyActorCritic):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Calculate next actions and add clipped noises.
         next_action = self.actor.apply(params_actor_target, next_state)
-        noise = jax.random.normal(key, next_action.shape) * self.std_target
-        next_action = jnp.clip(next_action + jnp.clip(noise, -self.clip_noise, self.clip_noise), -1.0, 1.0)
+        next_action = add_noise(next_action, key, self.std_target, -1.0, 1.0, -self.clip_noise, self.clip_noise)
         # Calculate target q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.minimum(next_q1, next_q2))
@@ -233,7 +232,6 @@ class TD3(OffPolicyActorCritic):
         return -q1.mean()
 
     def save_params(self, save_dir):
-        super(TD3, self).save_params(save_dir)
         save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
         save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
 

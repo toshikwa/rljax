@@ -231,7 +231,6 @@ class PPO(OnPolicyActorCritic):
         return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
 
     def save_params(self, save_dir):
-        super(PPO, self).save_params(save_dir)
         save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
         save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
 

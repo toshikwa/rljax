@@ -218,7 +218,6 @@ class DDPG(OffPolicyActorCritic):
         return -q.mean()
 
     def save_params(self, save_dir):
-        super(DDPG, self).save_params(save_dir)
         save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
         save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
 

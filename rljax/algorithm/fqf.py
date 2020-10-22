@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import CumProbNetwork, DiscreteImplicitQuantileFunction, DQNBody
-from rljax.util import calculate_quantile_loss, get_quantile_at_action, load_params, save_params
+from rljax.util import get_quantile_at_action, load_params, quantile_loss, save_params
 
 
 class FQF(QLearning):
@@ -235,7 +235,7 @@ class FQF(QLearning):
         # Calculate current quantile values, whose shape is (batch_size, N, 1).
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params["quantile"], feature, cum_p_prime), action)
         td = target_quantile - curr_quantile
-        loss = calculate_quantile_loss(td, cum_p_prime, weight, self.loss_type)
+        loss = quantile_loss(td, cum_p_prime, weight, self.loss_type)
         abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(abs_td)
 
@@ -282,7 +282,6 @@ class FQF(QLearning):
         return (cum_p[:, 1:-1] * grad).sum(axis=1).mean()
 
     def save_params(self, save_dir):
-        super(FQF, self).save_params(save_dir)
         save_params(self.params, os.path.join(save_dir, "params.npz"))
         save_params(self.params_cum_p, os.path.join(save_dir, "params_cum_p.npz"))
 

@@ -19,10 +19,6 @@ def _test_algorithm(env, algo):
     # Test is_update() method.
     assert isinstance(algo.is_update(), bool)
 
-    # Test saving.
-    algo.save_params("/tmp/rljax/test/algo")
-    algo.load_params("/tmp/rljax/test/algo")
-
 
 @pytest.mark.parametrize(
     "nstep, use_per, dueling_net, double_q",

@@ -12,8 +12,11 @@ class LazyFrames:
     def __init__(self, frames):
         self._frames = list(frames)
 
-    def __array__(self, dtype):
-        return np.array(self._frames, dtype=dtype)
+    def __array__(self, dtype=None):
+        out = np.array(self._frames)
+        if out is not None:
+            out = out.astype(dtype)
+        return out
 
     def __len__(self):
         return len(self._frames)
@@ -47,15 +50,15 @@ class SequenceBuffer:
     def append(self, action, reward, done, next_state):
         assert self._reset_episode
         self.action_.append(action)
-        self.reward_.append([reward])
-        self.done_.append([done])
+        self.reward_.append(reward)
+        self.done_.append(done)
         self.state_.append(next_state)
 
     def get(self):
         state_ = LazyFrames(self.state_)
-        action_ = np.array(self.action_, dtype=np.float32)
-        reward_ = np.array(self.reward_, dtype=np.float32)
-        done_ = np.array(self.done_, dtype=np.float32)
+        action_ = np.array(self.action_)
+        reward_ = np.array(self.reward_)
+        done_ = np.array(self.done_)
         return state_, action_, reward_, done_
 
     def is_empty(self):
@@ -126,9 +129,9 @@ class SLACReplayBuffer:
 
     def _append(self, state_, action_, reward_, done_):
         self.state_[self._p] = state_
-        self.action_[self._p] = action_
-        self.reward_[self._p] = reward_
-        self.done_[self._p] = done_
+        self.action_[self._p] = action_.reshape(self.num_sequences, -1)
+        self.reward_[self._p] = reward_.reshape(self.num_sequences, 1)
+        self.done_[self._p] = done_.reshape(self.num_sequences, 1)
 
         self._p = (self._p + 1) % self.buffer_size
         self._n = min(self._n + 1, self.buffer_size)

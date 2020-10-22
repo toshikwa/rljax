@@ -281,7 +281,6 @@ class SAC_Discrete(OffPolicyActorCritic):
         return -log_alpha * (self.target_entropy + mean_log_pi)
 
     def save_params(self, save_dir):
-        super(SAC_Discrete, self).save_params(save_dir)
         save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
         save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
 

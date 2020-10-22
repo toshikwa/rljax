@@ -23,6 +23,7 @@ from rljax.util import (
     calculate_kl_divergence,
     gaussian_log_prob,
     load_params,
+    preprocess_state,
     reparameterize_gaussian_and_tanh,
     save_params,
     soft_update,
@@ -348,6 +349,7 @@ class SLAC(Algorithm):
             action_=action_,
             reward_=reward_,
             done_=done_,
+            key=next(self.rng),
             keys1=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
             keys2=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
         )
@@ -489,6 +491,7 @@ class SLAC(Algorithm):
         action_: np.ndarray,
         reward_: np.ndarray,
         done_: np.ndarray,
+        key: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[Any, hk.Params, jnp.ndarray]:
@@ -498,6 +501,7 @@ class SLAC(Algorithm):
             action_=action_,
             reward_=reward_,
             done_=done_,
+            key=key,
             keys1=keys1,
             keys2=keys2,
         )
@@ -513,11 +517,12 @@ class SLAC(Algorithm):
         action_: np.ndarray,
         reward_: np.ndarray,
         done_: np.ndarray,
+        key: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Floatify the sequence of images.
-        img_ = state_.astype(jnp.float32) / 255.0
+        img_ = preprocess_state(state_, key)
         # Calculate the sequence of features.
         feature_ = self.encoder.apply(params_latent["encoder"], state_)
 
@@ -619,7 +624,6 @@ class SLAC(Algorithm):
         return (z1_mean_, z1_std_, z1_, z2_)
 
     def save_params(self, save_dir):
-        super(SLAC, self).save_params(save_dir)
         save_params(self.params_latent, os.path.join(save_dir, "params_latent.npz"))
         save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
         save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))

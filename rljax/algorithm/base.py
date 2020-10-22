@@ -65,8 +65,7 @@ class Algorithm(ABC):
 
     @abstractmethod
     def save_params(self, save_dir):
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
+        pass
 
     @abstractmethod
     def load_params(self, save_dir):
