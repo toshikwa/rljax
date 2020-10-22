@@ -38,7 +38,7 @@ class FQF(QLearning):
         units=(512,),
         num_quantiles=32,
         num_cosines=64,
-        loss_type="l2",
+        loss_type="huber",
         dueling_net=False,
         double_q=False,
     ):

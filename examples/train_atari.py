@@ -6,43 +6,6 @@ from rljax.algorithm import DISCRETE_ALGORITHM
 from rljax.env import make_atari_env
 from rljax.trainer import Trainer
 
-config = {
-    "dqn": {
-        "nstep": 1,
-        "loss_type": "l2",
-        "dueling_net": True,
-        "double_q": True,
-    },
-    "qrdqn": {
-        "nstep": 1,
-        "loss_type": "l2",
-        "dueling_net": True,
-        "double_q": True,
-    },
-    "iqn": {
-        "nstep": 1,
-        "loss_type": "l2",
-        "dueling_net": True,
-        "double_q": True,
-    },
-    "fqf": {
-        "nstep": 1,
-        "loss_type": "l2",
-        "dueling_net": True,
-        "double_q": True,
-    },
-    "dqn_discor": {
-        "nstep": 1,
-        "loss_type": "l2",
-        "dueling_net": True,
-        "double_q": True,
-    },
-    "sac_discrete": {
-        "nstep": 1,
-        "dueling_net": True,
-    },
-}
-
 
 def run(args):
     env = make_atari_env(args.env_id)

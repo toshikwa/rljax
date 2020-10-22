@@ -1,12 +1,12 @@
 import os
 from collections import deque
-from datetime import timedelta
 from time import sleep, time
 
 import numpy as np
 import pandas as pd
-from tensorboardX import SummaryWriter
 from tqdm import tqdm
+
+from .base_trainer import Trainer
 
 
 class SlacInput:
@@ -40,7 +40,7 @@ class SlacInput:
         return np.array(self._action, dtype=np.float32).reshape(1, -1)
 
 
-class SLACTrainer:
+class SLACTrainer(Trainer):
     """
     Trainer for SLAC.
     """
@@ -57,36 +57,24 @@ class SLACTrainer:
         num_agent_steps=10 ** 6,
         eval_interval=10 ** 4,
         num_eval_episodes=10,
+        save_params=False,
     ):
-        assert num_agent_steps % action_repeat == 0
-        assert eval_interval % action_repeat == 0
-
-        # Envs.
-        self.env = env
-        self.env_test = env_test
-
-        # Set seeds.
-        self.env.seed(seed)
-        self.env_test.seed(2 ** 31 - seed)
-
-        # Algorithm.
-        self.algo = algo
+        super(SLACTrainer, self).__init__(
+            env=env,
+            env_test=env_test,
+            algo=algo,
+            log_dir=log_dir,
+            seed=seed,
+            action_repeat=action_repeat,
+            num_agent_steps=num_agent_steps,
+            eval_interval=eval_interval,
+            num_eval_episodes=num_eval_episodes,
+            save_params=save_params,
+        )
 
         # Inputs for training and evaluation.
         self.input = SlacInput(env.observation_space, env.action_space, num_sequences)
         self.input_test = SlacInput(env.observation_space, env.action_space, num_sequences)
-
-        # Log setting.
-        self.log = {"step": [], "return": []}
-        self.csv_path = os.path.join(log_dir, "log.csv")
-        self.param_dir = os.path.join(log_dir, "param")
-        self.writer = SummaryWriter(log_dir=os.path.join(log_dir, "summary"))
-
-        # Other parameters.
-        self.action_repeat = action_repeat
-        self.num_agent_steps = num_agent_steps
-        self.eval_interval = eval_interval
-        self.num_eval_episodes = num_eval_episodes
 
     def train(self):
         # Time to start training.
@@ -115,7 +103,8 @@ class SLACTrainer:
 
             if step % self.eval_interval == 0:
                 self.evaluate(step)
-                self.algo.save_params(os.path.join(self.param_dir, f"step{step}"))
+                if self.save_params:
+                    self.algo.save_params(os.path.join(self.param_dir, f"step{step}"))
 
         # Wait for the logging to be finished.
         sleep(2)
@@ -144,7 +133,3 @@ class SLACTrainer:
 
         # Log to standard output.
         print(f"Num steps: {step * self.action_repeat:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
-
-    @property
-    def time(self):
-        return str(timedelta(seconds=int(time() - self.start_time)))

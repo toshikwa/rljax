@@ -35,7 +35,7 @@ class DQN(QLearning):
         eps_decay_steps=250000,
         lr=2.5e-4,
         units=(512,),
-        loss_type="l2",
+        loss_type="huber",
         dueling_net=False,
         double_q=False,
     ):

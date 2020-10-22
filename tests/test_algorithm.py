@@ -20,6 +20,7 @@ def _test_algorithm(env, algo):
     assert isinstance(algo.is_update(), bool)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "nstep, use_per, dueling_net, double_q",
     [
@@ -42,6 +43,7 @@ def test_dqn(nstep, use_per, dueling_net, double_q):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "use_per, dueling_net, double_q",
     [
@@ -63,6 +65,7 @@ def test_qrdqn(use_per, dueling_net, double_q):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "use_per, dueling_net, double_q",
     [
@@ -84,6 +87,7 @@ def test_iqn(use_per, dueling_net, double_q):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "use_per, dueling_net, double_q",
     [
@@ -105,6 +109,7 @@ def test_fqf(use_per, dueling_net, double_q):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "use_per, dueling_net",
     [
@@ -125,6 +130,7 @@ def test_sac_discrete(use_per, dueling_net):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 def test_dqn_discor():
     env = gym.make("CartPole-v0")
     algo = DQN_DisCor(
@@ -136,6 +142,7 @@ def test_dqn_discor():
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 def test_ppo():
     env = gym.make("MountainCarContinuous-v0")
     algo = PPO(
@@ -147,6 +154,7 @@ def test_ppo():
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("use_per", [(False), (True)])
 def test_ddpg(use_per):
     env = gym.make("MountainCarContinuous-v0")
@@ -160,6 +168,7 @@ def test_ddpg(use_per):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("use_per", [(False), (True)])
 def test_td3(use_per):
     env = gym.make("MountainCarContinuous-v0")
@@ -173,6 +182,7 @@ def test_td3(use_per):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("use_per", [(False), (True)])
 def test_sac(use_per):
     env = gym.make("MountainCarContinuous-v0")
@@ -186,6 +196,7 @@ def test_sac(use_per):
     _test_algorithm(env, algo)
 
 
+@pytest.mark.slow
 def test_sac_discor():
     env = gym.make("MountainCarContinuous-v0")
     algo = SAC_DisCor(

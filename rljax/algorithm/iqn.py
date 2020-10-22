@@ -38,7 +38,7 @@ class IQN(QLearning):
         num_quantiles=64,
         num_quantiles_eval=32,
         num_cosines=64,
-        loss_type="l2",
+        loss_type="huber",
         dueling_net=False,
         double_q=False,
     ):

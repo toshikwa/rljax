@@ -4,7 +4,7 @@ from datetime import datetime
 
 from rljax.algorithm import CONTINUOUS_ALGORITHM
 from rljax.env.mujoco.metaworld import make_metaworld_env
-from rljax.trainer import Trainer
+from rljax.trainer import MetaWorldTrainer
 
 config = {
     "sac": {
@@ -36,7 +36,7 @@ def run(args):
     time = datetime.now().strftime("%Y%m%d-%H%M")
     log_dir = os.path.join("logs", args.env_id, f"{str(algo)}-seed{args.seed}-{time}")
 
-    trainer = Trainer(
+    trainer = MetaWorldTrainer(
         env=env,
         env_test=env_test,
         algo=algo,

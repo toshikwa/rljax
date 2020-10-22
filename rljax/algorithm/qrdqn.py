@@ -36,7 +36,7 @@ class QRDQN(QLearning):
         lr=5e-5,
         units=(512,),
         num_quantiles=200,
-        loss_type="l2",
+        loss_type="huber",
         dueling_net=False,
         double_q=False,
     ):
