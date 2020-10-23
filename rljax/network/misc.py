@@ -136,8 +136,8 @@ class Gaussian(hk.Module):
             hidden_activation=partial(nn.leaky_relu, negative_slope=self.negative_slope),
             hidden_scale=np.sqrt(2 / (1 + self.negative_slope ** 2)),
         )(x)
-        mean, std = jnp.split(x, 2, axis=1)
-        std = nn.softplus(std) + 1e-5
+        mean, log_std = jnp.split(x, 2, axis=1)
+        std = nn.softplus(log_std) + 1e-5
         return mean, std
 
 

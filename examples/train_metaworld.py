@@ -9,11 +9,13 @@ from rljax.trainer import MetaWorldTrainer
 config = {
     "sac": {
         "start_steps": 1000,
+        "batch_size": 128,
         "units_critic": [256, 256, 256],
         "units_actor": [256, 256, 256],
     },
     "sac_discor": {
         "start_steps": 1000,
+        "batch_size": 128,
         "units_critic": [256, 256, 256],
         "units_actor": [256, 256, 256],
         "units_error": [256, 256, 256, 256],

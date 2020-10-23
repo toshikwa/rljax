@@ -1,4 +1,3 @@
-import math
 import os
 from functools import partial
 from typing import Any, List, Tuple
@@ -23,7 +22,6 @@ from rljax.util import (
     calculate_kl_divergence,
     gaussian_log_prob,
     load_params,
-    preprocess_state,
     reparameterize_gaussian_and_tanh,
     save_params,
     soft_update,
@@ -349,7 +347,6 @@ class SLAC(Algorithm):
             action_=action_,
             reward_=reward_,
             done_=done_,
-            key=next(self.rng),
             keys1=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
             keys2=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
         )
@@ -491,7 +488,6 @@ class SLAC(Algorithm):
         action_: np.ndarray,
         reward_: np.ndarray,
         done_: np.ndarray,
-        key: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[Any, hk.Params, jnp.ndarray]:
@@ -501,7 +497,6 @@ class SLAC(Algorithm):
             action_=action_,
             reward_=reward_,
             done_=done_,
-            key=key,
             keys1=keys1,
             keys2=keys2,
         )
@@ -517,12 +512,11 @@ class SLAC(Algorithm):
         action_: np.ndarray,
         reward_: np.ndarray,
         done_: np.ndarray,
-        key: np.ndarray,
         keys1: List[np.ndarray],
         keys2: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Floatify the sequence of images.
-        img_ = preprocess_state(state_, key)
+        img_ = state_.astype(jnp.float32) / 255.0
         # Calculate the sequence of features.
         feature_ = self.encoder.apply(params_latent["encoder"], state_)
 
