@@ -132,4 +132,4 @@ class SLACTrainer(Trainer):
         pd.DataFrame(self.log).to_csv(self.csv_path, index=False)
 
         # Log to standard output.
-        print(f"Num steps: {step * self.action_repeat:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
+        print(f"Num steps: {step * self.action_repeat:<6}   Return: {mean_return:<5.1f}   Time: {self.time}")
