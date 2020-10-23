@@ -5,10 +5,6 @@ import pytest
 from rljax.env.continuous import NormalizedActionEnv
 
 
-def make_continuous_env(env_id):
-    return NormalizedActionEnv(gym.make(env_id))
-
-
 @pytest.mark.parametrize("env_id", [("Pendulum-v0")])
 def test_normalized_action_env(env_id):
     env = gym.make(env_id)

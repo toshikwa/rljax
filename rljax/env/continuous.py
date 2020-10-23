@@ -15,7 +15,7 @@ class NormalizedActionEnv(gym.Wrapper):
         self._low = env.action_space.low
         self._delta = env.action_space.high - env.action_space.low
         # Normalized action space.
-        self.action_space = Box(low=-1.0, high=1.0, shape=env.action_space.shape, dtype=np.float32)
+        self.action_space = Box(low=-1.0, high=1.0, shape=env.action_space.shape, dtype=np.float64)
 
     def step(self, action):
         action = self._convert_action(action)

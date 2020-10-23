@@ -17,5 +17,6 @@ exclude = '''
 
 [tool.pytest.ini_options]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "mujoco: marks tests requiring mujoco's licence (deselect with '-m \"not mujoco\"')",
 ]

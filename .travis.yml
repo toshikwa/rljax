@@ -12,4 +12,4 @@ install:
 script:
   - pip install -e .
   - black rljax --check
-  - pytest --black -m "not slow" tests
+  - pytest --black -m "not (slow or mujoco)" tests
