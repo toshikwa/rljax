@@ -9,12 +9,12 @@ from jax.tree_util import tree_flatten
 @jax.jit
 def clip_gradient(
     grad: Any,
-    max_grad_norm: float,
+    max_value: float,
 ) -> Any:
     """
     Clip gradients.
     """
-    return jax.tree_map(lambda g: jnp.clip(g, -max_grad_norm, max_grad_norm), grad)
+    return jax.tree_map(lambda g: jnp.clip(g, -max_value, max_value), grad)
 
 
 @jax.jit

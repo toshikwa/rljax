@@ -26,7 +26,7 @@ def gaussian_and_tanh_log_prob(
     action: jnp.ndarray,
 ) -> jnp.ndarray:
     """
-    Calculate log probabilities of gaussian distributions and tanh transformation given.
+    Calculate log probabilities of gaussian distributions and tanh transformation.
     """
     return gaussian_log_prob(log_std, noise) - jnp.log(nn.relu(1.0 - jnp.square(action)) + 1e-6)
 
