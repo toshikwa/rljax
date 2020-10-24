@@ -18,6 +18,23 @@ def clip_gradient(
 
 
 @jax.jit
+def clip_gradient_norm(
+    grad: Any,
+    max_grad_norm: float,
+) -> Any:
+    """
+    Clip norms of gradients.
+    """
+
+    def _clip_gradient_norm(g):
+        clip_coef = max_grad_norm / (jax.lax.stop_gradient(jnp.linalg.norm(g)) + 1e-6)
+        clip_coef = jnp.clip(clip_coef, a_max=1.0)
+        return g * clip_coef
+
+    return jax.tree_map(lambda g: _clip_gradient_norm(g), grad)
+
+
+@jax.jit
 def soft_update(
     target_params: hk.Params,
     online_params: hk.Params,

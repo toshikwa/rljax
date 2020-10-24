@@ -11,7 +11,7 @@ from jax.experimental import optix
 from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
 from rljax.util import (
-    clip_gradient,
+    clip_gradient_norm,
     evaluate_gaussian_and_tanh_log_prob,
     load_params,
     reparameterize_gaussian_and_tanh,
@@ -154,7 +154,7 @@ class PPO(OnPolicyActorCritic):
             state=state,
             target=target,
         )
-        grad_critic = clip_gradient(grad_critic, self.max_grad_norm)
+        grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         return opt_state_critic, params_critic, loss_critic
@@ -185,7 +185,7 @@ class PPO(OnPolicyActorCritic):
             log_pi_old=log_pi_old,
             gae=gae,
         )
-        grad_actor = clip_gradient(grad_actor, self.max_grad_norm)
+        grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor

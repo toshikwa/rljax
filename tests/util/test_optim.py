@@ -1,6 +1,6 @@
 import numpy as np
 
-from rljax.util.optim import clip_gradient, soft_update, weight_decay
+from rljax.util.optim import clip_gradient, clip_gradient_norm, soft_update, weight_decay
 
 
 def test_clip_gradient():
@@ -10,6 +10,23 @@ def test_clip_gradient():
     assert np.isclose(clip_gradient(grad, 1.5)["w"], [-1.5, -1.0, 0.0, 1.0, 1.5]).all()
     assert np.isclose(clip_gradient(grad, 1.0)["w"], [-1.0, -1.0, 0.0, 1.0, 1.0]).all()
     assert np.isclose(clip_gradient(grad, 0.5)["w"], [-0.5, -0.5, 0.0, 0.5, 0.5]).all()
+
+
+def test_clip_gradient_norm():
+    grad = {"w": np.array([1.0, 0.0], dtype=np.float32)}
+
+    assert np.isclose(clip_gradient_norm(grad, 0.0)["w"], [0.0, 0.0]).all()
+    assert np.isclose(clip_gradient_norm(grad, 0.5)["w"], [0.5, 0.0]).all()
+    assert np.isclose(clip_gradient_norm(grad, 1.0)["w"], [1.0, 0.0]).all()
+    assert np.isclose(clip_gradient_norm(grad, 2.0)["w"], [1.0, 0.0]).all()
+
+    grad = {"w": np.array([3.0, 4.0], dtype=np.float32)}
+
+    assert np.isclose(clip_gradient_norm(grad, 0.0)["w"], [0.0, 0.0]).all()
+    assert np.isclose(clip_gradient_norm(grad, 1.0)["w"], [0.6, 0.8]).all()
+    assert np.isclose(clip_gradient_norm(grad, 2.0)["w"], [1.2, 1.6]).all()
+    assert np.isclose(clip_gradient_norm(grad, 5.0)["w"], [3.0, 4.0]).all()
+    assert np.isclose(clip_gradient_norm(grad, 10.0)["w"], [3.0, 4.0]).all()
 
 
 def test_soft_update():
