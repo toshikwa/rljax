@@ -35,6 +35,7 @@ class SAC(OffPolicyActorCritic):
         lr_alpha=3e-4,
         units_actor=(256, 256),
         units_critic=(256, 256),
+        d2rl=False,
     ):
         super(SAC, self).__init__(
             num_agent_steps=num_agent_steps,
@@ -50,17 +51,21 @@ class SAC(OffPolicyActorCritic):
             update_interval=update_interval,
             tau=tau,
         )
+        if d2rl:
+            self.name += "-D2RL"
 
         def critic_fn(s, a):
             return ContinuousQFunction(
                 num_critics=2,
                 hidden_units=units_critic,
+                d2rl=d2rl,
             )(s, a)
 
         def actor_fn(s):
             return StateDependentGaussianPolicy(
                 action_space=action_space,
                 hidden_units=units_actor,
+                d2rl=d2rl,
             )(s)
 
         # Critic.

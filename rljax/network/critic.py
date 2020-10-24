@@ -44,10 +44,12 @@ class ContinuousQFunction(hk.Module):
         self,
         num_critics=2,
         hidden_units=(400, 300),
+        d2rl=False,
     ):
         super(ContinuousQFunction, self).__init__()
         self.num_critics = num_critics
         self.hidden_units = hidden_units
+        self.d2rl = d2rl
 
     def __call__(self, s, a):
         def _fn(x):
@@ -56,6 +58,7 @@ class ContinuousQFunction(hk.Module):
                 self.hidden_units,
                 hidden_activation=nn.relu,
                 hidden_scale=np.sqrt(2),
+                d2rl=self.d2rl,
             )(x)
 
         x = jnp.concatenate([s, a], axis=1)
@@ -74,7 +77,7 @@ class DiscreteQFunction(hk.Module):
         action_space,
         num_critics=1,
         hidden_units=(512,),
-        dueling_net=True,
+        dueling_net=False,
     ):
         super(DiscreteQFunction, self).__init__()
         self.action_space = action_space

@@ -14,10 +14,12 @@ class DeterministicPolicy(hk.Module):
         self,
         action_space,
         hidden_units=(256, 256),
+        d2rl=False,
     ):
         super(DeterministicPolicy, self).__init__()
         self.action_space = action_space
         self.hidden_units = hidden_units
+        self.d2rl = d2rl
 
     def __call__(self, x):
         return MLP(
@@ -25,6 +27,7 @@ class DeterministicPolicy(hk.Module):
             self.hidden_units,
             hidden_activation=nn.relu,
             output_activation=jnp.tanh,
+            d2rl=self.d2rl,
         )(x)
 
 
@@ -37,24 +40,31 @@ class StateDependentGaussianPolicy(hk.Module):
         self,
         action_space,
         hidden_units=(256, 256),
+        log_std_min=-20.0,
+        log_std_max=2.0,
         clip_log_std=True,
+        d2rl=False,
     ):
         super(StateDependentGaussianPolicy, self).__init__()
         self.action_space = action_space
         self.hidden_units = hidden_units
+        self.log_std_min = log_std_min
+        self.log_std_max = log_std_max
         self.clip_log_std = clip_log_std
+        self.d2rl = d2rl
 
     def __call__(self, x):
         x = MLP(
             2 * self.action_space.shape[0],
             self.hidden_units,
             hidden_activation=nn.relu,
+            d2rl=self.d2rl,
         )(x)
         mean, log_std = jnp.split(x, 2, axis=1)
         if self.clip_log_std:
-            log_std = jnp.clip(log_std, -20, 2)
+            log_std = jnp.clip(log_std, self.log_std_min, self.log_std_max)
         else:
-            log_std = -10 + 6 * (jnp.tanh(log_std) + 1.0)
+            log_std = self.log_std_min + 0.5 * (self.log_std_max - self.log_std_min) * (jnp.tanh(log_std) + 1.0)
         return mean, log_std
 
 

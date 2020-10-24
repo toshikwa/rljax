@@ -74,6 +74,7 @@ class SAC_AE(OffPolicyActorCritic):
             return StateDependentGaussianPolicy(
                 action_space=action_space,
                 hidden_units=units_actor,
+                log_std_min=-10.0,
                 clip_log_std=False,
             )(x)
 

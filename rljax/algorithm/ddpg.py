@@ -34,6 +34,7 @@ class DDPG(OffPolicyActorCritic):
         lr_critic=1e-3,
         units_actor=(256, 256),
         units_critic=(256, 256),
+        d2rl=False,
         std=0.1,
         update_interval_policy=2,
     ):
@@ -51,17 +52,21 @@ class DDPG(OffPolicyActorCritic):
             update_interval=update_interval,
             tau=tau,
         )
+        if d2rl:
+            self.name += "-D2RL"
 
         def critic_fn(s, a):
             return ContinuousQFunction(
                 num_critics=1,
                 hidden_units=units_critic,
+                d2rl=d2rl,
             )(s, a)
 
         def actor_fn(s):
             return DeterministicPolicy(
                 action_space=action_space,
                 hidden_units=units_actor,
+                d2rl=d2rl,
             )(s)
 
         # Critic.
