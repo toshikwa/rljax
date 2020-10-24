@@ -28,6 +28,7 @@ class PPO(OnPolicyActorCritic):
         state_space,
         action_space,
         seed,
+        max_grad_norm=10.0,
         gamma=0.995,
         buffer_size=2048,
         batch_size=64,
@@ -38,7 +39,6 @@ class PPO(OnPolicyActorCritic):
         epoch_ppo=10,
         clip_eps=0.2,
         lambd=0.97,
-        max_grad_norm=10.0,
     ):
         assert buffer_size % batch_size == 0
         super(PPO, self).__init__(
@@ -46,6 +46,7 @@ class PPO(OnPolicyActorCritic):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             buffer_size=buffer_size,
             batch_size=batch_size,
@@ -154,7 +155,8 @@ class PPO(OnPolicyActorCritic):
             state=state,
             target=target,
         )
-        grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
+        if self.max_grad_norm is not None:
+            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         return opt_state_critic, params_critic, loss_critic
@@ -185,7 +187,8 @@ class PPO(OnPolicyActorCritic):
             log_pi_old=log_pi_old,
             gae=gae,
         )
-        grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
+        if self.max_grad_norm is not None:
+            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor

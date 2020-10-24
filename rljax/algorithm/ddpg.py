@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, DeterministicPolicy
-from rljax.util import add_noise, load_params, save_params
+from rljax.util import add_noise, clip_gradient_norm, load_params, save_params
 
 
 class DDPG(OffPolicyActorCritic):
@@ -22,6 +22,7 @@ class DDPG(OffPolicyActorCritic):
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -43,6 +44,7 @@ class DDPG(OffPolicyActorCritic):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -166,6 +168,8 @@ class DDPG(OffPolicyActorCritic):
             next_state=next_state,
             weight=weight,
         )
+        if self.max_grad_norm is not None:
+            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         return opt_state_critic, params_critic, loss_critic, abs_td
@@ -207,6 +211,8 @@ class DDPG(OffPolicyActorCritic):
             params_critic=params_critic,
             state=state,
         )
+        if self.max_grad_norm is not None:
+            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor

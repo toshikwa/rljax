@@ -20,6 +20,7 @@ from rljax.network import (
 )
 from rljax.util import (
     calculate_kl_divergence,
+    clip_gradient_norm,
     gaussian_log_prob,
     load_params,
     reparameterize_gaussian_and_tanh,
@@ -37,6 +38,7 @@ class SLAC(Algorithm):
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         buffer_size=10 ** 5,
         batch_size_sac=256,
@@ -63,6 +65,7 @@ class SLAC(Algorithm):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
         )
 
@@ -383,6 +386,8 @@ class SLAC(Algorithm):
             next_feature_action=next_feature_action,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         return opt_state_critic, params_critic, loss_critic
@@ -433,6 +438,8 @@ class SLAC(Algorithm):
             feature_action=feature_action,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor, mean_log_pi
@@ -500,6 +507,8 @@ class SLAC(Algorithm):
             keys1=keys1,
             keys2=keys2,
         )
+        if self.max_grad_norm is not None:
+            grad_latent = clip_gradient_norm(grad_latent, self.max_grad_norm)
         update, opt_state_latent = self.opt_latent(grad_latent, opt_state_latent)
         params_latent = optix.apply_updates(params_latent, update)
         return opt_state_latent, params_latent, loss_latent
@@ -626,6 +635,3 @@ class SLAC(Algorithm):
         self.params_latent = load_params(os.path.join(save_dir, "params_latent.npz"))
         self.params_critic = self.params_critic_target = load_params(os.path.join(save_dir, "params_critic.npz"))
         self.params_actor = load_params(os.path.join(save_dir, "params_actor.npz"))
-
-    def update(self, writer):
-        NotImplementedError

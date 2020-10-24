@@ -2,7 +2,7 @@ import gym
 import numpy as np
 import pytest
 
-from rljax.algorithm import DDPG, DQN, FQF, IQN, PPO, QRDQN, SAC, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
+from rljax.algorithm import DDPG, DQN, FQF, IQN, PPO, QRDQN, SAC, SAC_AE, TD3, DQN_DisCor, SAC_DisCor, SAC_Discrete
 
 
 def _test_algorithm(env, algo):
@@ -155,8 +155,8 @@ def test_ppo():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("use_per", [(False), (True)])
-def test_ddpg(use_per):
+@pytest.mark.parametrize("use_per, d2rl", [(False, False), (True, True)])
+def test_ddpg(use_per, d2rl):
     env = gym.make("MountainCarContinuous-v0")
     algo = DDPG(
         num_agent_steps=100000,
@@ -164,13 +164,14 @@ def test_ddpg(use_per):
         action_space=env.action_space,
         seed=0,
         use_per=use_per,
+        d2rl=d2rl,
     )
     _test_algorithm(env, algo)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("use_per", [(False), (True)])
-def test_td3(use_per):
+@pytest.mark.parametrize("use_per, d2rl", [(False, False), (True, True)])
+def test_td3(use_per, d2rl):
     env = gym.make("MountainCarContinuous-v0")
     algo = TD3(
         num_agent_steps=100000,
@@ -178,13 +179,14 @@ def test_td3(use_per):
         action_space=env.action_space,
         seed=0,
         use_per=use_per,
+        d2rl=d2rl,
     )
     _test_algorithm(env, algo)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("use_per", [(False), (True)])
-def test_sac(use_per):
+@pytest.mark.parametrize("use_per, d2rl", [(False, False), (True, True)])
+def test_sac(use_per, d2rl):
     env = gym.make("MountainCarContinuous-v0")
     algo = SAC(
         num_agent_steps=100000,
@@ -192,6 +194,7 @@ def test_sac(use_per):
         action_space=env.action_space,
         seed=0,
         use_per=use_per,
+        d2rl=d2rl,
     )
     _test_algorithm(env, algo)
 
@@ -200,6 +203,21 @@ def test_sac(use_per):
 def test_sac_discor():
     env = gym.make("MountainCarContinuous-v0")
     algo = SAC_DisCor(
+        num_agent_steps=100000,
+        state_space=env.observation_space,
+        action_space=env.action_space,
+        seed=0,
+    )
+    _test_algorithm(env, algo)
+
+
+@pytest.mark.mujoco
+@pytest.mark.slow
+def test_sac_ae():
+    from rljax.env.mujoco.dmc import make_dmc_env
+
+    env = make_dmc_env("cheetah", "run", 4)
+    algo = SAC_AE(
         num_agent_steps=100000,
         state_space=env.observation_space,
         action_space=env.action_space,

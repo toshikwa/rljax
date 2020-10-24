@@ -1,4 +1,3 @@
-import os
 from abc import ABC, abstractmethod
 from functools import partial
 
@@ -24,6 +23,7 @@ class Algorithm(ABC):
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
     ):
         np.random.seed(seed)
@@ -36,6 +36,7 @@ class Algorithm(ABC):
         self.state_space = state_space
         self.action_space = action_space
         self.gamma = gamma
+        self.max_grad_norm = max_grad_norm
 
         # Define fake input for JIT.
         self.fake_state = state_space.sample()[None, ...]
@@ -57,10 +58,6 @@ class Algorithm(ABC):
 
     @abstractmethod
     def step(self, env, state):
-        pass
-
-    @abstractmethod
-    def update(self, writer):
         pass
 
     @abstractmethod
@@ -86,6 +83,7 @@ class OnPolicyActorCritic(Algorithm):
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         buffer_size,
         batch_size,
@@ -95,6 +93,7 @@ class OnPolicyActorCritic(Algorithm):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
         )
         self.buffer = RolloutBuffer(
@@ -140,6 +139,10 @@ class OnPolicyActorCritic(Algorithm):
 
         return next_state
 
+    @abstractmethod
+    def update(self, writer):
+        pass
+
 
 class OffPolicyAlgorithm(Algorithm):
     """
@@ -152,6 +155,7 @@ class OffPolicyAlgorithm(Algorithm):
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         nstep,
         buffer_size,
@@ -168,6 +172,7 @@ class OffPolicyAlgorithm(Algorithm):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
         )
         if use_per:
@@ -226,6 +231,10 @@ class OffPolicyAlgorithm(Algorithm):
 
         return next_state
 
+    @abstractmethod
+    def update(self, writer):
+        pass
+
 
 class OffPolicyActorCritic(OffPolicyAlgorithm):
     """
@@ -238,6 +247,7 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         nstep,
         buffer_size,
@@ -253,6 +263,7 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -292,6 +303,7 @@ class QLearning(OffPolicyAlgorithm):
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         nstep,
         buffer_size,
@@ -309,6 +321,7 @@ class QLearning(OffPolicyAlgorithm):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,

@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQFunction
-from rljax.util import get_q_at_action, huber, load_params, save_params
+from rljax.util import clip_gradient_norm, get_q_at_action, huber, load_params, save_params
 
 
 class DQN(QLearning):
@@ -22,6 +22,7 @@ class DQN(QLearning):
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -45,6 +46,7 @@ class DQN(QLearning):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -136,6 +138,8 @@ class DQN(QLearning):
             next_state=next_state,
             weight=weight,
         )
+        if self.max_grad_norm is not None:
+            grad = clip_gradient_norm(grad, self.max_grad_norm)
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
         return opt_state, params, loss, abs_td

@@ -10,7 +10,15 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, SACDecoder, SACEncoder, SACLinear, StateDependentGaussianPolicy
-from rljax.util import load_params, preprocess_state, reparameterize_gaussian_and_tanh, save_params, soft_update, weight_decay
+from rljax.util import (
+    clip_gradient_norm,
+    load_params,
+    preprocess_state,
+    reparameterize_gaussian_and_tanh,
+    save_params,
+    soft_update,
+    weight_decay,
+)
 
 
 class SAC_AE(OffPolicyActorCritic):
@@ -22,6 +30,7 @@ class SAC_AE(OffPolicyActorCritic):
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -51,6 +60,7 @@ class SAC_AE(OffPolicyActorCritic):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -274,6 +284,8 @@ class SAC_AE(OffPolicyActorCritic):
             weight2=weight2,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         params_critic = (params_critic["encoder"], params_critic["linear"], params_critic["critic"])
@@ -332,6 +344,8 @@ class SAC_AE(OffPolicyActorCritic):
             state=state,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor, mean_log_pi
@@ -392,6 +406,8 @@ class SAC_AE(OffPolicyActorCritic):
             state=state,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_ae = clip_gradient_norm(grad_ae, self.max_grad_norm)
         update, opt_state_ae = self.opt_ae(grad_ae, opt_state_ae)
         params_ae = optix.apply_updates(params_ae, update)
         params_ae = (params_ae["encoder"], params_ae["linear"], params_ae["decoder"])

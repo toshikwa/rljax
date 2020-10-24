@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import CumProbNetwork, DiscreteImplicitQuantileFunction, DQNBody
-from rljax.util import get_quantile_at_action, load_params, quantile_loss, save_params
+from rljax.util import clip_gradient_norm, get_quantile_at_action, load_params, quantile_loss, save_params
 
 
 class FQF(QLearning):
@@ -22,6 +22,7 @@ class FQF(QLearning):
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -48,6 +49,7 @@ class FQF(QLearning):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -183,7 +185,8 @@ class FQF(QLearning):
             next_state=next_state,
             weight=weight,
         )
-
+        if self.max_grad_norm is not None:
+            grad = clip_gradient_norm(grad, self.max_grad_norm)
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
         return opt_state, params, loss, abs_td
@@ -259,6 +262,8 @@ class FQF(QLearning):
             feature=feature,
             action=action,
         )
+        if self.max_grad_norm is not None:
+            grad_cum_p = clip_gradient_norm(grad_cum_p, self.max_grad_norm)
         update, opt_state_cum_p = self.opt_cum_p(grad_cum_p, opt_state_cum_p)
         params_cum_p = optix.apply_updates(params_cum_p, update)
         return opt_state_cum_p, params_cum_p, loss_cum_p

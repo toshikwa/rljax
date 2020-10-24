@@ -72,7 +72,7 @@ def make(
     environment_kwargs=None,
     time_limit=None,
 ):
-    env_id = "dmc_%s_%s_%s-v1" % (domain_name, task_name, seed)
+    env_id = "dmc_%s_%s_%s_%s_%s-v1" % (domain_name, task_name, seed, height, width)
 
     if from_pixels:
         assert not visualize_reward, "cannot use visualize reward when learning from pixels"

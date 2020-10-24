@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQuantileFunction
-from rljax.util import get_quantile_at_action, load_params, quantile_loss, save_params
+from rljax.util import clip_gradient_norm, get_quantile_at_action, load_params, quantile_loss, save_params
 
 
 class QRDQN(QLearning):
@@ -22,6 +22,7 @@ class QRDQN(QLearning):
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -46,6 +47,7 @@ class QRDQN(QLearning):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -143,6 +145,8 @@ class QRDQN(QLearning):
             next_state=next_state,
             weight=weight,
         )
+        if self.max_grad_norm is not None:
+            grad = clip_gradient_norm(grad, self.max_grad_norm)
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
         return opt_state, params, loss, abs_td

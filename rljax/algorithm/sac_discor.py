@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.sac import SAC
 from rljax.network import ContinuousQFunction
-from rljax.util import load_params, save_params
+from rljax.util import clip_gradient_norm, load_params, save_params
 
 
 class SAC_DisCor(SAC):
@@ -22,6 +22,7 @@ class SAC_DisCor(SAC):
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -44,6 +45,7 @@ class SAC_DisCor(SAC):
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -217,6 +219,8 @@ class SAC_DisCor(SAC):
             abs_td2=abs_td2,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_error = clip_gradient_norm(grad_error, self.max_grad_norm)
         update, opt_state_error = self.opt_error(grad_error, opt_state_error)
         params_error = optix.apply_updates(params_error, update)
         return opt_state_error, params_error, loss_error, (mean_error1, mean_error2)
