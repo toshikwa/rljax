@@ -1,4 +1,5 @@
 import os
+from collections import deque
 from functools import partial
 from typing import Any, List, Tuple
 
@@ -29,6 +30,37 @@ from rljax.util import (
 )
 
 
+class SlacInput:
+    """
+    Input for SLAC.
+    """
+
+    def __init__(self, state_space, action_space, num_sequences):
+        self.state_shape = state_space.shape
+        self.action_shape = action_space.shape
+        self.num_sequences = num_sequences
+
+    def reset_episode(self, state):
+        self._state = deque(maxlen=self.num_sequences)
+        self._action = deque(maxlen=self.num_sequences - 1)
+        for _ in range(self.num_sequences - 1):
+            self._state.append(np.zeros(self.state_shape, dtype=np.uint8))
+            self._action.append(np.zeros(self.action_shape, dtype=np.float32))
+        self._state.append(state)
+
+    def append(self, state, action):
+        self._state.append(state)
+        self._action.append(action)
+
+    @property
+    def state(self):
+        return np.array(self._state, dtype=np.uint8)[None, ...]
+
+    @property
+    def action(self):
+        return np.array(self._action, dtype=np.float32).reshape(1, -1)
+
+
 class SLAC(Algorithm):
     name = "SLAC"
 
@@ -40,7 +72,7 @@ class SLAC(Algorithm):
         seed,
         max_grad_norm=None,
         gamma=0.99,
-        buffer_size=10 ** 5,
+        buffer_size=50000,
         batch_size_sac=256,
         batch_size_latent=32,
         start_steps=10000,
@@ -55,11 +87,14 @@ class SLAC(Algorithm):
         units_actor=(256, 256),
         units_critic=(256, 256),
         units_latent=(256, 256),
+        d2rl=False,
         feature_dim=256,
         z1_dim=32,
         z2_dim=256,
     ):
         assert len(state_space.shape) == 3 and state_space.shape[:2] == (64, 64)
+        if d2rl:
+            self.name += "-D2RL"
         super(SLAC, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -161,13 +196,14 @@ class SLAC(Algorithm):
             return ContinuousQFunction(
                 num_critics=2,
                 hidden_units=units_critic,
+                d2rl=d2rl,
             )(z, a)
 
         def actor_fn(x):
             return StateDependentGaussianPolicy(
                 action_space=action_space,
                 hidden_units=units_actor,
-                clip_log_std=True,
+                d2rl=d2rl,
             )(x)
 
         # Critic.

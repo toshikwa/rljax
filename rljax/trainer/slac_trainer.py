@@ -1,43 +1,11 @@
 import os
-from collections import deque
 from time import sleep, time
 
-import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .base_trainer import Trainer
-
-
-class SlacInput:
-    """
-    Input for SLAC.
-    """
-
-    def __init__(self, state_space, action_space, num_sequences):
-        self.state_shape = state_space.shape
-        self.action_shape = action_space.shape
-        self.num_sequences = num_sequences
-
-    def reset_episode(self, state):
-        self._state = deque(maxlen=self.num_sequences)
-        self._action = deque(maxlen=self.num_sequences - 1)
-        for _ in range(self.num_sequences - 1):
-            self._state.append(np.zeros(self.state_shape, dtype=np.uint8))
-            self._action.append(np.zeros(self.action_shape, dtype=np.float32))
-        self._state.append(state)
-
-    def append(self, state, action):
-        self._state.append(state)
-        self._action.append(action)
-
-    @property
-    def state(self):
-        return np.array(self._state, dtype=np.uint8)[None, ...]
-
-    @property
-    def action(self):
-        return np.array(self._action, dtype=np.float32).reshape(1, -1)
+from rljax.algorithm.slac import SlacInput
+from rljax.trainer.base_trainer import Trainer
 
 
 class SLACTrainer(Trainer):

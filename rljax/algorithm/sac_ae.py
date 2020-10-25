@@ -46,6 +46,7 @@ class SAC_AE(OffPolicyActorCritic):
         lr_alpha=1e-4,
         units_actor=(1024, 1024),
         units_critic=(1024, 1024),
+        d2rl=False,
         feature_dim=50,
         alpha_init=0.1,
         lambda_latent=1e-6,
@@ -55,6 +56,8 @@ class SAC_AE(OffPolicyActorCritic):
         update_interval_target=2,
     ):
         assert len(state_space.shape) == 3 and state_space.shape[:2] == (84, 84)
+        if d2rl:
+            self.name += "-D2RL"
         super(SAC_AE, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -76,6 +79,7 @@ class SAC_AE(OffPolicyActorCritic):
             return ContinuousQFunction(
                 num_critics=2,
                 hidden_units=units_critic,
+                d2rl=d2rl,
             )(x, a)
 
         def actor_fn(x):
@@ -86,6 +90,7 @@ class SAC_AE(OffPolicyActorCritic):
                 hidden_units=units_actor,
                 log_std_min=-10.0,
                 clip_log_std=False,
+                d2rl=d2rl,
             )(x)
 
         # Encoder.

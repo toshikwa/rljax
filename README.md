@@ -30,8 +30,8 @@ Currently, following algorithms have been implemented.
 | DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
 | TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
 | SAC[[4,5]](#reference)         | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | :heavy_check_mark: | :heavy_check_mark: |
-| SAC+AE[[13]](#reference)       | Continuous         | -                  | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
-| SLAC[[14]](#reference)         | Continuous         | -                  | :heavy_check_mark: | -                          | -    | -    |
+| SAC+AE[[13]](#reference)       | Continuous         | -                  | :heavy_check_mark: | :heavy_check_mark:         | -    | :heavy_check_mark: |
+| SLAC[[14]](#reference)         | Continuous         | -                  | :heavy_check_mark: | -                          | -    | :heavy_check_mark: |
 | DQN[[6]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | :heavy_check_mark: | -    |
 | QR-DQN[[7]](#reference)        | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
 | IQN[[8]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
