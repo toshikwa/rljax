@@ -91,8 +91,8 @@ trainer.train()
 
 I benchmarked my implementations in some environments from MuJoCo's `-v3` task suite, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/mujoco)).
 
-<img src="https://user-images.githubusercontent.com/37267851/97092187-d29a1080-167c-11eb-85ec-11528276fd22.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97092186-d2017a00-167c-11eb-958b-99f837c1425a.png" title="Walker2d-v3" width=400>
-<img src="https://user-images.githubusercontent.com/37267851/97092184-d0d04d00-167c-11eb-9e9e-a9e40721d73f.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97092188-d29a1080-167c-11eb-93a0-56343990f8ce.png" title="Ant-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97110604-72a77680-171d-11eb-8220-3b66ba141deb.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110603-720ee000-171d-11eb-9a24-f3a3297c78b8.png" title="Walker2d-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97110602-70ddb300-171d-11eb-9428-75d4334724ed.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110606-73400d00-171d-11eb-8f23-f060b7a5721b.png" title="Ant-v3" width=400>
 
 </details>
 
