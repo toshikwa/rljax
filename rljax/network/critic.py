@@ -5,7 +5,8 @@ import jax.numpy as jnp
 import numpy as np
 from jax import nn
 
-from rljax.network.base import MLP, DQNBody
+from rljax.network.base import MLP
+from rljax.network.conv import DQNBody
 
 
 class ContinuousVFunction(hk.Module):

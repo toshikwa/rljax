@@ -2,7 +2,8 @@ import haiku as hk
 import jax.numpy as jnp
 from jax import nn
 
-from rljax.network.base import MLP, DQNBody
+from rljax.network.base import MLP
+from rljax.network.conv import DQNBody
 
 
 class DeterministicPolicy(hk.Module):

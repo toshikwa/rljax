@@ -1,5 +1,6 @@
 from .actor import CategoricalPolicy, DeterministicPolicy, StateDependentGaussianPolicy, StateIndependentGaussianPolicy
-from .base import MLP, DQNBody
+from .base import MLP
+from .conv import DQNBody, SACDecoder, SACEncoder, SLACDecoder, SLACEncoder
 from .critic import (
     ContinuousQFunction,
     ContinuousVFunction,
@@ -7,4 +8,4 @@ from .critic import (
     DiscreteQFunction,
     DiscreteQuantileFunction,
 )
-from .misc import ConstantGaussian, CumProbNetwork, Gaussian, SACDecoder, SACEncoder, SACLinear, SLACDecoder, SLACEncoder
+from .misc import ConstantGaussian, CumProbNetwork, Gaussian, SACLinear
