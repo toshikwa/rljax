@@ -76,7 +76,7 @@ class SLAC(Algorithm):
         batch_size_sac=256,
         batch_size_latent=32,
         start_steps=10000,
-        initial_learning_steps=10 ** 5,
+        initial_learning_steps=50000,
         update_interval=1,
         tau=5e-3,
         num_sequences=8,

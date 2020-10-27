@@ -43,7 +43,7 @@ class ContinuousQFunction(hk.Module):
     def __init__(
         self,
         num_critics=2,
-        hidden_units=(400, 300),
+        hidden_units=(256, 256),
         d2rl=False,
     ):
         super(ContinuousQFunction, self).__init__()

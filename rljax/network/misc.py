@@ -134,7 +134,6 @@ class Gaussian(hk.Module):
             output_dim=2 * self.output_dim,
             hidden_units=self.hidden_units,
             hidden_activation=partial(nn.leaky_relu, negative_slope=self.negative_slope),
-            hidden_scale=np.sqrt(2 / (1 + self.negative_slope ** 2)),
         )(x)
         mean, log_std = jnp.split(x, 2, axis=1)
         std = nn.softplus(log_std) + 1e-5
@@ -159,7 +158,7 @@ class SLACEncoder(hk.Module):
         # Reshape.
         x = x.reshape([B * S, H, W, C])
         # Apply CNN.
-        w_init = DeltaOrthogonal(scale=np.sqrt(2 / (1 + self.negative_slope ** 2)))
+        w_init = DeltaOrthogonal(scale=1.0)
         depth = [32, 64, 128, 256, self.output_dim]
         kernel = [5, 3, 3, 3, 4]
         stride = [2, 2, 2, 2, 1]
@@ -196,7 +195,7 @@ class SLACDecoder(hk.Module):
         x = x.reshape([B * S, 1, 1, latent_dim])
 
         # Apply CNN.
-        w_init = DeltaOrthogonal(scale=np.sqrt(2 / (1 + self.negative_slope ** 2)))
+        w_init = DeltaOrthogonal(scale=1.0)
         depth = [256, 128, 64, 32, self.state_space.shape[2]]
         kernel = [4, 3, 3, 3, 5]
         stride = [1, 2, 2, 2, 2]
@@ -212,7 +211,6 @@ class SLACDecoder(hk.Module):
             )(x)
             x = nn.leaky_relu(x, self.negative_slope)
 
-        w_init = DeltaOrthogonal(scale=1.0)
         x = hk.Conv2DTranspose(
             depth[-1],
             kernel_shape=kernel[-1],

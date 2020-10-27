@@ -186,6 +186,11 @@ class DMCWrapper(core.Env):
         self._observation_space.seed(seed)
 
     def step(self, action):
+        action = np.clip(
+            action,
+            a_min=self._norm_action_space.low,
+            a_max=self._norm_action_space.high,
+        )
         assert self._norm_action_space.contains(action)
         action = self._convert_action(action)
         assert self._true_action_space.contains(action)
