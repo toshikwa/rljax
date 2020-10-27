@@ -101,7 +101,7 @@ I benchmarked my implementations in some environments from MuJoCo's `-v3` task s
 
 I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind Control Suite ([code](https://github.com/ku2482/rljax/blob/master/examples/dm_control)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat.
 
-<img src="https://user-images.githubusercontent.com/37267851/96671914-f23fe900-139d-11eb-9ca5-ff1e3ad39bd8.png" title="cheetah-run" width=400><img src="https://user-images.githubusercontent.com/37267851/96671916-f409ac80-139d-11eb-8daa-2978e93876ea.png" title="walker-walk" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97359828-b7c7d600-18e0-11eb-8c79-852624dfa1e8.png" title="cheetah-run" width=400><img src="https://user-images.githubusercontent.com/37267851/97359825-b696a900-18e0-11eb-88e2-b532076de7e8.png" title="walker-walk" width=400>
 
 </details>
 
