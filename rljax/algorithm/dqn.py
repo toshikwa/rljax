@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import DiscreteQFunction
-from rljax.util import get_q_at_action, huber_fn, load_params, save_params
+from rljax.util import clip_gradient_norm, get_q_at_action, huber, load_params, save_params
 
 
 class DQN(QLearning):
@@ -18,10 +18,11 @@ class DQN(QLearning):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -35,16 +36,17 @@ class DQN(QLearning):
         eps_decay_steps=250000,
         lr=2.5e-4,
         units=(512,),
-        loss_type="l2",
+        loss_type="huber",
         dueling_net=False,
         double_q=False,
     ):
         assert loss_type in ["l2", "huber"]
         super(DQN, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -136,6 +138,8 @@ class DQN(QLearning):
             next_state=next_state,
             weight=weight,
         )
+        if self.max_grad_norm is not None:
+            grad = clip_gradient_norm(grad, self.max_grad_norm)
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
         return opt_state, params, loss, abs_td
@@ -167,11 +171,10 @@ class DQN(QLearning):
         if self.loss_type == "l2":
             loss = jnp.mean(jnp.square(td) * weight)
         elif self.loss_type == "huber":
-            loss = jnp.mean(huber_fn(td) * weight)
+            loss = jnp.mean(huber(td) * weight)
         return loss, jax.lax.stop_gradient(jnp.abs(td))
 
     def save_params(self, save_dir):
-        super(DQN, self).save_params(save_dir)
         save_params(self.params, os.path.join(save_dir, "params.npz"))
 
     def load_params(self, save_dir):

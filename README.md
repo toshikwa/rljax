@@ -24,18 +24,19 @@ pip install mujoco_py==2.0.2.11
 ## Algorithm
 Currently, following algorithms have been implemented.
 
-| **Algorithm** | **Action Space** | **Vector State** | **Pixel State** | **PER**[[11]](#reference) | **DisCor**[[12]](#reference) |
-| :--                            | :--                | :--:               | :--:               | :--:                       | :--: |
-| PPO[[1]](#reference)           | Continuous         | :heavy_check_mark: | -                  | -                          | -    |
-| DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    |
-| TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    |
-| SAC[[4,5]](#reference)         | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | :heavy_check_mark: |
-| SAC+AE[[13]](#reference)      | Continuous         | -                  | :heavy_check_mark: | :heavy_check_mark:         | -    |
-| DQN[[6]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | :heavy_check_mark: |
-| QR-DQN[[7]](#reference)        | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
-| IQN[[8]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
-| FQF[[9]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
-| SAC-Discrete[[10]](#reference) | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    |
+| **Algorithm** | **Action Space** | **Vector State** | **Pixel State** | **PER**[[11]](#reference) | **DisCor**[[12]](#reference) | **D2RL**[[15]](#reference) |
+| :--                            | :--                | :--:               | :--:               | :--:                       | :--: | :--: |
+| PPO[[1]](#reference)           | Continuous         | :heavy_check_mark: | -                  | -                          | -    | -    |
+| DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
+| TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
+| SAC[[4,5]](#reference)         | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | :heavy_check_mark: | :heavy_check_mark: |
+| SAC+AE[[13]](#reference)       | Continuous         | -                  | :heavy_check_mark: | :heavy_check_mark:         | -    | :heavy_check_mark: |
+| SLAC[[14]](#reference)         | Continuous         | -                  | :heavy_check_mark: | -                          | -    | :heavy_check_mark: |
+| DQN[[6]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | :heavy_check_mark: | -    |
+| QR-DQN[[7]](#reference)        | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
+| IQN[[8]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
+| FQF[[9]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
+| SAC-Discrete[[10]](#reference) | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
 
 ## Example
 All algorithms can be trained in a few lines of code.
@@ -51,14 +52,14 @@ import gym
 from rljax.algorithm import DQN
 from rljax.trainer import Trainer
 
-NUM_STEPS = 20000
+NUM_AGENT_STEPS = 20000
 SEED = 0
 
 env = gym.make("CartPole-v0")
 env_test = gym.make("CartPole-v0")
 
 algo = DQN(
-    num_steps=NUM_STEPS,
+    num_agent_steps=NUM_AGENT_STEPS,
     state_space=env.observation_space,
     action_space=env.action_space,
     seed=SEED,
@@ -76,7 +77,7 @@ trainer = Trainer(
     env_test=env_test,
     algo=algo,
     log_dir="/tmp/rljax/dqn",
-    num_steps=NUM_STEPS,
+    num_agent_steps=NUM_AGENT_STEPS,
     eval_interval=1000,
     seed=SEED,
 )
@@ -85,25 +86,24 @@ trainer.train()
 
 </details>
 
-<!-- <details>
-<summary>Simple examples</summary>
-
-Below shows that our algorithms successfully learning the discrete action environment `CartPole-v0` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_continuous_easy.py)) and the continuous action environment `InvertedPendulum-v2` ([code](https://github.com/ku2482/rljax/blob/master/examples/train_discrete_easy.py)).
-
-<img src="https://user-images.githubusercontent.com/37267851/94993592-08dbf700-05cd-11eb-8bf0-a40f8e0567d0.png" title="CartPole-v0" width=400><img src="https://user-images.githubusercontent.com/37267851/94993625-4fc9ec80-05cd-11eb-8c2d-a0bf0c791086.png" title="InvertedPendulum-v2" width=400>
-
-</details> -->
-
 <details>
-<summary>MuJoCo(Gym)</summary>
+<summary>Gym(MuJoCo)</summary>
 
-I benchmarked my implementations in some environments from MuJoCo's `-v3` task suites, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/train_mujoco.py)).
+I benchmarked my implementations in some environments from MuJoCo's `-v3` task suite, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/mujoco)).
 
-<img src="https://user-images.githubusercontent.com/37267851/95005023-f04ff900-062d-11eb-8dfd-78a488837c93.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/95005020-eded9f00-062d-11eb-9fd9-a82346aa6c11.png" title="Walker2d-v3" width=400>
-<img src="https://user-images.githubusercontent.com/37267851/95014273-c542c500-0680-11eb-8233-89d1ace6ba33.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/95005021-efb76280-062d-11eb-8bfb-249cd87066ea.png" title="Ant-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97110604-72a77680-171d-11eb-8220-3b66ba141deb.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110603-720ee000-171d-11eb-9a24-f3a3297c78b8.png" title="Walker2d-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97110602-70ddb300-171d-11eb-9428-75d4334724ed.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110606-73400d00-171d-11eb-8f23-f060b7a5721b.png" title="Ant-v3" width=400>
 
 </details>
 
+<details>
+<summary>DeepMind Control Suite</summary>
+
+I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind Control Suite ([code](https://github.com/ku2482/rljax/blob/master/examples/dm_control)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat.
+
+<img src="https://user-images.githubusercontent.com/37267851/97359828-b7c7d600-18e0-11eb-8c79-852624dfa1e8.png" title="cheetah-run" width=400><img src="https://user-images.githubusercontent.com/37267851/97359825-b696a900-18e0-11eb-88e2-b532076de7e8.png" title="walker-walk" width=400>
+
+</details>
 
 ## Reference
 [[1]](https://arxiv.org/abs/1707.06347) Schulman, John, et al. "Proximal policy optimization algorithms." arXiv preprint arXiv:1707.06347 (2017).
@@ -131,3 +131,7 @@ I benchmarked my implementations in some environments from MuJoCo's `-v3` task s
 [[12]](https://arxiv.org/abs/2003.07305) Kumar, Aviral, Abhishek Gupta, and Sergey Levine. "Discor: Corrective feedback in reinforcement learning via distribution correction." arXiv preprint arXiv:2003.07305 (2020).
 
 [[13]](https://arxiv.org/abs/1910.01741) Yarats, Denis, et al. "Improving sample efficiency in model-free reinforcement learning from images." arXiv preprint arXiv:1910.01741 (2019).
+
+[[14]](https://arxiv.org/abs/1907.00953) Lee, Alex X., et al. "Stochastic latent actor-critic: Deep reinforcement learning with a latent variable model." arXiv preprint arXiv:1907.00953 (2019).
+
+[[15]](https://arxiv.org/abs/2010.09163) Sinha, Samarth, et al. "D2RL: Deep Dense Architectures in Reinforcement Learning." arXiv preprint arXiv:2010.09163 (2020).

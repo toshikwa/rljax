@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
-from rljax.util import load_params, reparameterize_gaussian_with_tanh, save_params
+from rljax.util import clip_gradient_norm, load_params, reparameterize_gaussian_and_tanh, save_params
 
 
 class SAC(OffPolicyActorCritic):
@@ -18,10 +18,11 @@ class SAC(OffPolicyActorCritic):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -35,12 +36,14 @@ class SAC(OffPolicyActorCritic):
         lr_alpha=3e-4,
         units_actor=(256, 256),
         units_critic=(256, 256),
+        d2rl=False,
     ):
         super(SAC, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -50,17 +53,21 @@ class SAC(OffPolicyActorCritic):
             update_interval=update_interval,
             tau=tau,
         )
+        if d2rl:
+            self.name += "-D2RL"
 
         def critic_fn(s, a):
             return ContinuousQFunction(
                 num_critics=2,
                 hidden_units=units_critic,
+                d2rl=d2rl,
             )(s, a)
 
         def actor_fn(s):
             return StateDependentGaussianPolicy(
                 action_space=action_space,
                 hidden_units=units_actor,
+                d2rl=d2rl,
             )(s)
 
         # Critic.
@@ -98,7 +105,7 @@ class SAC(OffPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize_gaussian_with_tanh(mean, log_std, key)[0]
+        return reparameterize_gaussian_and_tanh(mean, log_std, key, False)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -184,6 +191,8 @@ class SAC(OffPolicyActorCritic):
             weight2=weight2,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         return opt_state_critic, params_critic, loss_critic, (abs_td1, abs_td2)
@@ -207,7 +216,7 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         # Sample next actions.
         next_mean, next_log_std = self.actor.apply(params_actor, next_state)
-        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, key)
+        next_action, next_log_pi = reparameterize_gaussian_and_tanh(next_mean, next_log_std, key, True)
         # Calculate target soft q values (clipped double q) with target critic.
         next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
@@ -236,6 +245,8 @@ class SAC(OffPolicyActorCritic):
             state=state,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor, mean_log_pi
@@ -252,7 +263,7 @@ class SAC(OffPolicyActorCritic):
         alpha = jnp.exp(log_alpha)
         # Sample actions.
         mean, log_std = self.actor.apply(params_actor, state)
-        action, log_pi = reparameterize_gaussian_with_tanh(mean, log_std, key)
+        action, log_pi = reparameterize_gaussian_and_tanh(mean, log_std, key, True)
         # Calculate soft q values with online critic.
         q1, q2 = self.critic.apply(params_critic, state, action)
         mean_log_pi = log_pi.mean()
@@ -282,7 +293,6 @@ class SAC(OffPolicyActorCritic):
         return -log_alpha * (self.target_entropy + mean_log_pi)
 
     def save_params(self, save_dir):
-        super(SAC, self).save_params(save_dir)
         save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
         save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
 

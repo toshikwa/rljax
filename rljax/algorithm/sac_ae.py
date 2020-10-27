@@ -10,7 +10,15 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, SACDecoder, SACEncoder, SACLinear, StateDependentGaussianPolicy
-from rljax.util import load_params, preprocess_state, reparameterize_gaussian_with_tanh, save_params, soft_update
+from rljax.util import (
+    clip_gradient_norm,
+    load_params,
+    preprocess_state,
+    reparameterize_gaussian_and_tanh,
+    save_params,
+    soft_update,
+    weight_decay,
+)
 
 
 class SAC_AE(OffPolicyActorCritic):
@@ -18,10 +26,11 @@ class SAC_AE(OffPolicyActorCritic):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -37,18 +46,24 @@ class SAC_AE(OffPolicyActorCritic):
         lr_alpha=1e-4,
         units_actor=(1024, 1024),
         units_critic=(1024, 1024),
+        d2rl=False,
         feature_dim=50,
         alpha_init=0.1,
+        lambda_latent=1e-6,
+        lambda_weight=1e-7,
         update_interval_actor=2,
         update_interval_ae=1,
         update_interval_target=2,
     ):
-        assert len(state_space.shape) == 3
+        assert len(state_space.shape) == 3 and state_space.shape[:2] == (84, 84)
+        if d2rl:
+            self.name += "-D2RL"
         super(SAC_AE, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -64,6 +79,7 @@ class SAC_AE(OffPolicyActorCritic):
             return ContinuousQFunction(
                 num_critics=2,
                 hidden_units=units_critic,
+                d2rl=d2rl,
             )(x, a)
 
         def actor_fn(x):
@@ -72,7 +88,9 @@ class SAC_AE(OffPolicyActorCritic):
             return StateDependentGaussianPolicy(
                 action_space=action_space,
                 hidden_units=units_actor,
+                log_std_min=-10.0,
                 clip_log_std=False,
+                d2rl=d2rl,
             )(x)
 
         # Encoder.
@@ -112,6 +130,8 @@ class SAC_AE(OffPolicyActorCritic):
 
         # Other parameters.
         self._update_target_ae = jax.jit(partial(soft_update, tau=tau_ae))
+        self.lambda_latent = lambda_latent
+        self.lambda_weight = lambda_weight
         self.update_interval_actor = update_interval_actor
         self.update_interval_ae = update_interval_ae
         self.update_interval_target = update_interval_target
@@ -169,7 +189,7 @@ class SAC_AE(OffPolicyActorCritic):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         last_conv = self.encoder.apply(params_encoder, state)
         mean, log_std = self.actor.apply(params_actor, last_conv)
-        return reparameterize_gaussian_with_tanh(mean, log_std, key)[0]
+        return reparameterize_gaussian_and_tanh(mean, log_std, key, False)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -269,6 +289,8 @@ class SAC_AE(OffPolicyActorCritic):
             weight2=weight2,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         params_critic = (params_critic["encoder"], params_critic["linear"], params_critic["critic"])
@@ -294,10 +316,10 @@ class SAC_AE(OffPolicyActorCritic):
         # Sample next actions.
         next_last_conv = self.encoder.apply(params_critic["encoder"], next_state)
         next_mean, next_log_std = self.actor.apply(params_actor, next_last_conv)
-        next_action, next_log_pi = reparameterize_gaussian_with_tanh(next_mean, next_log_std, key)
+        next_action, next_log_pi = reparameterize_gaussian_and_tanh(next_mean, next_log_std, key, True)
         # Calculate target soft q values (clipped double q) with target critic.
-        next_last_conv = self.encoder.apply(params_critic_target["encoder"], next_state)
-        next_feature = self.linear.apply(params_critic_target["linear"], next_last_conv)
+        next_last_conv_prime = self.encoder.apply(params_critic_target["encoder"], next_state)
+        next_feature = self.linear.apply(params_critic_target["linear"], next_last_conv_prime)
         next_q1, next_q2 = self.critic.apply(params_critic_target["critic"], next_feature, next_action)
         next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
         target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
@@ -327,6 +349,8 @@ class SAC_AE(OffPolicyActorCritic):
             state=state,
             key=key,
         )
+        if self.max_grad_norm is not None:
+            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor, mean_log_pi
@@ -341,15 +365,15 @@ class SAC_AE(OffPolicyActorCritic):
         key: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
-        # Sample actions.
         last_conv = jax.lax.stop_gradient(self.encoder.apply(params_critic["encoder"], state))
+        # Sample actions.
         mean, log_std = self.actor.apply(params_actor, last_conv)
-        action, log_pi = reparameterize_gaussian_with_tanh(mean, log_std, key)
+        action, log_pi = reparameterize_gaussian_and_tanh(mean, log_std, key, True)
         # Calculate soft q values with online critic.
         feature = self.linear.apply(params_critic["linear"], last_conv)
         q1, q2 = self.critic.apply(params_critic["critic"], feature, action)
         mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), mean_log_pi
+        return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)
     def _update_alpha(
@@ -387,7 +411,9 @@ class SAC_AE(OffPolicyActorCritic):
             state=state,
             key=key,
         )
-        update, opt_state_ae = self.opt_actor(grad_ae, opt_state_ae)
+        if self.max_grad_norm is not None:
+            grad_ae = clip_gradient_norm(grad_ae, self.max_grad_norm)
+        update, opt_state_ae = self.opt_ae(grad_ae, opt_state_ae)
         params_ae = optix.apply_updates(params_ae, update)
         params_ae = (params_ae["encoder"], params_ae["linear"], params_ae["decoder"])
         return opt_state_ae, params_ae, loss_ae
@@ -400,7 +426,7 @@ class SAC_AE(OffPolicyActorCritic):
         key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         # Preprocess states.
-        target = preprocess_state(state, key, 5)
+        target = preprocess_state(state, key)
         # Reconstruct states.
         last_conv = self.encoder.apply(params_ae["encoder"], state)
         feature = self.linear.apply(params_ae["linear"], last_conv)
@@ -410,12 +436,13 @@ class SAC_AE(OffPolicyActorCritic):
         loss_reconst = jnp.square(target - reconst).mean()
         # L2 penalty of latent representations following RAE.
         loss_latent = 0.5 * jnp.square(feature).sum(axis=1).mean()
+        # Weight decay for the decoder.
+        loss_weight = weight_decay(params_ae["decoder"])
         # RAE loss is reconstruction loss plus the reglarizations.
         # (i.e. L2 penalty of latent representations + weight decay.)
-        return loss_reconst + 1e-6 * loss_latent
+        return loss_reconst + self.lambda_latent * loss_latent + self.lambda_weight * loss_weight
 
     def save_params(self, save_dir):
-        super(SAC_AE, self).save_params(save_dir)
         save_params(self.params_encoder, os.path.join(save_dir, "params_encoder.npz"))
         save_params(self.params_linear, os.path.join(save_dir, "params_linear.npz"))
         save_params(self.params_decoder, os.path.join(save_dir, "params_decoder.npz"))

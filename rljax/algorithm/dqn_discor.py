@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.dqn import DQN
 from rljax.network import DiscreteQFunction
-from rljax.util import get_q_at_action, load_params, save_params, soft_update
+from rljax.util import clip_gradient_norm, get_q_at_action, load_params, save_params, soft_update
 
 
 class DQN_DisCor(DQN):
@@ -18,10 +18,11 @@ class DQN_DisCor(DQN):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -44,10 +45,11 @@ class DQN_DisCor(DQN):
     ):
         assert nstep == 1
         super(DQN_DisCor, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -181,6 +183,8 @@ class DQN_DisCor(DQN):
             next_state=next_state,
             abs_td=abs_td,
         )
+        if self.max_grad_norm is not None:
+            grad_error = clip_gradient_norm(grad_error, self.max_grad_norm)
         update, opt_state_error = self.opt_error(grad_error, opt_state_error)
         params_error = optix.apply_updates(params_error, update)
         return opt_state_error, params_error, loss_error, mean_error

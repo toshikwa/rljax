@@ -5,6 +5,7 @@ from collections import deque
 import gym
 import numpy as np
 from gym import spaces, wrappers
+from gym.wrappers.time_limit import TimeLimit
 
 import cv2
 
@@ -150,7 +151,7 @@ class MaxAndSkipEnv(gym.Wrapper):
         return self.env.reset(**kwargs)
 
 
-class ClipRewardEnv(gym.RewardWrapper):
+class SignRewardEnv(gym.RewardWrapper):
     def __init__(self, env):
         """
         clips the reward to {+1, 0, -1} by its sign.
@@ -164,6 +165,22 @@ class ClipRewardEnv(gym.RewardWrapper):
         :param reward: (float)
         """
         return np.sign(reward)
+
+
+class ClipRewardEnv(gym.RewardWrapper):
+    def __init__(self, env):
+        """
+        clips the reward to [-1, 1].
+        :param env: (Gym Environment) the environment
+        """
+        gym.RewardWrapper.__init__(self, env)
+
+    def reward(self, reward):
+        """
+        Bin reward to [-1, 1].
+        :param reward: (float)
+        """
+        return np.clip(reward, a_min=-1.0, a_max=1.0)
 
 
 class WarpFrame(gym.ObservationWrapper):
@@ -261,12 +278,19 @@ def make_atari(env_id):
     return env
 
 
-def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False):
+def wrap_deepmind(
+    env,
+    episode_life=True,
+    sign_rewards=True,
+    clip_rewards=False,
+    frame_stack=False,
+):
     """
     Configure environment for DeepMind-style Atari.
     :param env: (Gym Environment) the atari environment
     :param episode_life: (bool) wrap the episode life wrapper
-    :param clip_rewards: (bool) wrap the reward clipping wrapper
+    :param sign_rewards: (bool) wrap the reward clipping (sign) wrapper
+    :param clip_rewards: (bool) wrap the reward clipping (from -1 to 1) wrapper
     :param frame_stack: (bool) wrap the frame stacking wrapper
     :return: (Gym Environment) the wrapped atari environment
     """
@@ -275,6 +299,8 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False):
     if "FIRE" in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
     env = WarpFrame(env)
+    if sign_rewards:
+        env = SignRewardEnv(env)
     if clip_rewards:
         env = ClipRewardEnv(env)
     if frame_stack:
@@ -282,10 +308,18 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False):
     return env
 
 
-def make_atari_env(env_id, episode_life=True, clip_rewards=True, frame_stack=True):
+def make_atari_env(
+    env_id,
+    episode_life=True,
+    sign_rewards=True,
+    clip_rewards=False,
+    frame_stack=True,
+    max_episode_steps=27000,
+):
+    assert not (sign_rewards and clip_rewards)
     env = make_atari(env_id)
-    env = wrap_deepmind(env, episode_life, clip_rewards, frame_stack)
-    setattr(env, "_max_episode_steps", min(env.spec.max_episode_steps, 27000))
+    env = wrap_deepmind(env, episode_life, sign_rewards, clip_rewards, frame_stack)
+    env = TimeLimit(env, max_episode_steps=max_episode_steps)
     return env
 
 

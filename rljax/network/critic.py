@@ -2,9 +2,11 @@ import math
 
 import haiku as hk
 import jax.numpy as jnp
+import numpy as np
 from jax import nn
 
-from rljax.network.base import MLP, DQNBody
+from rljax.network.base import MLP
+from rljax.network.conv import DQNBody
 
 
 class ContinuousVFunction(hk.Module):
@@ -16,16 +18,18 @@ class ContinuousVFunction(hk.Module):
         self,
         num_critics=1,
         hidden_units=(64, 64),
-        hidden_activation=jnp.tanh,
     ):
         super(ContinuousVFunction, self).__init__()
         self.num_critics = num_critics
         self.hidden_units = hidden_units
-        self.hidden_activation = hidden_activation
 
     def __call__(self, x):
         def _fn(x):
-            return MLP(1, self.hidden_units, self.hidden_activation)(x)
+            return MLP(
+                1,
+                self.hidden_units,
+                hidden_activation=jnp.tanh,
+            )(x)
 
         if self.num_critics == 1:
             return _fn(x)
@@ -40,17 +44,23 @@ class ContinuousQFunction(hk.Module):
     def __init__(
         self,
         num_critics=2,
-        hidden_units=(400, 300),
-        hidden_activation=nn.relu,
+        hidden_units=(256, 256),
+        d2rl=False,
     ):
         super(ContinuousQFunction, self).__init__()
         self.num_critics = num_critics
         self.hidden_units = hidden_units
-        self.hidden_activation = hidden_activation
+        self.d2rl = d2rl
 
     def __call__(self, s, a):
         def _fn(x):
-            return MLP(1, self.hidden_units, self.hidden_activation)(x)
+            return MLP(
+                1,
+                self.hidden_units,
+                hidden_activation=nn.relu,
+                hidden_scale=np.sqrt(2),
+                d2rl=self.d2rl,
+            )(x)
 
         x = jnp.concatenate([s, a], axis=1)
         if self.num_critics == 1:
@@ -68,23 +78,31 @@ class DiscreteQFunction(hk.Module):
         action_space,
         num_critics=1,
         hidden_units=(512,),
-        dueling_net=True,
-        hidden_activation=nn.relu,
+        dueling_net=False,
     ):
         super(DiscreteQFunction, self).__init__()
         self.action_space = action_space
         self.num_critics = num_critics
         self.hidden_units = hidden_units
         self.dueling_net = dueling_net
-        self.hidden_activation = hidden_activation
 
     def __call__(self, x):
         def _fn(x):
             if len(x.shape) == 4:
                 x = DQNBody()(x)
-            output = MLP(self.action_space.n, self.hidden_units, self.hidden_activation)(x)
+            output = MLP(
+                self.action_space.n,
+                self.hidden_units,
+                hidden_activation=nn.relu,
+                hidden_scale=np.sqrt(2),
+            )(x)
             if self.dueling_net:
-                baseline = MLP(1, self.hidden_units, self.hidden_activation)(x)
+                baseline = MLP(
+                    1,
+                    self.hidden_units,
+                    hidden_activation=nn.relu,
+                    hidden_scale=np.sqrt(2),
+                )(x)
                 return output + baseline - output.mean(axis=1, keepdims=True)
             else:
                 return output
@@ -106,7 +124,6 @@ class DiscreteQuantileFunction(hk.Module):
         num_quantiles=200,
         hidden_units=(512,),
         dueling_net=True,
-        hidden_activation=nn.relu,
     ):
         super(DiscreteQuantileFunction, self).__init__()
         self.action_space = action_space
@@ -114,16 +131,25 @@ class DiscreteQuantileFunction(hk.Module):
         self.num_quantiles = num_quantiles
         self.hidden_units = hidden_units
         self.dueling_net = dueling_net
-        self.hidden_activation = hidden_activation
 
     def __call__(self, x):
         def _fn(x):
             if len(x.shape) == 4:
                 x = DQNBody()(x)
-            output = MLP(self.action_space.n * self.num_quantiles, self.hidden_units, self.hidden_activation)(x)
+            output = MLP(
+                self.action_space.n * self.num_quantiles,
+                self.hidden_units,
+                hidden_activation=nn.relu,
+                hidden_scale=np.sqrt(2),
+            )(x)
             output = output.reshape(-1, self.num_quantiles, self.action_space.n)
             if self.dueling_net:
-                baseline = MLP(self.num_quantiles, self.hidden_units, self.hidden_activation)(x)
+                baseline = MLP(
+                    self.num_quantiles,
+                    self.hidden_units,
+                    hidden_activation=nn.relu,
+                    hidden_scale=np.sqrt(2),
+                )(x)
                 baseline = baseline.reshape(-1, self.num_quantiles, 1)
                 return output + baseline - output.mean(axis=2, keepdims=True)
             else:
@@ -146,14 +172,12 @@ class DiscreteImplicitQuantileFunction(hk.Module):
         num_cosines=64,
         hidden_units=(512,),
         dueling_net=True,
-        hidden_activation=nn.relu,
     ):
         super(DiscreteImplicitQuantileFunction, self).__init__()
         self.action_space = action_space
         self.num_critics = num_critics
         self.num_cosines = num_cosines
         self.hidden_units = hidden_units
-        self.hidden_activation = hidden_activation
         self.dueling_net = dueling_net
         self.pi = math.pi * jnp.arange(1, num_cosines + 1, dtype=jnp.float32).reshape(1, 1, num_cosines)
 
@@ -170,10 +194,20 @@ class DiscreteImplicitQuantileFunction(hk.Module):
             cosine_feature = nn.relu(hk.Linear(feature_dim)(cosine)).reshape(-1, num_quantiles, feature_dim)
             x = (x.reshape(-1, 1, feature_dim) * cosine_feature).reshape(-1, feature_dim)
             # Apply quantile network.
-            output = MLP(self.action_space.n, self.hidden_units, self.hidden_activation)(x)
+            output = MLP(
+                self.action_space.n,
+                self.hidden_units,
+                hidden_activation=nn.relu,
+                hidden_scale=np.sqrt(2),
+            )(x)
             output = output.reshape(-1, num_quantiles, self.action_space.n)
             if self.dueling_net:
-                baseline = MLP(1, self.hidden_units, self.hidden_activation)(x)
+                baseline = MLP(
+                    1,
+                    self.hidden_units,
+                    hidden_activation=nn.relu,
+                    hidden_scale=np.sqrt(2),
+                )(x)
                 baseline = baseline.reshape(-1, num_quantiles, 1)
                 return output + baseline - output.mean(axis=2, keepdims=True)
             else:

@@ -10,7 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import QLearning
 from rljax.network import CumProbNetwork, DiscreteImplicitQuantileFunction, DQNBody
-from rljax.util import calculate_quantile_loss, get_quantile_at_action, load_params, save_params
+from rljax.util import clip_gradient_norm, get_quantile_at_action, load_params, quantile_loss, save_params
 
 
 class FQF(QLearning):
@@ -18,10 +18,11 @@ class FQF(QLearning):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm=None,
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
@@ -38,16 +39,17 @@ class FQF(QLearning):
         units=(512,),
         num_quantiles=32,
         num_cosines=64,
-        loss_type="l2",
+        loss_type="huber",
         dueling_net=False,
         double_q=False,
     ):
         assert loss_type in ["l2", "huber"]
         super(FQF, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -183,7 +185,8 @@ class FQF(QLearning):
             next_state=next_state,
             weight=weight,
         )
-
+        if self.max_grad_norm is not None:
+            grad = clip_gradient_norm(grad, self.max_grad_norm)
         update, opt_state = self.opt(grad, opt_state)
         params = optix.apply_updates(params, update)
         return opt_state, params, loss, abs_td
@@ -235,7 +238,7 @@ class FQF(QLearning):
         # Calculate current quantile values, whose shape is (batch_size, N, 1).
         curr_quantile = get_quantile_at_action(self.quantile_net.apply(params["quantile"], feature, cum_p_prime), action)
         td = target_quantile - curr_quantile
-        loss = calculate_quantile_loss(td, cum_p_prime, weight, self.loss_type)
+        loss = quantile_loss(td, cum_p_prime, weight, self.loss_type)
         abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
         return loss, jax.lax.stop_gradient(abs_td)
 
@@ -259,6 +262,8 @@ class FQF(QLearning):
             feature=feature,
             action=action,
         )
+        if self.max_grad_norm is not None:
+            grad_cum_p = clip_gradient_norm(grad_cum_p, self.max_grad_norm)
         update, opt_state_cum_p = self.opt_cum_p(grad_cum_p, opt_state_cum_p)
         params_cum_p = optix.apply_updates(params_cum_p, update)
         return opt_state_cum_p, params_cum_p, loss_cum_p
@@ -282,7 +287,6 @@ class FQF(QLearning):
         return (cum_p[:, 1:-1] * grad).sum(axis=1).mean()
 
     def save_params(self, save_dir):
-        super(FQF, self).save_params(save_dir)
         save_params(self.params, os.path.join(save_dir, "params.npz"))
         save_params(self.params_cum_p, os.path.join(save_dir, "params_cum_p.npz"))
 

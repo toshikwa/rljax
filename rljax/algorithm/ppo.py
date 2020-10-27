@@ -10,7 +10,13 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
-from rljax.util import clip_gradient, evaluate_lop_pi, load_params, reparameterize_gaussian_with_tanh, save_params
+from rljax.util import (
+    clip_gradient_norm,
+    evaluate_gaussian_and_tanh_log_prob,
+    load_params,
+    reparameterize_gaussian_and_tanh,
+    save_params,
+)
 
 
 class PPO(OnPolicyActorCritic):
@@ -18,10 +24,11 @@ class PPO(OnPolicyActorCritic):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm=10.0,
         gamma=0.995,
         buffer_size=2048,
         batch_size=64,
@@ -32,14 +39,14 @@ class PPO(OnPolicyActorCritic):
         epoch_ppo=10,
         clip_eps=0.2,
         lambd=0.97,
-        max_grad_norm=10.0,
     ):
         assert buffer_size % batch_size == 0
         super(PPO, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             buffer_size=buffer_size,
             batch_size=batch_size,
@@ -93,7 +100,7 @@ class PPO(OnPolicyActorCritic):
         state: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
-        return reparameterize_gaussian_with_tanh(mean, log_std, key)
+        return reparameterize_gaussian_and_tanh(mean, log_std, key, True)
 
     def update(self, writer=None):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()
@@ -148,7 +155,8 @@ class PPO(OnPolicyActorCritic):
             state=state,
             target=target,
         )
-        grad_critic = clip_gradient(grad_critic, self.max_grad_norm)
+        if self.max_grad_norm is not None:
+            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
         return opt_state_critic, params_critic, loss_critic
@@ -179,7 +187,8 @@ class PPO(OnPolicyActorCritic):
             log_pi_old=log_pi_old,
             gae=gae,
         )
-        grad_actor = clip_gradient(grad_actor, self.max_grad_norm)
+        if self.max_grad_norm is not None:
+            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
         update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
         params_actor = optix.apply_updates(params_actor, update)
         return opt_state_actor, params_actor, loss_actor
@@ -195,7 +204,7 @@ class PPO(OnPolicyActorCritic):
     ) -> jnp.ndarray:
         # Calculate log(\pi) at current policy.
         mean, log_std = self.actor.apply(params_actor, state)
-        log_pi = evaluate_lop_pi(mean, log_std, action)
+        log_pi = evaluate_gaussian_and_tanh_log_prob(mean, log_std, action)
         # Calculate importance ratio.
         ratio = jnp.exp(log_pi - log_pi_old)
         loss_actor1 = -ratio * gae
@@ -225,7 +234,6 @@ class PPO(OnPolicyActorCritic):
         return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
 
     def save_params(self, save_dir):
-        super(PPO, self).save_params(save_dir)
         save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
         save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
 

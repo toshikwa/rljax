@@ -1,4 +1,3 @@
-import os
 from abc import ABC, abstractmethod
 from functools import partial
 
@@ -20,10 +19,11 @@ class Algorithm(ABC):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
     ):
         np.random.seed(seed)
@@ -32,10 +32,11 @@ class Algorithm(ABC):
         self.agent_step = 0
         self.episode_step = 0
         self.learning_step = 0
-        self.num_steps = num_steps
+        self.num_agent_steps = num_agent_steps
         self.state_space = state_space
         self.action_space = action_space
         self.gamma = gamma
+        self.max_grad_norm = max_grad_norm
 
         # Define fake input for JIT.
         self.fake_state = state_space.sample()[None, ...]
@@ -60,13 +61,8 @@ class Algorithm(ABC):
         pass
 
     @abstractmethod
-    def update(self, writer):
-        pass
-
-    @abstractmethod
     def save_params(self, save_dir):
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
+        pass
 
     @abstractmethod
     def load_params(self, save_dir):
@@ -83,19 +79,21 @@ class OnPolicyActorCritic(Algorithm):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         buffer_size,
         batch_size,
     ):
         super(OnPolicyActorCritic, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
         )
         self.buffer = RolloutBuffer(
@@ -141,6 +139,10 @@ class OnPolicyActorCritic(Algorithm):
 
         return next_state
 
+    @abstractmethod
+    def update(self, writer):
+        pass
+
 
 class OffPolicyAlgorithm(Algorithm):
     """
@@ -149,10 +151,11 @@ class OffPolicyAlgorithm(Algorithm):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         nstep,
         buffer_size,
@@ -165,10 +168,11 @@ class OffPolicyAlgorithm(Algorithm):
     ):
         assert update_interval_target or tau
         super(OffPolicyAlgorithm, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
         )
         if use_per:
@@ -178,7 +182,7 @@ class OffPolicyAlgorithm(Algorithm):
                 action_space=action_space,
                 gamma=gamma,
                 nstep=nstep,
-                beta_steps=(num_steps - start_steps) / update_interval,
+                beta_steps=(num_agent_steps - start_steps) / update_interval,
             )
         else:
             self.buffer = ReplayBuffer(
@@ -227,6 +231,10 @@ class OffPolicyAlgorithm(Algorithm):
 
         return next_state
 
+    @abstractmethod
+    def update(self, writer):
+        pass
+
 
 class OffPolicyActorCritic(OffPolicyAlgorithm):
     """
@@ -235,10 +243,11 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         nstep,
         buffer_size,
@@ -250,10 +259,11 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
         tau=None,
     ):
         super(OffPolicyActorCritic, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
@@ -289,10 +299,11 @@ class QLearning(OffPolicyAlgorithm):
 
     def __init__(
         self,
-        num_steps,
+        num_agent_steps,
         state_space,
         action_space,
         seed,
+        max_grad_norm,
         gamma,
         nstep,
         buffer_size,
@@ -306,10 +317,11 @@ class QLearning(OffPolicyAlgorithm):
         eps_decay_steps,
     ):
         super(QLearning, self).__init__(
-            num_steps=num_steps,
+            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
             seed=seed,
+            max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,

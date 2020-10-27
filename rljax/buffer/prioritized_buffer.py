@@ -80,9 +80,9 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         assert self._cached_idxes is not None, "Sample batch before updating priorities."
         assert abs_td.shape[1:] == (1,)
         pa = np.array(self._calculate_pa(abs_td), dtype=np.float32).flatten()
-        for i, _pa in zip(self._cached_idxes, pa):
-            self.tree_sum[i] = _pa
-            self.tree_min[i] = _pa
+        for i, idx in enumerate(self._cached_idxes):
+            self.tree_sum[idx] = pa[i]
+            self.tree_min[idx] = pa[i]
         self._cached_idxes = None
 
     @partial(jax.jit, static_argnums=0)

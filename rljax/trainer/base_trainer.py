@@ -19,11 +19,12 @@ class Trainer:
         log_dir,
         seed=0,
         action_repeat=1,
-        num_steps=10 ** 6,
+        num_agent_steps=10 ** 6,
         eval_interval=10 ** 4,
         num_eval_episodes=10,
+        save_params=False,
     ):
-        assert num_steps % action_repeat == 0
+        assert num_agent_steps % action_repeat == 0
         assert eval_interval % action_repeat == 0
 
         # Envs.
@@ -45,9 +46,10 @@ class Trainer:
 
         # Other parameters.
         self.action_repeat = action_repeat
-        self.num_steps = num_steps
+        self.num_agent_steps = num_agent_steps
         self.eval_interval = eval_interval
         self.num_eval_episodes = num_eval_episodes
+        self.save_params = save_params
 
     def train(self):
         # Time to start training.
@@ -55,7 +57,7 @@ class Trainer:
         # Initialize the environment.
         state = self.env.reset()
 
-        for step in range(1, self.num_steps + 1):
+        for step in range(1, self.num_agent_steps + 1):
             state = self.algo.step(self.env, state)
 
             if self.algo.is_update():
@@ -63,7 +65,8 @@ class Trainer:
 
             if step % self.eval_interval == 0:
                 self.evaluate(step)
-                self.algo.save_params(os.path.join(self.param_dir, f"step{step}"))
+                if self.save_params:
+                    self.algo.save_params(os.path.join(self.param_dir, f"step{step}"))
 
         # Wait for the logging to be finished.
         sleep(2)
@@ -75,18 +78,20 @@ class Trainer:
             done = False
             while not done:
                 action = self.algo.select_action(state)
-                state, reward, done, info = self.env_test.step(action)
+                state, reward, done, _ = self.env_test.step(action)
                 total_return += reward
-        mean_return = total_return / self.num_eval_episodes
 
-        # Log to TensorBoard.
+        # Log mean return.
+        mean_return = total_return / self.num_eval_episodes
+        # To TensorBoard.
         self.writer.add_scalar("return/test", mean_return, step * self.action_repeat)
-        # Log to CSV.
+        # To CSV.
         self.log["step"].append(step * self.action_repeat)
         self.log["return"].append(mean_return)
         pd.DataFrame(self.log).to_csv(self.csv_path, index=False)
+
         # Log to standard output.
-        print(f"Num steps: {step * self.action_repeat:<6}   " f"Return: {mean_return:<5.1f}   " f"Time: {self.time}")
+        print(f"Num steps: {step * self.action_repeat:<6}   Return: {mean_return:<5.1f}   Time: {self.time}")
 
     @property
     def time(self):
