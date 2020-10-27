@@ -4,7 +4,7 @@ from time import sleep, time
 import pandas as pd
 from tqdm import tqdm
 
-from rljax.algorithm.slac import SlacInput
+from rljax.algorithm.slac import SlacObservation
 from rljax.trainer.base_trainer import Trainer
 
 
@@ -40,21 +40,21 @@ class SLACTrainer(Trainer):
             save_params=save_params,
         )
 
-        # Inputs for training and evaluation.
-        self.input = SlacInput(env.observation_space, env.action_space, num_sequences)
-        self.input_test = SlacInput(env.observation_space, env.action_space, num_sequences)
+        # Observations for training and evaluation.
+        self.ob = SlacObservation(env.observation_space, env.action_space, num_sequences)
+        self.ob_test = SlacObservation(env.observation_space, env.action_space, num_sequences)
 
     def train(self):
         # Time to start training.
         self.start_time = time()
         # Initialize the environment.
         state = self.env.reset()
-        self.input.reset_episode(state)
+        self.ob.reset_episode(state)
         self.algo.buffer.reset_episode(state)
 
         # Collect trajectories using random policy.
         for step in range(1, self.algo.start_steps + 1):
-            self.algo.step(self.env, self.input)
+            self.algo.step(self.env, self.ob)
 
         # Update latent variable model first so that SLAC can learn well using (learned) latent dynamics.
         bar = tqdm(range(self.algo.initial_learning_steps))
@@ -63,7 +63,7 @@ class SLACTrainer(Trainer):
             self.algo.update_latent(self.writer)
 
         for step in range(1, self.num_agent_steps + 1):
-            self.algo.step(self.env, self.input)
+            self.algo.step(self.env, self.ob)
 
             if self.algo.is_update():
                 self.algo.update_latent(self.writer)
@@ -82,12 +82,12 @@ class SLACTrainer(Trainer):
 
         for _ in range(self.num_eval_episodes):
             state = self.env_test.reset()
-            self.input_test.reset_episode(state)
+            self.ob_test.reset_episode(state)
             done = False
             while not done:
-                action = self.algo.select_action(self.input_test)
+                action = self.algo.select_action(self.ob_test)
                 state, reward, done, _ = self.env_test.step(action)
-                self.input_test.append(state, action)
+                self.ob_test.append(state, action)
                 total_return += reward
 
         # Log mean return.

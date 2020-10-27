@@ -1,19 +1,19 @@
 import pytest
 
-from rljax.algorithm.slac import SLAC, SlacInput
+from rljax.algorithm.slac import SLAC, SlacObservation
 
 
 def _test_slac(env, algo):
-    input = SlacInput(env.observation_space, env.action_space, 8)
+    ob = SlacObservation(env.observation_space, env.action_space, 8)
     state = env.reset()
-    input.reset_episode(state)
+    ob.reset_episode(state)
     algo.buffer.reset_episode(state)
 
     # Test step() method.
-    algo.step(env, input)
+    algo.step(env, ob)
 
     # Test select_action() method.
-    action = algo.select_action(input)
+    action = algo.select_action(ob)
     assert env.action_space.contains(action)
 
     # Test is_update() method.

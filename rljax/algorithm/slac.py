@@ -30,9 +30,9 @@ from rljax.util import (
 )
 
 
-class SlacInput:
+class SlacObservation:
     """
-    Input for SLAC.
+    Observation for SLAC.
     """
 
     def __init__(self, state_space, action_space, num_sequences):
@@ -239,35 +239,35 @@ class SLAC(Algorithm):
     def is_update(self):
         return self.agent_step % self.update_interval == 0 and self.agent_step >= self.start_steps
 
-    def step(self, env, input):
+    def step(self, env, ob):
         self.agent_step += 1
         self.episode_step += 1
 
         if self.agent_step <= self.start_steps:
             action = env.action_space.sample()
         else:
-            action = self.explore(input)
+            action = self.explore(ob)
 
         state, reward, done, _ = env.step(action)
         mask = False if self.episode_step == env._max_episode_steps else done
-        input.append(state, action)
+        ob.append(state, action)
         self.buffer.append(action, reward, mask, state, done)
 
         if done:
             self.episode_step = 0
             state = env.reset()
-            input.reset_episode(state)
+            ob.reset_episode(state)
             self.buffer.reset_episode(state)
 
         return None
 
-    def select_action(self, input):
-        feature_action = self._preprocess(self.params_latent["encoder"], input.state, input.action)
+    def select_action(self, ob):
+        feature_action = self._preprocess(self.params_latent["encoder"], ob.state, ob.action)
         action = self._select_action(self.params_actor, feature_action)
         return np.array(action[0])
 
-    def explore(self, input):
-        feature_action = self._preprocess(self.params_latent["encoder"], input.state, input.action)
+    def explore(self, ob):
+        feature_action = self._preprocess(self.params_latent["encoder"], ob.state, ob.action)
         action = self._explore(self.params_actor, next(self.rng), feature_action)
         return np.array(action[0])
 
