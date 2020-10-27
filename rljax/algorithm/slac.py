@@ -249,8 +249,8 @@ class SLAC(Algorithm):
             action = self.explore(ob)
 
         state, reward, done, _ = env.step(action)
-        mask = False if self.episode_step == env._max_episode_steps else done
         ob.append(state, action)
+        mask = self.get_mask(env, done)
         self.buffer.append(action, reward, mask, state, done)
 
         if done:

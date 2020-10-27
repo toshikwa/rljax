@@ -43,10 +43,15 @@ class Algorithm(ABC):
         if len(state_space.shape) == 1:
             self.fake_state = self.fake_state.astype(np.float32)
         if type(action_space) == Box:
+            self.discrete_action = False
             self.fake_action = action_space.sample()[None, ...]
             self.fake_action = self.fake_action.astype(np.float32)
         else:
+            self.discrete_action = True
             self.fake_action = None
+
+    def get_mask(self, env, done):
+        return done if self.episode_step != env._max_episode_steps or self.discrete_action else False
 
     @abstractmethod
     def is_update(self):
@@ -130,7 +135,7 @@ class OnPolicyActorCritic(Algorithm):
 
         action, log_pi = self.explore(state)
         next_state, reward, done, _ = env.step(action)
-        mask = False if self.episode_step == env._max_episode_steps else done
+        mask = self.get_mask(env, done)
         self.buffer.append(state, action, reward, mask, log_pi, next_state)
 
         if done:
@@ -222,7 +227,7 @@ class OffPolicyAlgorithm(Algorithm):
             action = self.explore(state)
 
         next_state, reward, done, _ = env.step(action)
-        mask = False if self.episode_step == env._max_episode_steps else done
+        mask = self.get_mask(env, done)
         self.buffer.append(state, action, reward, mask, next_state, done)
 
         if done:
