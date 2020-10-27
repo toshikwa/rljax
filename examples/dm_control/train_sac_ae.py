@@ -19,7 +19,7 @@ def run(args):
     )
 
     time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_dir = os.path.join("logs", f"{args.domain_name}-{args.task_name}", f"SAC+AE-seed{args.seed}-{time}")
+    log_dir = os.path.join("logs", f"{args.domain_name}-{args.task_name}", f"{str(algo)}-seed{args.seed}-{time}")
 
     trainer = Trainer(
         env=env,

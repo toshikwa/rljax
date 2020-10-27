@@ -20,7 +20,7 @@ def run(args):
     )
 
     time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_dir = os.path.join("logs", f"{args.domain_name}-{args.task_name}", f"SLAC-seed{args.seed}-{time}")
+    log_dir = os.path.join("logs", f"{args.domain_name}-{args.task_name}", f"{str(algo)}-seed{args.seed}-{time}")
 
     trainer = SLACTrainer(
         env=env,
@@ -38,10 +38,10 @@ def run(args):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument('--domain_name', type=str, default='cheetah')
-    p.add_argument('--task_name', type=str, default='run')
-    p.add_argument('--action_repeat', type=int, default=4)
-    p.add_argument('--num_sequences', type=int, default=8)
+    p.add_argument("--domain_name", type=str, default="cheetah")
+    p.add_argument("--task_name", type=str, default="run")
+    p.add_argument("--action_repeat", type=int, default=4)
+    p.add_argument("--num_sequences", type=int, default=8)
     p.add_argument("--num_agent_steps", type=int, default=500000)
     p.add_argument("--eval_interval", type=int, default=5000)
     p.add_argument("--seed", type=int, default=0)
