@@ -5,6 +5,7 @@ from collections import deque
 import gym
 import numpy as np
 from gym import spaces, wrappers
+from gym.wrappers.time_limit import TimeLimit
 
 import cv2
 
@@ -313,11 +314,12 @@ def make_atari_env(
     sign_rewards=True,
     clip_rewards=False,
     frame_stack=True,
+    max_episode_steps=27000,
 ):
     assert not (sign_rewards and clip_rewards)
     env = make_atari(env_id)
     env = wrap_deepmind(env, episode_life, sign_rewards, clip_rewards, frame_stack)
-    setattr(env, "_max_episode_steps", min(env.spec.max_episode_steps, 27000))
+    env = TimeLimit(env, max_episode_steps=max_episode_steps)
     return env
 
 
