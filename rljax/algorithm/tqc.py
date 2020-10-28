@@ -33,7 +33,7 @@ class TQC(OffPolicyActorCritic):
         lr_critic=3e-4,
         lr_alpha=3e-4,
         units_actor=(256, 256),
-        units_critic=(256, 256),
+        units_critic=(512, 512, 512),
         d2rl=False,
         num_critics=5,
         num_quantiles=25,
@@ -94,7 +94,7 @@ class TQC(OffPolicyActorCritic):
         cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
         self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
         self.num_quantiles = num_quantiles
-        self.num_quantiles_to_drop = num_quantiles_to_drop
+        self.num_quantiles_target = num_quantiles * num_critics - num_quantiles_to_drop
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(
@@ -215,15 +215,13 @@ class TQC(OffPolicyActorCritic):
         next_action, next_log_pi = reparameterize_gaussian_and_tanh(next_mean, next_log_std, key, True)
         # Calculate target soft quantile values with target critic.
         next_quantile = jnp.concatenate(self.critic.apply(params_critic_target, next_state, next_action), axis=1)
-        # Sort the ensemble of quantile values and drop large quantile values.
-        next_quantile = jnp.sort(next_quantile, axis=1)[:, : self.num_quantiles - self.num_quantiles_to_drop]
-        next_quantile = next_quantile - alpha * next_log_pi
-        target_quantile = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_quantile)[:, None, :]
         # Calculate current soft quantile values with online critic.
+        next_quantile = jnp.sort(next_quantile)[:, : self.num_quantiles_target] - alpha * next_log_pi
+        target_quantile = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_quantile)
         curr_quantile_list = self.critic.apply(params_critic, state, action)
         loss = 0.0
         for curr_quantile in curr_quantile_list:
-            loss += quantile_loss(target_quantile - curr_quantile[:, :, None], self.cum_p_prime, 1.0, "huber")
+            loss += quantile_loss(target_quantile[:, None, :] - curr_quantile[:, :, None], self.cum_p_prime, 1.0, "huber")
         return loss
 
     @partial(jax.jit, static_argnums=0)
