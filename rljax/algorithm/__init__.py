@@ -11,3 +11,4 @@ from .sac_discor import SAC_DisCor
 from .sac_discrete import SAC_Discrete
 from .slac import SLAC, SlacObservation
 from .td3 import TD3
+from .tqc import TQC

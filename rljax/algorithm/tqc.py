@@ -9,12 +9,12 @@ import numpy as np
 from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
-from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
-from rljax.util import clip_gradient_norm, load_params, reparameterize_gaussian_and_tanh, save_params
+from rljax.network import ContinuousQuantileFunction, StateDependentGaussianPolicy
+from rljax.util import clip_gradient_norm, load_params, quantile_loss, reparameterize_gaussian_and_tanh, save_params
 
 
-class SAC(OffPolicyActorCritic):
-    name = "SAC"
+class TQC(OffPolicyActorCritic):
+    name = "TQC"
 
     def __init__(
         self,
@@ -26,7 +26,6 @@ class SAC(OffPolicyActorCritic):
         gamma=0.99,
         nstep=1,
         buffer_size=10 ** 6,
-        use_per=False,
         batch_size=256,
         start_steps=10000,
         update_interval=1,
@@ -37,8 +36,11 @@ class SAC(OffPolicyActorCritic):
         units_actor=(256, 256),
         units_critic=(256, 256),
         d2rl=False,
+        num_critics=5,
+        num_quantiles=25,
+        num_quantiles_to_drop=0,
     ):
-        super(SAC, self).__init__(
+        super(TQC, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
@@ -47,7 +49,7 @@ class SAC(OffPolicyActorCritic):
             gamma=gamma,
             nstep=nstep,
             buffer_size=buffer_size,
-            use_per=use_per,
+            use_per=False,
             batch_size=batch_size,
             start_steps=start_steps,
             update_interval=update_interval,
@@ -57,9 +59,10 @@ class SAC(OffPolicyActorCritic):
             self.name += "-D2RL"
 
         def critic_fn(s, a):
-            return ContinuousQFunction(
-                num_critics=2,
+            return ContinuousQuantileFunction(
+                num_critics=num_critics,
                 hidden_units=units_critic,
+                num_quantiles=num_quantiles,
                 d2rl=d2rl,
             )(s, a)
 
@@ -88,6 +91,12 @@ class SAC(OffPolicyActorCritic):
         opt_init, self.opt_alpha = optix.adam(lr_alpha)
         self.opt_state_alpha = opt_init(self.log_alpha)
 
+        # Other parameters.
+        cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
+        self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
+        self.num_quantiles = num_quantiles
+        self.num_quantiles_to_drop = num_quantiles_to_drop
+
     @partial(jax.jit, static_argnums=0)
     def _select_action(
         self,
@@ -113,7 +122,7 @@ class SAC(OffPolicyActorCritic):
         state, action, reward, done, next_state = batch
 
         # Update critic.
-        self.opt_state_critic, self.params_critic, loss_critic, (abs_td1, _) = self._update_critic(
+        self.opt_state_critic, self.params_critic, loss_critic = self._update_critic(
             opt_state_critic=self.opt_state_critic,
             params_critic=self.params_critic,
             params_critic_target=self.params_critic_target,
@@ -124,14 +133,8 @@ class SAC(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
-            weight1=weight,
-            weight2=weight,
             key=next(self.rng),
         )
-
-        # Update priority.
-        if self.use_per:
-            self.buffer.update_priority(abs_td1)
 
         # Update actor.
         self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = self._update_actor(
@@ -173,11 +176,9 @@ class SAC(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight1: np.ndarray,
-        weight2: np.ndarray,
         key: jnp.ndarray,
     ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss_critic, (abs_td1, abs_td2)), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
+        loss_critic, grad_critic = jax.value_and_grad(self._loss_critic)(
             params_critic,
             params_critic_target=params_critic_target,
             params_actor=params_actor,
@@ -187,15 +188,13 @@ class SAC(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
-            weight1=weight1,
-            weight2=weight2,
             key=key,
         )
         if self.max_grad_norm is not None:
             grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
         update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
         params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, loss_critic, (abs_td1, abs_td2)
+        return opt_state_critic, params_critic, loss_critic
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -209,24 +208,24 @@ class SAC(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight1: np.ndarray,
-        weight2: np.ndarray,
         key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.exp(log_alpha)
         # Sample next actions.
         next_mean, next_log_std = self.actor.apply(params_actor, next_state)
         next_action, next_log_pi = reparameterize_gaussian_and_tanh(next_mean, next_log_std, key, True)
-        # Calculate target soft q values (clipped double q) with target critic.
-        next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
-        next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        # Calculate current soft q values with online critic.
-        curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
-        abs_td1 = jnp.abs(target_q - curr_q1)
-        abs_td2 = jnp.abs(target_q - curr_q2)
-        loss = (jnp.square(abs_td1) * weight1).mean() + (jnp.square(abs_td2) * weight2).mean()
-        return loss, (jax.lax.stop_gradient(abs_td1), jax.lax.stop_gradient(abs_td2))
+        # Calculate target soft quantile values with target critic.
+        next_quantile = jnp.concatenate(self.critic.apply(params_critic_target, next_state, next_action), axis=1)
+        # Sort the ensemble of quantile values and drop large quantile values.
+        next_quantile = jnp.sort(next_quantile, axis=1)[:, : self.num_quantiles - self.num_quantiles_to_drop]
+        next_quantile = next_quantile - alpha * next_log_pi
+        target_quantile = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_quantile)[:, None, :]
+        # Calculate current soft quantile values with online critic.
+        curr_quantile_list = self.critic.apply(params_critic, state, action)
+        loss = 0.0
+        for curr_quantile in curr_quantile_list:
+            loss += quantile_loss(target_quantile - curr_quantile[:, :, None], self.cum_p_prime, 1.0, "huber")
+        return loss
 
     @partial(jax.jit, static_argnums=0)
     def _update_actor(
@@ -265,9 +264,9 @@ class SAC(OffPolicyActorCritic):
         mean, log_std = self.actor.apply(params_actor, state)
         action, log_pi = reparameterize_gaussian_and_tanh(mean, log_std, key, True)
         # Calculate soft q values with online critic.
-        q1, q2 = self.critic.apply(params_critic, state, action)
+        mean_q = jnp.concatenate(self.critic.apply(params_critic, state, action), axis=1).mean()
         mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), jax.lax.stop_gradient(mean_log_pi)
+        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)
     def _update_alpha(

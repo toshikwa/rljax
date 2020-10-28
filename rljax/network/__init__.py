@@ -3,6 +3,7 @@ from .base import MLP
 from .conv import DQNBody, SACDecoder, SACEncoder, SLACDecoder, SLACEncoder
 from .critic import (
     ContinuousQFunction,
+    ContinuousQuantileFunction,
     ContinuousVFunction,
     DiscreteImplicitQuantileFunction,
     DiscreteQFunction,
