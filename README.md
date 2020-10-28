@@ -107,9 +107,9 @@ I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind
 </details>
 
 <details>
-<summary>Atari</summary>
+<summary>Atari(Arcade Learning Environment)</summary>
 
-I benchmarked SAC-Discrete implementation in `MsPacmanNoFrameskip-v4` ([code](https://github.com/ku2482/rljax/blob/master/examples/atari)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat(4).
+I benchmarked SAC-Discrete implementation in `MsPacmanNoFrameskip-v4` from the Arcade Learning Environment(ALE) ([code](https://github.com/ku2482/rljax/blob/master/examples/atari)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by 4.
 
 <img src="https://user-images.githubusercontent.com/37267851/97410160-0e193100-1942-11eb-8056-df445eb6f5e9.png" title="MsPacmanNoFrameskip-v4" width=400>
 
