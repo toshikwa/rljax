@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from functools import partial
 
@@ -7,7 +8,7 @@ from gym.spaces import Box
 from haiku import PRNGSequence
 
 from rljax.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
-from rljax.util import soft_update
+from rljax.util import load_params, save_params, soft_update
 
 
 class Algorithm(ABC):
@@ -147,6 +148,14 @@ class OnPolicyActorCritic(Algorithm):
     @abstractmethod
     def update(self, writer):
         pass
+
+    def save_params(self, save_dir):
+        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
+        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
+
+    def load_params(self, save_dir):
+        self.params_critic = load_params(os.path.join(save_dir, "params_critic.npz"))
+        self.params_actor = load_params(os.path.join(save_dir, "params_actor.npz"))
 
 
 class OffPolicyAlgorithm(Algorithm):
@@ -296,6 +305,14 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
     def _explore(self, params_actor, key, state):
         pass
 
+    def save_params(self, save_dir):
+        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
+        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
+
+    def load_params(self, save_dir):
+        self.params_critic = self.params_critic_target = load_params(os.path.join(save_dir, "params_critic.npz"))
+        self.params_actor = load_params(os.path.join(save_dir, "params_actor.npz"))
+
 
 class QLearning(OffPolicyAlgorithm):
     """
@@ -368,3 +385,9 @@ class QLearning(OffPolicyAlgorithm):
         if self.agent_step > self.eps_decay_steps:
             return self.eps
         return 1.0 + (self.eps - 1.0) / self.eps_decay_steps * self.agent_step
+
+    def save_params(self, save_dir):
+        save_params(self.params, os.path.join(save_dir, "params.npz"))
+
+    def load_params(self, save_dir):
+        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))

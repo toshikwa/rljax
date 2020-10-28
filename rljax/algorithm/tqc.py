@@ -1,4 +1,3 @@
-import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -10,7 +9,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQuantileFunction, StateDependentGaussianPolicy
-from rljax.util import clip_gradient_norm, load_params, quantile_loss, reparameterize_gaussian_and_tanh, save_params
+from rljax.util import clip_gradient_norm, quantile_loss, reparameterize_gaussian_and_tanh
 
 
 class TQC(OffPolicyActorCritic):
@@ -290,11 +289,3 @@ class TQC(OffPolicyActorCritic):
         mean_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
         return -log_alpha * (self.target_entropy + mean_log_pi)
-
-    def save_params(self, save_dir):
-        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
-        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
-
-    def load_params(self, save_dir):
-        self.params_critic = self.params_critic_target = load_params(os.path.join(save_dir, "params_critic.npz"))
-        self.params_actor = load_params(os.path.join(save_dir, "params_actor.npz"))

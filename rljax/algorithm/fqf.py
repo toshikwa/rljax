@@ -287,10 +287,10 @@ class FQF(QLearning):
         return (cum_p[:, 1:-1] * grad).sum(axis=1).mean()
 
     def save_params(self, save_dir):
-        save_params(self.params, os.path.join(save_dir, "params.npz"))
+        super().save_params(save_dir)
         save_params(self.params_cum_p, os.path.join(save_dir, "params_cum_p.npz"))
 
     def load_params(self, save_dir):
-        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))
+        super().load_params(save_dir)
         self.params_cum_p = load_params(os.path.join(save_dir, "params_cum_p.npz"))
         self.use_image = "feature" in self.params.keys()

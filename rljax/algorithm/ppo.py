@@ -1,4 +1,3 @@
-import os
 from functools import partial
 from typing import Any, Tuple
 
@@ -10,13 +9,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
-from rljax.util import (
-    clip_gradient_norm,
-    evaluate_gaussian_and_tanh_log_prob,
-    load_params,
-    reparameterize_gaussian_and_tanh,
-    save_params,
-)
+from rljax.util import clip_gradient_norm, evaluate_gaussian_and_tanh_log_prob, reparameterize_gaussian_and_tanh
 
 
 class PPO(OnPolicyActorCritic):
@@ -232,11 +225,3 @@ class PPO(OnPolicyActorCritic):
             gae.insert(0, delta[t] + self.gamma * self.lambd * (1 - done[t]) * gae[0])
         gae = jnp.array(gae)
         return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
-
-    def save_params(self, save_dir):
-        save_params(self.params_critic, os.path.join(save_dir, "params_critic.npz"))
-        save_params(self.params_actor, os.path.join(save_dir, "params_actor.npz"))
-
-    def load_params(self, save_dir):
-        self.params_critic = load_params(os.path.join(save_dir, "params_critic.npz"))
-        self.params_actor = load_params(os.path.join(save_dir, "params_actor.npz"))
