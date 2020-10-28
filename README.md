@@ -30,6 +30,7 @@ Currently, following algorithms have been implemented.
 | DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
 | TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
 | SAC[[4,5]](#reference)         | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | :heavy_check_mark: | :heavy_check_mark: |
+| TQC[[16]](#reference)         | Continuous         | :heavy_check_mark: | - | - | - | :heavy_check_mark: |
 | SAC+AE[[13]](#reference)       | Continuous         | -                  | :heavy_check_mark: | :heavy_check_mark:         | -    | :heavy_check_mark: |
 | SLAC[[14]](#reference)         | Continuous         | -                  | :heavy_check_mark: | -                          | -    | :heavy_check_mark: |
 | DQN[[6]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | :heavy_check_mark: | -    |
@@ -87,7 +88,7 @@ trainer.train()
 </details>
 
 <details>
-<summary>Gym(MuJoCo)</summary>
+<summary>MuJoCo(Gym)</summary>
 
 I benchmarked my implementations in some environments from MuJoCo's `-v3` task suite, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/mujoco)).
 
@@ -99,9 +100,18 @@ I benchmarked my implementations in some environments from MuJoCo's `-v3` task s
 <details>
 <summary>DeepMind Control Suite</summary>
 
-I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind Control Suite ([code](https://github.com/ku2482/rljax/blob/master/examples/dm_control)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat.
+I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind Control Suite ([code](https://github.com/ku2482/rljax/blob/master/examples/dm_control)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat. I set action_repeat to 4 for cheetah-run and 2 for walker-walk.
 
 <img src="https://user-images.githubusercontent.com/37267851/97359828-b7c7d600-18e0-11eb-8c79-852624dfa1e8.png" title="cheetah-run" width=400><img src="https://user-images.githubusercontent.com/37267851/97359825-b696a900-18e0-11eb-88e2-b532076de7e8.png" title="walker-walk" width=400>
+
+</details>
+
+<details>
+<summary>Atari</summary>
+
+I benchmarked SAC-Discrete implementation in `MsPacmanNoFrameskip-v4` ([code](https://github.com/ku2482/rljax/blob/master/examples/atari)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat(4).
+
+<img src="https://user-images.githubusercontent.com/37267851/97410160-0e193100-1942-11eb-8056-df445eb6f5e9.png" title="MsPacmanNoFrameskip-v4" width=400>
 
 </details>
 
@@ -135,3 +145,5 @@ I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind
 [[14]](https://arxiv.org/abs/1907.00953) Lee, Alex X., et al. "Stochastic latent actor-critic: Deep reinforcement learning with a latent variable model." arXiv preprint arXiv:1907.00953 (2019).
 
 [[15]](https://arxiv.org/abs/2010.09163) Sinha, Samarth, et al. "D2RL: Deep Dense Architectures in Reinforcement Learning." arXiv preprint arXiv:2010.09163 (2020).
+
+[[16]](https://arxiv.org/abs/2005.04269) Kuznetsov, Arsenii, et al. "Controlling Overestimation Bias with Truncated Mixture of Continuous Distributional Quantile Critics." arXiv preprint arXiv:2005.04269 (2020).
