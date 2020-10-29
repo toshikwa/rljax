@@ -3,7 +3,7 @@ from abc import abstractmethod
 
 import numpy as np
 
-from rljax.algorithm.base_class.algoirithm import OffPolicyAlgorithm
+from rljax.algorithm.base_class.base_algoirithm import OffPolicyAlgorithm
 from rljax.buffer import SLACReplayBuffer
 from rljax.util import load_params, save_params
 
@@ -90,7 +90,7 @@ class SlacAlgorithm(OffPolicyAlgorithm):
 
     def explore(self, ob):
         feature_action = self._preprocess(self.params_model, ob.state, ob.action)
-        action = self._explore(self.params_actor, next(self.rng), feature_action)
+        action = self._explore(self.params_actor, next(self.rng), feature_action)[0]
         return np.array(action[0])
 
     def update(self, writer):

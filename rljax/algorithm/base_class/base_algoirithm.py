@@ -42,7 +42,6 @@ class BaseAlgorithm(ABC):
     def get_mask(self, env, done):
         return done if self.episode_step != env._max_episode_steps or self.discrete_action else False
 
-    @jax.jit
     def get_key_list(self, num_keys):
         return [next(self.rng) for _ in range(num_keys)]
 

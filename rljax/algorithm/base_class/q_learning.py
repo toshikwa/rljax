@@ -3,7 +3,7 @@ from abc import abstractmethod
 
 import numpy as np
 
-from rljax.algorithm.base_class.algoirithm import OffPolicyAlgorithm
+from rljax.algorithm.base_class.base_algoirithm import OffPolicyAlgorithm
 from rljax.util import fake_state, load_params, save_params
 
 
