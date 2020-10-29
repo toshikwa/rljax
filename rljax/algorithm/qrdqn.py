@@ -8,7 +8,7 @@ import numpy as np
 
 from rljax.algorithm.dqn import DQN
 from rljax.network import DiscreteQuantileFunction
-from rljax.util import get_quantile_at_action, optimize, quantile_loss
+from rljax.util import get_quantile_at_action, quantile_loss
 
 
 class QRDQN(DQN):
@@ -79,8 +79,6 @@ class QRDQN(DQN):
 
         # Other parameters.
         self.num_quantiles = num_quantiles
-        self.loss_type = loss_type
-        self.double_q = double_q
 
     @partial(jax.jit, static_argnums=0)
     def _forward(

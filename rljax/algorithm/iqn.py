@@ -88,8 +88,6 @@ class IQN(DQN):
         self.num_quantiles = num_quantiles
         self.num_quantiles_eval = num_quantiles_eval
         self.num_cosines = num_cosines
-        self.loss_type = loss_type
-        self.double_q = double_q
 
     def forward(self, state):
         return self._forward(self.params, next(self.rng), state)
