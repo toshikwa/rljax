@@ -7,7 +7,7 @@ import numpy as np
 from gym.spaces import Box
 from haiku import PRNGSequence
 
-from rljax.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer
+from rljax.buffer import PrioritizedReplayBuffer, ReplayBuffer, RolloutBuffer, SLACReplayBuffer
 from rljax.util import load_params, save_params, soft_update
 
 
@@ -212,9 +212,9 @@ class OffPolicyAlgorithm(Algorithm):
         self.batch_size = batch_size
         self.start_steps = start_steps
         self.update_interval = update_interval
+        self.update_interval_target = update_interval_target
 
         if update_interval_target:
-            self.update_interval_target = update_interval_target
             self._update_target = jax.jit(partial(soft_update, tau=1.0))
         else:
             self._update_target = jax.jit(partial(soft_update, tau=tau))
@@ -288,6 +288,16 @@ class OffPolicyActorCritic(OffPolicyAlgorithm):
             update_interval_target=update_interval_target,
             tau=tau,
         )
+        # Define fake input for critic.
+        if not hasattr(self, "fake_args_critic"):
+            if self.discrete_action:
+                self.fake_args_critic = (self.fake_state,)
+            else:
+                self.fake_args_critic = (self.fake_state, self.fake_action)
+
+        # Define fake input for actor.
+        if not hasattr(self, "fake_args_actor"):
+            self.fake_args_actor = (self.fake_state,)
 
     def select_action(self, state):
         action = self._select_action(self.params_actor, state[None, ...])
@@ -356,6 +366,8 @@ class QLearning(OffPolicyAlgorithm):
         self.eps = eps
         self.eps_eval = eps_eval
         self.eps_decay_steps = eps_decay_steps
+        if not hasattr(self, "fake_args"):
+            self.fake_args = (self.fake_state,)
 
     def select_action(self, state):
         if np.random.rand() < self.eps_eval:
@@ -391,3 +403,106 @@ class QLearning(OffPolicyAlgorithm):
 
     def load_params(self, save_dir):
         self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))
+
+
+class SlacAlgorithm(Algorithm):
+    """
+    Base class for SLAC-based algorithms.
+    """
+
+    def __init__(
+        self,
+        num_agent_steps,
+        state_space,
+        action_space,
+        seed,
+        max_grad_norm,
+        gamma,
+        num_sequences,
+        buffer_size,
+        batch_size_sac,
+        batch_size_model,
+        start_steps,
+        initial_learning_steps,
+        update_interval,
+        update_interval_target=None,
+        tau=None,
+    ):
+        assert update_interval_target or tau
+        super(OffPolicyAlgorithm, self).__init__(
+            num_agent_steps=num_agent_steps,
+            state_space=state_space,
+            action_space=action_space,
+            seed=seed,
+            max_grad_norm=max_grad_norm,
+            gamma=gamma,
+        )
+
+        self.buffer = SLACReplayBuffer(
+            buffer_size=buffer_size,
+            state_space=state_space,
+            action_space=action_space,
+            num_sequences=num_sequences,
+        )
+
+        self.learning_step_model = 0
+        self.learning_step_sac = 0
+        self.discount = gamma
+        self.num_sequences = num_sequences
+        self.batch_size_sac = batch_size_sac
+        self.batch_size_model = batch_size_model
+        self.start_steps = start_steps
+        self.initial_learning_steps = initial_learning_steps
+        self.update_interval = update_interval
+        self.update_interval_target = update_interval_target
+
+        if update_interval_target:
+            self._update_target = jax.jit(partial(soft_update, tau=1.0))
+        else:
+            self._update_target = jax.jit(partial(soft_update, tau=tau))
+
+    def is_update(self):
+        return self.agent_step % self.update_interval == 0 and self.agent_step >= self.start_steps
+
+    def select_action(self, ob):
+        feature_action = self._preprocess(self.params_model, ob.state, ob.action)
+        action = self._select_action(self.params_actor, feature_action)
+        return np.array(action[0])
+
+    def explore(self, ob):
+        feature_action = self._preprocess(self.params_model, ob.state, ob.action)
+        action = self._explore(self.params_actor, next(self.rng), feature_action)
+        return np.array(action[0])
+
+    def step(self, env, ob):
+        self.agent_step += 1
+        self.episode_step += 1
+
+        if self.agent_step <= self.start_steps:
+            action = env.action_space.sample()
+        else:
+            action = self.explore(ob)
+
+        state, reward, done, _ = env.step(action)
+        ob.append(state, action)
+        mask = self.get_mask(env, done)
+        self.buffer.append(action, reward, mask, state, done)
+
+        if done:
+            self.episode_step = 0
+            state = env.reset()
+            ob.reset_episode(state)
+            self.buffer.reset_episode(state)
+
+        return None
+
+    def update(self, writer):
+        NotImplementedError
+
+    @abstractmethod
+    def update_model(self, writer):
+        pass
+
+    @abstractmethod
+    def update_sac(self, writer):
+        pass

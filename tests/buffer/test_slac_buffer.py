@@ -32,7 +32,7 @@ def test_slac_buffer(env_id, state_dtype, state_shape, action_dtype, action_shap
         assert np.isclose(buffer.reward_[i - 3], reward[i - 3 : i + 1]).all()
         assert np.isclose(buffer.done_[i - 3], done[i - 3 : i + 1]).all()
 
-    s_, a_, r_, d_ = buffer.sample_latent(3)
+    s_, a_, r_, d_ = buffer.sample_model(3)
     assert s_.shape == (3, 5) + state_shape and s_.dtype == state_dtype
     assert a_.shape == (3, 4) + action_shape and a_.dtype == action_dtype
     assert r_.shape == (3, 4, 1)

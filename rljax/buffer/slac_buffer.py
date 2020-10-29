@@ -148,7 +148,7 @@ class SLACReplayBuffer:
             state_ = self.state_[idxes]
         return state_
 
-    def sample_latent(self, batch_size):
+    def sample_model(self, batch_size):
         idxes = self._sample_idx(batch_size)
         return (self._sample_state(idxes), self.action_[idxes], self.reward_[idxes], self.done_[idxes])
 

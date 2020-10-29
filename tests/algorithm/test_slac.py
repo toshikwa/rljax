@@ -9,15 +9,25 @@ def _test_slac(env, algo):
     ob.reset_episode(state)
     algo.buffer.reset_episode(state)
 
-    # Test step() method.
-    algo.step(env, ob)
+    for _ in range(10):
+        # Test step() method.
+        algo.step(env, ob)
 
-    # Test select_action() method.
-    action = algo.select_action(ob)
-    assert env.action_space.contains(action)
+        # Test select_action() method.
+        action = algo.select_action(ob)
+        assert env.action_space.contains(action)
 
     # Test is_update() method.
     assert isinstance(algo.is_update(), bool)
+
+    # Test update_sac() method.
+    algo.update_sac()
+    # Test update_model() method.
+    algo.update_model()
+    # Test save_params() method.
+    algo.save_params("/tmp/rljax/test")
+    # Test load_params() method.
+    algo.load_params("/tmp/rljax/test")
 
 
 @pytest.mark.mujoco

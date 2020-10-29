@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Tuple
+from typing import Tuple
 
 import haiku as hk
 import jax
@@ -9,7 +9,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
-from rljax.util import clip_gradient_norm, reparameterize_gaussian_and_tanh
+from rljax.util import optimize, reparameterize_gaussian_and_tanh
 
 
 class SAC(OffPolicyActorCritic):
@@ -30,12 +30,17 @@ class SAC(OffPolicyActorCritic):
         start_steps=10000,
         update_interval=1,
         tau=5e-3,
+        fn_actor=None,
+        fn_critic=None,
         lr_actor=3e-4,
         lr_critic=3e-4,
         lr_alpha=3e-4,
         units_actor=(256, 256),
         units_critic=(256, 256),
         d2rl=False,
+        init_alpha=1.0,
+        adam_b1_alpha=0.9,
+        **kwargs,
     ):
         super(SAC, self).__init__(
             num_agent_steps=num_agent_steps,
@@ -51,40 +56,57 @@ class SAC(OffPolicyActorCritic):
             start_steps=start_steps,
             update_interval=update_interval,
             tau=tau,
+            **kwargs,
         )
         if d2rl:
             self.name += "-D2RL"
 
-        def critic_fn(s, a):
-            return ContinuousQFunction(
-                num_critics=2,
-                hidden_units=units_critic,
-                d2rl=d2rl,
-            )(s, a)
+        if fn_critic is None:
 
-        def actor_fn(s):
-            return StateDependentGaussianPolicy(
-                action_space=action_space,
-                hidden_units=units_actor,
-                d2rl=d2rl,
-            )(s)
+            def fn_critic(s, a):
+                return ContinuousQFunction(
+                    num_critics=2,
+                    hidden_units=units_critic,
+                    d2rl=d2rl,
+                )(s, a)
 
+        if fn_actor is None:
+
+            def fn_actor(s):
+                return StateDependentGaussianPolicy(
+                    action_space=action_space,
+                    hidden_units=units_actor,
+                    d2rl=d2rl,
+                )(s)
+
+        self.setup_soft_actor_critic(fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha)
+
+        # Other parameters.
+        if not hasattr(self, "random_update_critic"):
+            # SAC._loss_critic() needs a random key.
+            self.random_update_critic = True
+        if not hasattr(self, "random_update_actor"):
+            # SAC._loss_actor() needs a random key.
+            self.random_update_actor = True
+
+    def setup_soft_actor_critic(self, fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha):
         # Critic.
-        self.critic = hk.without_apply_rng(hk.transform(critic_fn))
-        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state, self.fake_action)
+        self.critic = hk.without_apply_rng(hk.transform(fn_critic))
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), *self.fake_args_critic)
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = hk.without_apply_rng(hk.transform(actor_fn))
-        self.params_actor = self.actor.init(next(self.rng), self.fake_state)
+        self.actor = hk.without_apply_rng(hk.transform(fn_actor))
+        self.params_actor = self.actor.init(next(self.rng), *self.fake_args_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
 
         # Entropy coefficient.
-        self.target_entropy = -float(action_space.shape[0])
-        self.log_alpha = jnp.zeros((), dtype=jnp.float32)
-        opt_init, self.opt_alpha = optix.adam(lr_alpha)
+        if not hasattr(self, "target_entropy"):
+            self.target_entropy = -float(self.action_space.shape[0])
+        self.log_alpha = jnp.array(np.log(init_alpha), dtype=jnp.float32)
+        opt_init, self.opt_alpha = optix.adam(lr_alpha, b1=adam_b1_alpha)
         self.opt_state_alpha = opt_init(self.log_alpha)
 
     @partial(jax.jit, static_argnums=0)
@@ -112,9 +134,13 @@ class SAC(OffPolicyActorCritic):
         state, action, reward, done, next_state = batch
 
         # Update critic.
-        self.opt_state_critic, self.params_critic, loss_critic, (abs_td1, _) = self._update_critic(
-            opt_state_critic=self.opt_state_critic,
-            params_critic=self.params_critic,
+        kwargs_critic = {"key": next(self.rng)} if self.random_update_critic else {}
+        self.opt_state_critic, self.params_critic, loss_critic, abs_td = optimize(
+            self._loss_critic,
+            self.opt_critic,
+            self.opt_state_critic,
+            self.params_critic,
+            self.max_grad_norm,
             params_critic_target=self.params_critic_target,
             params_actor=self.params_actor,
             log_alpha=self.log_alpha,
@@ -123,29 +149,35 @@ class SAC(OffPolicyActorCritic):
             reward=reward,
             done=done,
             next_state=next_state,
-            weight1=weight,
-            weight2=weight,
-            key=next(self.rng),
+            weight=weight,
+            **kwargs_critic,
         )
 
         # Update priority.
         if self.use_per:
-            self.buffer.update_priority(abs_td1)
+            self.buffer.update_priority(abs_td)
 
         # Update actor.
-        self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = self._update_actor(
-            opt_state_actor=self.opt_state_actor,
-            params_actor=self.params_actor,
+        kwargs_actor = {"key": next(self.rng)} if self.random_update_actor else {}
+        self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = optimize(
+            self._loss_actor,
+            self.opt_actor,
+            self.opt_state_actor,
+            self.params_actor,
+            self.max_grad_norm,
             params_critic=self.params_critic,
             log_alpha=self.log_alpha,
             state=state,
-            key=next(self.rng),
+            **kwargs_actor,
         )
 
         # Update alpha.
-        self.opt_state_alpha, self.log_alpha, loss_alpha = self._update_alpha(
-            opt_state_alpha=self.opt_state_alpha,
-            log_alpha=self.log_alpha,
+        self.opt_state_alpha, self.log_alpha, loss_alpha, _ = optimize(
+            self._loss_alpha,
+            self.opt_alpha,
+            self.opt_state_alpha,
+            self.log_alpha,
+            None,
             mean_log_pi=mean_log_pi,
         )
 
@@ -160,41 +192,30 @@ class SAC(OffPolicyActorCritic):
             writer.add_scalar("stat/entropy", -mean_log_pi, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def _update_critic(
+    def _sample_action(
         self,
-        opt_state_critic: Any,
-        params_critic: hk.Params,
-        params_critic_target: hk.Params,
         params_actor: hk.Params,
-        log_alpha: jnp.ndarray,
+        key: jnp.ndarray,
         state: np.ndarray,
-        action: np.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        mean, log_std = self.actor.apply(params_actor, state)
+        return reparameterize_gaussian_and_tanh(mean, log_std, key, True)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_target(
+        self,
+        params_critic_target: hk.Params,
+        log_alpha: jnp.ndarray,
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight1: np.ndarray,
-        weight2: np.ndarray,
-        key: jnp.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss_critic, (abs_td1, abs_td2)), grad_critic = jax.value_and_grad(self._loss_critic, has_aux=True)(
-            params_critic,
-            params_critic_target=params_critic_target,
-            params_actor=params_actor,
-            log_alpha=log_alpha,
-            state=state,
-            action=action,
-            reward=reward,
-            done=done,
-            next_state=next_state,
-            weight1=weight1,
-            weight2=weight2,
-            key=key,
-        )
-        if self.max_grad_norm is not None:
-            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
-        update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
-        params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, loss_critic, (abs_td1, abs_td2)
+        next_action: jnp.ndarray,
+        next_log_pi: jnp.ndarray,
+    ) -> jnp.ndarray:
+        alpha = jnp.exp(log_alpha)
+        next_q_list = self.critic.apply(params_critic_target, next_state, next_action)
+        next_q = jnp.asarray(next_q_list).min(axis=0) - alpha * next_log_pi
+        return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -208,47 +229,17 @@ class SAC(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight1: np.ndarray,
-        weight2: np.ndarray,
+        weight: np.ndarray,
         key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jnp.exp(log_alpha)
-        # Sample next actions.
-        next_mean, next_log_std = self.actor.apply(params_actor, next_state)
-        next_action, next_log_pi = reparameterize_gaussian_and_tanh(next_mean, next_log_std, key, True)
-        # Calculate target soft q values (clipped double q) with target critic.
-        next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
-        next_q = jnp.minimum(next_q1, next_q2) - alpha * next_log_pi
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        # Calculate current soft q values with online critic.
-        curr_q1, curr_q2 = self.critic.apply(params_critic, state, action)
-        abs_td1 = jnp.abs(target_q - curr_q1)
-        abs_td2 = jnp.abs(target_q - curr_q2)
-        loss = (jnp.square(abs_td1) * weight1).mean() + (jnp.square(abs_td2) * weight2).mean()
-        return loss, (jax.lax.stop_gradient(abs_td1), jax.lax.stop_gradient(abs_td2))
-
-    @partial(jax.jit, static_argnums=0)
-    def _update_actor(
-        self,
-        opt_state_actor: Any,
-        params_actor: hk.Params,
-        params_critic: hk.Params,
-        log_alpha: jnp.ndarray,
-        state: np.ndarray,
-        key: jnp.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss_actor, mean_log_pi), grad_actor = jax.value_and_grad(self._loss_actor, has_aux=True)(
-            params_actor,
-            params_critic=params_critic,
-            log_alpha=log_alpha,
-            state=state,
-            key=key,
-        )
-        if self.max_grad_norm is not None:
-            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
-        update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
-        params_actor = optix.apply_updates(params_actor, update)
-        return opt_state_actor, params_actor, loss_actor, mean_log_pi
+        next_action, next_log_pi = self._sample_action(params_actor, key, next_state)
+        target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_action, next_log_pi)
+        curr_q_list = self.critic.apply(params_critic, state, action)
+        loss = 0.0
+        for curr_q in curr_q_list:
+            loss += (jnp.square(target - curr_q) * weight).mean()
+        abs_td = jax.lax.stop_gradient(jnp.abs(target - curr_q[0]))
+        return loss, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
@@ -259,29 +250,11 @@ class SAC(OffPolicyActorCritic):
         state: np.ndarray,
         key: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jnp.exp(log_alpha)
-        # Sample actions.
-        mean, log_std = self.actor.apply(params_actor, state)
-        action, log_pi = reparameterize_gaussian_and_tanh(mean, log_std, key, True)
-        # Calculate soft q values with online critic.
-        q1, q2 = self.critic.apply(params_critic, state, action)
+        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
+        action, log_pi = self._sample_action(params_actor, key, state)
+        mean_q = jnp.asarray(self.critic.apply(params_critic, state, action)).min(axis=0).mean()
         mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - jnp.minimum(q1, q2).mean(), jax.lax.stop_gradient(mean_log_pi)
-
-    @partial(jax.jit, static_argnums=0)
-    def _update_alpha(
-        self,
-        opt_state_alpha: Any,
-        log_alpha: jnp.ndarray,
-        mean_log_pi: jnp.ndarray,
-    ) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
-        loss_alpha, grad_alpha = jax.value_and_grad(self._loss_alpha)(
-            log_alpha,
-            mean_log_pi=mean_log_pi,
-        )
-        update, opt_state_alpha = self.opt_alpha(grad_alpha, opt_state_alpha)
-        log_alpha = optix.apply_updates(log_alpha, update)
-        return opt_state_alpha, log_alpha, loss_alpha
+        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_alpha(
@@ -289,4 +262,4 @@ class SAC(OffPolicyActorCritic):
         log_alpha: jnp.ndarray,
         mean_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
-        return -log_alpha * (self.target_entropy + mean_log_pi)
+        return -log_alpha * (self.target_entropy + mean_log_pi), None

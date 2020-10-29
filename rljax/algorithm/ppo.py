@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Tuple
+from typing import Tuple
 
 import haiku as hk
 import jax
@@ -9,7 +9,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.base import OnPolicyActorCritic
 from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
-from rljax.util import clip_gradient_norm, evaluate_gaussian_and_tanh_log_prob, reparameterize_gaussian_and_tanh
+from rljax.util import evaluate_gaussian_and_tanh_log_prob, optimize, reparameterize_gaussian_and_tanh
 
 
 class PPO(OnPolicyActorCritic):
@@ -25,6 +25,8 @@ class PPO(OnPolicyActorCritic):
         gamma=0.995,
         buffer_size=2048,
         batch_size=64,
+        fn_actor=None,
+        fn_critic=None,
         lr_actor=3e-4,
         lr_critic=3e-4,
         units_actor=(64, 64),
@@ -45,26 +47,30 @@ class PPO(OnPolicyActorCritic):
             batch_size=batch_size,
         )
 
-        def critic_fn(s):
-            return ContinuousVFunction(
-                num_critics=1,
-                hidden_units=(units_critic),
-            )(s)
+        if fn_critic is None:
 
-        def actor_fn(s):
-            return StateIndependentGaussianPolicy(
-                action_space=action_space,
-                hidden_units=units_actor,
-            )(s)
+            def fn_critic(s):
+                return ContinuousVFunction(
+                    num_critics=1,
+                    hidden_units=(units_critic),
+                )(s)
+
+        if fn_actor is None:
+
+            def fn_actor(s):
+                return StateIndependentGaussianPolicy(
+                    action_space=action_space,
+                    hidden_units=units_actor,
+                )(s)
 
         # Critic.
-        self.critic = hk.without_apply_rng(hk.transform(critic_fn))
+        self.critic = hk.without_apply_rng(hk.transform(fn_critic))
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
-        self.actor = hk.without_apply_rng(hk.transform(actor_fn))
+        self.actor = hk.without_apply_rng(hk.transform(fn_actor))
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
@@ -114,17 +120,23 @@ class PPO(OnPolicyActorCritic):
                 idx = self.idxes[start : start + self.batch_size]
 
                 # Update critic.
-                self.opt_state_critic, self.params_critic, loss_critic = self._update_critic(
-                    opt_state_critic=self.opt_state_critic,
-                    params_critic=self.params_critic,
+                self.opt_state_critic, self.params_critic, loss_critic, _ = optimize(
+                    self._loss_critic,
+                    self.opt_critic,
+                    self.opt_state_critic,
+                    self.params_critic,
+                    self.max_grad_norm,
                     state=state[idx],
                     target=target[idx],
                 )
 
                 # Update actor.
-                self.opt_state_actor, self.params_actor, loss_actor = self._update_actor(
-                    opt_state_actor=self.opt_state_actor,
-                    params_actor=self.params_actor,
+                self.opt_state_actor, self.params_actor, loss_actor, _ = optimize(
+                    self._loss_actor,
+                    self.opt_actor,
+                    self.opt_state_actor,
+                    self.params_actor,
+                    self.max_grad_norm,
                     state=state[idx],
                     action=action[idx],
                     log_pi_old=log_pi_old[idx],
@@ -136,55 +148,13 @@ class PPO(OnPolicyActorCritic):
             writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def _update_critic(
-        self,
-        opt_state_critic: Any,
-        params_critic: hk.Params,
-        state: np.ndarray,
-        target: np.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        loss_critic, grad_critic = jax.value_and_grad(self._loss_critic)(
-            params_critic,
-            state=state,
-            target=target,
-        )
-        if self.max_grad_norm is not None:
-            grad_critic = clip_gradient_norm(grad_critic, self.max_grad_norm)
-        update, opt_state_critic = self.opt_critic(grad_critic, opt_state_critic)
-        params_critic = optix.apply_updates(params_critic, update)
-        return opt_state_critic, params_critic, loss_critic
-
-    @partial(jax.jit, static_argnums=0)
     def _loss_critic(
         self,
         params_critic: hk.Params,
         state: np.ndarray,
         target: np.ndarray,
     ) -> jnp.ndarray:
-        return jnp.square(target - self.critic.apply(params_critic, state)).mean()
-
-    @partial(jax.jit, static_argnums=0)
-    def _update_actor(
-        self,
-        opt_state_actor: Any,
-        params_actor: hk.Params,
-        state: np.ndarray,
-        action: np.ndarray,
-        log_pi_old: np.ndarray,
-        gae: jnp.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray]:
-        loss_actor, grad_actor = jax.value_and_grad(self._loss_actor)(
-            params_actor,
-            state=state,
-            action=action,
-            log_pi_old=log_pi_old,
-            gae=gae,
-        )
-        if self.max_grad_norm is not None:
-            grad_actor = clip_gradient_norm(grad_actor, self.max_grad_norm)
-        update, opt_state_actor = self.opt_actor(grad_actor, opt_state_actor)
-        params_actor = optix.apply_updates(params_actor, update)
-        return opt_state_actor, params_actor, loss_actor
+        return jnp.square(target - self.critic.apply(params_critic, state)).mean(), None
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
@@ -203,7 +173,7 @@ class PPO(OnPolicyActorCritic):
         loss_actor1 = -ratio * gae
         loss_actor2 = -jnp.clip(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * gae
         loss_actor = jnp.maximum(loss_actor1, loss_actor2).mean()
-        return loss_actor
+        return loss_actor, None
 
     @partial(jax.jit, static_argnums=0)
     def calculate_gae(

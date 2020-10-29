@@ -1,6 +1,5 @@
 import os
 from functools import partial
-from typing import Any, Tuple
 
 import haiku as hk
 import jax
@@ -10,7 +9,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.dqn import DQN
 from rljax.network import DiscreteQFunction
-from rljax.util import clip_gradient_norm, get_q_at_action, load_params, save_params, soft_update
+from rljax.util import get_q_at_action, load_params, optimize, save_params, soft_update
 
 
 class DQN_DisCor(DQN):
@@ -33,6 +32,8 @@ class DQN_DisCor(DQN):
         eps=0.01,
         eps_eval=0.001,
         eps_decay_steps=250000,
+        fn=None,
+        fn_error=None,
         lr=2.5e-4,
         lr_error=2.5e-4,
         units=(512,),
@@ -40,8 +41,8 @@ class DQN_DisCor(DQN):
         loss_type="l2",
         dueling_net=False,
         double_q=False,
-        tau=5e-3,
-        error_init=10.0,
+        tau_error=5e-3,
+        init_error=10.0,
     ):
         assert nstep == 1
         super(DQN_DisCor, self).__init__(
@@ -61,6 +62,7 @@ class DQN_DisCor(DQN):
             eps=eps,
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
+            fn=fn,
             lr=lr,
             units=units,
             loss_type=loss_type,
@@ -68,22 +70,24 @@ class DQN_DisCor(DQN):
             double_q=double_q,
         )
 
-        def error_fn(s):
-            return DiscreteQFunction(
-                action_space=action_space,
-                num_critics=1,
-                hidden_units=units_error,
-            )(s)
+        if fn_error is None:
+
+            def fn_error(s):
+                return DiscreteQFunction(
+                    action_space=action_space,
+                    num_critics=1,
+                    hidden_units=units_error,
+                )(s)
 
         # Error model.
-        self.error = hk.without_apply_rng(hk.transform(error_fn))
+        self.error = hk.without_apply_rng(hk.transform(fn_error))
         self.params_error = self.params_error_target = self.error.init(next(self.rng), self.fake_state)
         opt_init, self.opt_error = optix.adam(lr_error)
         self.opt_state_error = opt_init(self.params_error)
 
         # Running mean of errors.
-        self.rm_error = jnp.array(error_init, dtype=jnp.float32)
-        self._update_target_error = jax.jit(partial(soft_update, tau=tau))
+        self.rm_error = jnp.array(init_error, dtype=jnp.float32)
+        self._update_target_error = jax.jit(partial(soft_update, tau=tau_error))
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -97,9 +101,12 @@ class DQN_DisCor(DQN):
             next_state=next_state,
         )
 
-        self.opt_state, self.params, loss, abs_td = self._update(
-            opt_state=self.opt_state,
-            params=self.params,
+        self.opt_state, self.params, loss, abs_td = optimize(
+            self._loss,
+            self.opt,
+            self.opt_state,
+            self.params,
+            self.max_grad_norm,
             params_target=self.params_target,
             state=state,
             action=action,
@@ -109,9 +116,12 @@ class DQN_DisCor(DQN):
             weight=weight,
         )
 
-        self.opt_state_error, self.params_error, loss_error, mean_error = self._update_error(
-            opt_state_error=self.opt_state_error,
-            params_error=self.params_error,
+        self.opt_state_error, self.params_error, loss_error, mean_error = optimize(
+            self._loss_error,
+            self.opt_error,
+            self.opt_state_error,
+            self.params_error,
+            self.max_grad_norm,
             params_error_target=self.params_error_target,
             params_target=self.params_target,
             state=state,
@@ -159,35 +169,6 @@ class DQN_DisCor(DQN):
         x = -(1.0 - done) * self.gamma * next_error / rm_error
         # Calculate importance weights.
         return jax.lax.stop_gradient(jax.nn.softmax(x, axis=0) * x.shape[0])
-
-    @partial(jax.jit, static_argnums=0)
-    def _update_error(
-        self,
-        opt_state_error: Any,
-        params_error: hk.Params,
-        params_error_target: hk.Params,
-        params_target: hk.Params,
-        state: np.ndarray,
-        action: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        abs_td: np.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss_error, mean_error), grad_error = jax.value_and_grad(self._loss_error, has_aux=True)(
-            params_error,
-            params_error_target=params_error_target,
-            params_target=params_target,
-            state=state,
-            action=action,
-            done=done,
-            next_state=next_state,
-            abs_td=abs_td,
-        )
-        if self.max_grad_norm is not None:
-            grad_error = clip_gradient_norm(grad_error, self.max_grad_norm)
-        update, opt_state_error = self.opt_error(grad_error, opt_state_error)
-        params_error = optix.apply_updates(params_error, update)
-        return opt_state_error, params_error, loss_error, mean_error
 
     @partial(jax.jit, static_argnums=0)
     def _loss_error(

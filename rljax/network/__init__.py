@@ -9,4 +9,11 @@ from .critic import (
     DiscreteQFunction,
     DiscreteQuantileFunction,
 )
-from .misc import ConstantGaussian, CumProbNetwork, Gaussian, SACLinear
+from .misc import (
+    ConstantGaussian,
+    CumProbNetwork,
+    Gaussian,
+    SACLinear,
+    make_quantile_nerwork,
+    make_stochastic_latent_variable_model,
+)

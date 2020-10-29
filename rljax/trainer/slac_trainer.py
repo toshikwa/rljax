@@ -60,13 +60,13 @@ class SLACTrainer(Trainer):
         bar = tqdm(range(self.algo.initial_learning_steps))
         for _ in bar:
             bar.set_description("Updating latent variable model.")
-            self.algo.update_latent(self.writer)
+            self.algo.update_model(self.writer)
 
         for step in range(1, self.num_agent_steps + 1):
             self.algo.step(self.env, self.ob)
 
             if self.algo.is_update():
-                self.algo.update_latent(self.writer)
+                self.algo.update_model(self.writer)
                 self.algo.update_sac(self.writer)
 
             if step % self.eval_interval == 0:
