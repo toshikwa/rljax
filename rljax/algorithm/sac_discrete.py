@@ -60,13 +60,10 @@ class SAC_Discrete(SAC):
         # Entropy coefficient.
         self.target_entropy = -np.log(1.0 / action_space.n) * target_entropy_ratio
 
-        # Other parameters.
-        if not hasattr(self, "random_update_critic"):
-            # SAC_Discrete._loss_critic() doesn't need a random key.
-            self.random_update_critic = False
-        if not hasattr(self, "random_update_actor"):
-            # SAC_Discrete._loss_actor() doesn't need a random key.
-            self.random_update_actor = False
+        if not hasattr(self, "use_key_critic"):
+            self.use_key_critic = False
+        if not hasattr(self, "use_key_actor"):
+            self.use_key_actor = False
 
         super(SAC_Discrete, self).__init__(
             num_agent_steps=num_agent_steps,

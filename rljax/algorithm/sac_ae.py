@@ -10,15 +10,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.sac import SAC
 from rljax.network import ContinuousQFunction, SACDecoder, SACEncoder, SACLinear, StateDependentGaussianPolicy
-from rljax.util import (
-    load_params,
-    optimize,
-    preprocess_state,
-    reparameterize_gaussian_and_tanh,
-    save_params,
-    soft_update,
-    weight_decay,
-)
+from rljax.util import fake_action, fake_state, load_params, optimize, preprocess_state, save_params, soft_update, weight_decay
 
 
 class SAC_AE(SAC):
@@ -59,6 +51,7 @@ class SAC_AE(SAC):
         update_interval_target=2,
     ):
         assert len(state_space.shape) == 3 and state_space.shape[:2] == (84, 84)
+        assert (state_space.high == 255).all()
         if d2rl:
             self.name += "-D2RL"
 
@@ -85,11 +78,12 @@ class SAC_AE(SAC):
                     d2rl=d2rl,
                 )(x)
 
-        fake_last_conv = np.zeros((1, 32 * (43 - 2 * 4) * (43 - 2 * 4)), dtype=np.float32)
-        fake_feature = np.zeros((1, feature_dim), dtype=np.float32)
-        fake_action = action_space.sample().astype(np.float32)[None, ...]
-        self.fake_args_critic = (fake_feature, fake_action)
-        self.fake_args_actor = (fake_last_conv,)
+        fake_feature = jnp.empty((1, feature_dim))
+        fake_last_conv = jnp.empty((1, 39200))
+        if not hasattr(self, "fake_args_critic"):
+            self.fake_args_critic = (fake_feature, fake_action(action_space))
+        if not hasattr(self, "fake_args_actor"):
+            self.fake_args_actor = (fake_last_conv,)
 
         super(SAC_AE, self).__init__(
             num_agent_steps=num_agent_steps,
@@ -113,10 +107,9 @@ class SAC_AE(SAC):
             init_alpha=init_alpha,
             adam_b1_alpha=adam_b1_alpha,
         )
-
         # Encoder.
         self.encoder = hk.without_apply_rng(hk.transform(lambda s: SACEncoder(num_filters=32, num_layers=4)(s)))
-        self.params_encoder = self.params_encoder_target = self.encoder.init(next(self.rng), self.fake_state)
+        self.params_encoder = self.params_encoder_target = self.encoder.init(next(self.rng), fake_state(state_space))
 
         # Linear layer for critic and decoder.
         self.linear = hk.without_apply_rng(hk.transform(lambda x: SACLinear(feature_dim=feature_dim)(x)))
@@ -141,35 +134,22 @@ class SAC_AE(SAC):
         self.update_interval_target = update_interval_target
 
     def select_action(self, state):
-        action = self._select_action(self.params_encoder, self.params_actor, state[None, ...])
+        last_conv = self._preprocess(self.params_encoder, state[None, ...])
+        action = self._select_action(self.params_actor, last_conv)
         return np.array(action[0])
 
     def explore(self, state):
-        action = self._explore(self.params_encoder, self.params_actor, next(self.rng), state[None, ...])
+        last_conv = self._preprocess(self.params_encoder, state[None, ...])
+        action = self._explore(self.params_actor, next(self.rng), last_conv)
         return np.array(action[0])
 
     @partial(jax.jit, static_argnums=0)
-    def _select_action(
+    def _preprocess(
         self,
         params_encoder: hk.Params,
-        params_actor: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        last_conv = self.encoder.apply(params_encoder, state)
-        mean, _ = self.actor.apply(params_actor, last_conv)
-        return jnp.tanh(mean)
-
-    @partial(jax.jit, static_argnums=0)
-    def _explore(
-        self,
-        params_encoder: hk.Params,
-        params_actor: hk.Params,
-        key: jnp.ndarray,
-        state: np.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        last_conv = self.encoder.apply(params_encoder, state)
-        mean, log_std = self.actor.apply(params_actor, last_conv)
-        return reparameterize_gaussian_and_tanh(mean, log_std, key, False)
+        return self.encoder.apply(params_encoder, state)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -177,7 +157,6 @@ class SAC_AE(SAC):
         state, action, reward, done, next_state = batch
 
         # Update critic.
-        kwargs_critic = {"key": next(self.rng)} if self.random_update_critic else {}
         self.opt_state_critic, params_entire_critic, loss_critic, abs_td = optimize(
             self._loss_critic,
             self.opt_critic,
@@ -193,7 +172,7 @@ class SAC_AE(SAC):
             done=done,
             next_state=next_state,
             weight=weight,
-            **kwargs_critic,
+            **self.kwargs_critic,
         )
         self.params_encoder = params_entire_critic["encoder"]
         self.params_linear = params_entire_critic["linear"]
@@ -205,7 +184,6 @@ class SAC_AE(SAC):
 
         # Update actor and alpha.
         if self.learning_step % self.update_interval_actor == 0:
-            kwargs_actor = {"key": next(self.rng)} if self.random_update_actor else {}
             self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = optimize(
                 self._loss_actor,
                 self.opt_actor,
@@ -215,7 +193,7 @@ class SAC_AE(SAC):
                 params_critic=self.params_entire_critic,
                 log_alpha=self.log_alpha,
                 state=state,
-                **kwargs_actor,
+                **self.kwargs_actor,
             )
             self.opt_state_alpha, self.log_alpha, loss_alpha, _ = optimize(
                 self._loss_alpha,
@@ -336,8 +314,6 @@ class SAC_AE(SAC):
         loss_latent = 0.5 * jnp.square(feature).sum(axis=1).mean()
         # Weight decay for the decoder.
         loss_weight = weight_decay(params_ae["decoder"])
-        # RAE loss is reconstruction loss plus the reglarizations.
-        # (i.e. L2 penalty of latent representations + weight decay.)
         return loss_reconst + self.lambda_latent * loss_latent + self.lambda_weight * loss_weight, None
 
     @property

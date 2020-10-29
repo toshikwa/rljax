@@ -9,7 +9,7 @@ from jax.experimental import optix
 
 from rljax.algorithm.dqn import DQN
 from rljax.network import DiscreteQFunction
-from rljax.util import get_q_at_action, load_params, optimize, save_params, soft_update
+from rljax.util import fake_state, get_q_at_action, load_params, optimize, save_params, soft_update
 
 
 class DQN_DisCor(DQN):
@@ -23,7 +23,6 @@ class DQN_DisCor(DQN):
         seed,
         max_grad_norm=None,
         gamma=0.99,
-        nstep=1,
         buffer_size=10 ** 6,
         batch_size=32,
         start_steps=50000,
@@ -44,7 +43,6 @@ class DQN_DisCor(DQN):
         tau_error=5e-3,
         init_error=10.0,
     ):
-        assert nstep == 1
         super(DQN_DisCor, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -52,7 +50,7 @@ class DQN_DisCor(DQN):
             seed=seed,
             max_grad_norm=max_grad_norm,
             gamma=gamma,
-            nstep=nstep,
+            nstep=1,
             buffer_size=buffer_size,
             batch_size=batch_size,
             use_per=False,
@@ -81,10 +79,9 @@ class DQN_DisCor(DQN):
 
         # Error model.
         self.error = hk.without_apply_rng(hk.transform(fn_error))
-        self.params_error = self.params_error_target = self.error.init(next(self.rng), self.fake_state)
+        self.params_error = self.params_error_target = self.error.init(next(self.rng), fake_state(state_space))
         opt_init, self.opt_error = optix.adam(lr_error)
         self.opt_state_error = opt_init(self.params_error)
-
         # Running mean of errors.
         self.rm_error = jnp.array(init_error, dtype=jnp.float32)
         self._update_target_error = jax.jit(partial(soft_update, tau=tau_error))
@@ -93,6 +90,7 @@ class DQN_DisCor(DQN):
         self.learning_step += 1
         _, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
+
         weight = self.calculate_weight(
             params_target=self.params_target,
             params_error_target=self.params_error_target,

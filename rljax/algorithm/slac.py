@@ -1,4 +1,3 @@
-import os
 from collections import deque
 from functools import partial
 from typing import List, Tuple
@@ -9,10 +8,10 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base import SlacAlgorithm
+from rljax.algorithm.base_class import SlacAlgorithm
 from rljax.algorithm.sac import SAC
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy, make_stochastic_latent_variable_model
-from rljax.util import calculate_kl_divergence, gaussian_log_prob, load_params, optimize, save_params
+from rljax.util import calculate_kl_divergence, fake_action, gaussian_log_prob, optimize
 
 
 class SlacObservation:
@@ -82,6 +81,13 @@ class SLAC(SlacAlgorithm, SAC):
         z2_dim=256,
     ):
         assert len(state_space.shape) == 3 and state_space.shape[:2] == (64, 64)
+        assert (state_space.high == 255).all()
+
+        fake_z = jnp.empty((1, z1_dim + z2_dim))
+        fake_feature_action = jnp.empty((1, num_sequences * feature_dim + (num_sequences - 1) * action_space.shape[0]))
+        self.fake_args_critic = (fake_z, fake_action(action_space))
+        self.fake_args_actor = (fake_feature_action,)
+
         SlacAlgorithm.__init__(
             self,
             num_agent_steps=num_agent_steps,
@@ -120,13 +126,7 @@ class SLAC(SlacAlgorithm, SAC):
                     d2rl=d2rl,
                 )(x)
 
-        fake_z = jnp.empty((1, z1_dim + z2_dim))
-        fake_action = action_space.sample().astype(np.float32)[None, ...]
-        fake_feature_action = jnp.empty((1, num_sequences * feature_dim + (num_sequences - 1) * action_space.shape[0]))
-        self.fake_args_critic = (fake_z, fake_action)
-        self.fake_args_actor = (fake_feature_action,)
-        self.setup_soft_actor_critic(fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha)
-
+        self.setup_sac(fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha)
         self.model, self.params_model = make_stochastic_latent_variable_model(
             rng=self.rng,
             state_space=state_space,
@@ -193,7 +193,7 @@ class SLAC(SlacAlgorithm, SAC):
             reward=reward,
             done=done,
             next_feature_action=next_feature_action,
-            key=next(self.rng),
+            **self.kwargs_critic,
         )
 
         # Update actor and alpha.
@@ -207,7 +207,7 @@ class SLAC(SlacAlgorithm, SAC):
             log_alpha=self.log_alpha,
             z=z,
             feature_action=feature_action,
-            key=next(self.rng),
+            **self.kwargs_actor,
         )
         self.opt_state_alpha, self.log_alpha, loss_alpha, _ = optimize(
             self._loss_alpha,
@@ -297,8 +297,8 @@ class SLAC(SlacAlgorithm, SAC):
             action_=action_,
             reward_=reward_,
             done_=done_,
-            key_list1=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
-            key_list2=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
+            key_list1=self.get_key_list(2 * (self.num_sequences + 1)),
+            key_list2=self.get_key_list(2 * (self.num_sequences + 1)),
         )
 
         if writer and self.learning_step_model % 1000 == 0:
@@ -413,11 +413,3 @@ class SLAC(SlacAlgorithm, SAC):
         z1_ = jnp.stack(z1_, axis=1)
         z2_ = jnp.stack(z2_, axis=1)
         return (z1_mean_, z1_std_, z1_, z2_)
-
-    def save_params(self, save_dir):
-        SAC.save_params(self, save_dir)
-        save_params(self.params_model, os.path.join(save_dir, "params_model.npz"))
-
-    def load_params(self, save_dir):
-        SAC.load_params(self, save_dir)
-        self.params_model = load_params(os.path.join(save_dir, "params_model.npz"))

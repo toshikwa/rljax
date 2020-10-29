@@ -62,9 +62,8 @@ class TD3(DDPG):
                     d2rl=d2rl,
                 )(s)
 
-        if not hasattr(self, "random_update_critic"):
-            # TD3._loss_critic() needs a random key.
-            self.random_update_critic = True
+        if not hasattr(self, "use_key_critic"):
+            self.use_key_critic = True
 
         super(TD3, self).__init__(
             num_agent_steps=num_agent_steps,
@@ -85,8 +84,6 @@ class TD3(DDPG):
             std=std,
             update_interval_policy=update_interval_policy,
         )
-
-        # Other parameters.
         self.std_target = std_target
         self.clip_noise = clip_noise
 

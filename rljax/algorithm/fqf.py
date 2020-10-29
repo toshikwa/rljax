@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base import QLearning
+from rljax.algorithm.base_class import QLearning
 from rljax.network import CumProbNetwork, DiscreteImplicitQuantileFunction, make_quantile_nerwork
 from rljax.util import get_quantile_at_action, load_params, optimize, quantile_loss, save_params
 
@@ -63,7 +63,6 @@ class FQF(QLearning):
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
         )
-
         if fn is None:
 
             def fn(s, cum_p):
@@ -139,6 +138,7 @@ class FQF(QLearning):
             done=done,
             next_state=next_state,
             weight=weight,
+            **self.kwargs_update,
         )
 
         # Update priority.

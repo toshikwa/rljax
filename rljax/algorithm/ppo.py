@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base import OnPolicyActorCritic
+from rljax.algorithm.base_class import OnPolicyActorCritic
 from rljax.network import ContinuousVFunction, StateIndependentGaussianPolicy
 from rljax.util import evaluate_gaussian_and_tanh_log_prob, optimize, reparameterize_gaussian_and_tanh
 
@@ -65,13 +65,13 @@ class PPO(OnPolicyActorCritic):
 
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(fn_critic))
-        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), self.fake_state)
+        self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), *self.fake_args_critic)
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
 
         # Actor.
         self.actor = hk.without_apply_rng(hk.transform(fn_actor))
-        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), self.fake_state)
+        self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), *self.fake_args_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
 

@@ -40,7 +40,6 @@ class QRDQN(DQN):
         dueling_net=False,
         double_q=False,
     ):
-        assert loss_type in ["l2", "huber"]
         if fn is None:
 
             def fn(s):
@@ -72,12 +71,8 @@ class QRDQN(DQN):
             fn=fn,
             lr=lr,
         )
-
-        # Fixed cumulative probabilities for calculating quantile values.
         cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
         self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
-
-        # Other parameters.
         self.num_quantiles = num_quantiles
 
     @partial(jax.jit, static_argnums=0)

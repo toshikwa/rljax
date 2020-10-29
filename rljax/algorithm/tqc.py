@@ -83,8 +83,6 @@ class TQC(SAC):
             lr_critic=lr_critic,
             lr_alpha=lr_alpha,
         )
-
-        # Other parameters.
         cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
         self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
         self.num_quantiles = num_quantiles

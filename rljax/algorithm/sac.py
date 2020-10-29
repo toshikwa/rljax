@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base import OffPolicyActorCritic
+from rljax.algorithm.base_class import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
 from rljax.util import optimize, reparameterize_gaussian_and_tanh
 
@@ -42,6 +42,11 @@ class SAC(OffPolicyActorCritic):
         adam_b1_alpha=0.9,
         **kwargs,
     ):
+        if not hasattr(self, "use_key_critic"):
+            self.use_key_critic = True
+        if not hasattr(self, "use_key_actor"):
+            self.use_key_actor = True
+
         super(SAC, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -79,29 +84,19 @@ class SAC(OffPolicyActorCritic):
                     d2rl=d2rl,
                 )(s)
 
-        self.setup_soft_actor_critic(fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha)
+        self.setup_sac(fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha)
 
-        # Other parameters.
-        if not hasattr(self, "random_update_critic"):
-            # SAC._loss_critic() needs a random key.
-            self.random_update_critic = True
-        if not hasattr(self, "random_update_actor"):
-            # SAC._loss_actor() needs a random key.
-            self.random_update_actor = True
-
-    def setup_soft_actor_critic(self, fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha):
+    def setup_sac(self, fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha):
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(fn_critic))
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), *self.fake_args_critic)
         opt_init, self.opt_critic = optix.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
-
         # Actor.
         self.actor = hk.without_apply_rng(hk.transform(fn_actor))
         self.params_actor = self.actor.init(next(self.rng), *self.fake_args_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
-
         # Entropy coefficient.
         if not hasattr(self, "target_entropy"):
             self.target_entropy = -float(self.action_space.shape[0])
@@ -134,7 +129,6 @@ class SAC(OffPolicyActorCritic):
         state, action, reward, done, next_state = batch
 
         # Update critic.
-        kwargs_critic = {"key": next(self.rng)} if self.random_update_critic else {}
         self.opt_state_critic, self.params_critic, loss_critic, abs_td = optimize(
             self._loss_critic,
             self.opt_critic,
@@ -150,7 +144,7 @@ class SAC(OffPolicyActorCritic):
             done=done,
             next_state=next_state,
             weight=weight,
-            **kwargs_critic,
+            **self.kwargs_critic,
         )
 
         # Update priority.
@@ -158,7 +152,6 @@ class SAC(OffPolicyActorCritic):
             self.buffer.update_priority(abs_td)
 
         # Update actor.
-        kwargs_actor = {"key": next(self.rng)} if self.random_update_actor else {}
         self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = optimize(
             self._loss_actor,
             self.opt_actor,
@@ -168,7 +161,7 @@ class SAC(OffPolicyActorCritic):
             params_critic=self.params_critic,
             log_alpha=self.log_alpha,
             state=state,
-            **kwargs_actor,
+            **self.kwargs_actor,
         )
 
         # Update alpha.

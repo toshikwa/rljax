@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base import QLearning
+from rljax.algorithm.base_class import QLearning
 from rljax.network import DiscreteQFunction
 from rljax.util import get_q_at_action, huber, optimize
 
@@ -59,7 +59,6 @@ class DQN(QLearning):
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
         )
-
         if fn is None:
 
             def fn(s):
@@ -78,9 +77,6 @@ class DQN(QLearning):
         # Other parameters.
         self.loss_type = loss_type
         self.double_q = double_q
-        if not hasattr(self, "random_update"):
-            # DQN._loss() doesn't need a random key.
-            self.random_update = False
 
     @partial(jax.jit, static_argnums=0)
     def _forward(
@@ -96,7 +92,6 @@ class DQN(QLearning):
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        kwargs = {"key1": next(self.rng), "key2": next(self.rng)} if self.random_update else {}
         self.opt_state, self.params, loss, abs_td = optimize(
             self._loss,
             self.opt,
@@ -110,7 +105,7 @@ class DQN(QLearning):
             done=done,
             next_state=next_state,
             weight=weight,
-            **kwargs,
+            **self.kwargs_update,
         )
 
         # Update priority.

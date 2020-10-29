@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base import OffPolicyActorCritic
+from rljax.algorithm.base_class import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, DeterministicPolicy
 from rljax.util import add_noise, optimize
 
@@ -76,16 +76,6 @@ class DDPG(OffPolicyActorCritic):
                     d2rl=d2rl,
                 )(s)
 
-        self.setup_actor_critic(fn_actor, fn_critic, lr_actor, lr_critic)
-
-        # Other parameters.
-        self.std = std
-        self.update_interval_policy = update_interval_policy
-        if not hasattr(self, "random_update_critic"):
-            # DDPG._loss_critic() doesn't need a random key.
-            self.random_update_critic = False
-
-    def setup_actor_critic(self, fn_actor, fn_critic, lr_actor, lr_critic):
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(fn_critic))
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), *self.fake_args_critic)
@@ -97,6 +87,10 @@ class DDPG(OffPolicyActorCritic):
         self.params_actor = self.params_actor_target = self.actor.init(next(self.rng), *self.fake_args_actor)
         opt_init, self.opt_actor = optix.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
+
+        # Other parameters.
+        self.std = std
+        self.update_interval_policy = update_interval_policy
 
     @partial(jax.jit, static_argnums=0)
     def _select_action(
@@ -122,7 +116,6 @@ class DDPG(OffPolicyActorCritic):
         state, action, reward, done, next_state = batch
 
         # Update critic and target.
-        kwargs_critic = {"key": next(self.rng)} if self.random_update_critic else {}
         self.opt_state_critic, self.params_critic, loss_critic, abs_td = optimize(
             self._loss_critic,
             self.opt_critic,
@@ -137,7 +130,7 @@ class DDPG(OffPolicyActorCritic):
             done=done,
             next_state=next_state,
             weight=weight,
-            **kwargs_critic,
+            **self.kwargs_critic,
         )
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
 
@@ -155,6 +148,7 @@ class DDPG(OffPolicyActorCritic):
                 self.max_grad_norm,
                 params_critic=self.params_critic,
                 state=state,
+                **self.kwargs_actor,
             )
             self.params_actor_target = self._update_target(self.params_actor_target, self.params_actor)
 

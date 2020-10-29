@@ -24,7 +24,6 @@ class SAC_DisCor(SAC):
         seed,
         max_grad_norm=None,
         gamma=0.99,
-        nstep=1,
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
@@ -45,7 +44,6 @@ class SAC_DisCor(SAC):
         init_error=10.0,
         adam_b1_alpha=0.9,
     ):
-        assert nstep == 1
         super(SAC_DisCor, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -53,7 +51,7 @@ class SAC_DisCor(SAC):
             seed=seed,
             max_grad_norm=max_grad_norm,
             gamma=gamma,
-            nstep=nstep,
+            nstep=1,
             buffer_size=buffer_size,
             use_per=False,
             batch_size=batch_size,
@@ -85,7 +83,6 @@ class SAC_DisCor(SAC):
         self.params_error = self.params_error_target = self.error.init(next(self.rng), *self.fake_args_critic)
         opt_init, self.opt_error = optix.adam(lr_error)
         self.opt_state_error = opt_init(self.params_error)
-
         # Running mean of errors.
         self.rm_error_list = [jnp.array(init_error, dtype=jnp.float32) for _ in range(2)]
 
@@ -105,7 +102,6 @@ class SAC_DisCor(SAC):
         )
 
         # Update critic.
-        kwargs_critic = {"key": next(self.rng)} if self.random_update_critic else {}
         self.opt_state_critic, self.params_critic, loss_critic, abs_td_list = optimize(
             self._loss_critic,
             self.opt_critic,
@@ -121,7 +117,7 @@ class SAC_DisCor(SAC):
             done=done,
             next_state=next_state,
             weight_list=weight_list,
-            **kwargs_critic,
+            **self.kwargs_critic,
         )
 
         # Update error model.
@@ -142,7 +138,6 @@ class SAC_DisCor(SAC):
         )
 
         # Update actor.
-        kwargs_actor = {"key": next(self.rng)} if self.random_update_actor else {}
         self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = optimize(
             self._loss_actor,
             self.opt_actor,
@@ -152,7 +147,7 @@ class SAC_DisCor(SAC):
             params_critic=self.params_critic,
             log_alpha=self.log_alpha,
             state=state,
-            **kwargs_actor,
+            **self.kwargs_actor,
         )
 
         # Update alpha.
