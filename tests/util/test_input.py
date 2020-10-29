@@ -8,16 +8,14 @@ from rljax.util.input import fake_action, fake_state
 def test_pixel_state():
     env = make_atari_env("MsPacmanNoFrameskip-v4")
     state = fake_state(env.observation_space)
-    assert state.shape == (1, 64, 64, 4)
+    assert state.shape == (1, 84, 84, 4)
     assert state.dtype == np.uint8
-    assert state.high == 255
-    assert state.low == 0
 
 
 def test_vector_state():
     env = gym.make("CartPole-v0")
     state = fake_state(env.observation_space)
-    assert state.shape == (1, 2)
+    assert state.shape == (1, 4)
     assert state.dtype == np.float32
 
 
