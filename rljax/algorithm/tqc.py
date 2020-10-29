@@ -36,6 +36,8 @@ class TQC(SAC):
         lr_alpha=3e-4,
         units_actor=(256, 256),
         units_critic=(512, 512, 512),
+        log_std_min=-20.0,
+        log_std_max=2.0,
         d2rl=False,
         num_critics=5,
         num_quantiles=25,
@@ -60,6 +62,8 @@ class TQC(SAC):
                 return StateDependentGaussianPolicy(
                     action_space=action_space,
                     hidden_units=units_actor,
+                    log_std_min=log_std_min,
+                    log_std_max=log_std_max,
                     d2rl=d2rl,
                 )(s)
 

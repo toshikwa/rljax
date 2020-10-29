@@ -73,6 +73,8 @@ class SLAC(SlacAlgorithm, SAC):
         units_actor=(256, 256),
         units_critic=(256, 256),
         units_model=(256, 256),
+        log_std_min=-20.0,
+        log_std_max=2.0,
         d2rl=False,
         init_alpha=1.0,
         adam_b1_alpha=0.9,
@@ -123,6 +125,8 @@ class SLAC(SlacAlgorithm, SAC):
                 return StateDependentGaussianPolicy(
                     action_space=action_space,
                     hidden_units=units_actor,
+                    log_std_min=log_std_min,
+                    log_std_max=log_std_max,
                     d2rl=d2rl,
                 )(x)
 

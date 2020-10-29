@@ -40,6 +40,8 @@ class SAC_AE(SAC):
         lr_alpha=1e-4,
         units_actor=(1024, 1024),
         units_critic=(1024, 1024),
+        log_std_min=-10.0,
+        log_std_max=2.0,
         d2rl=False,
         init_alpha=0.1,
         adam_b1_alpha=0.5,
@@ -73,7 +75,8 @@ class SAC_AE(SAC):
                 return StateDependentGaussianPolicy(
                     action_space=action_space,
                     hidden_units=units_actor,
-                    log_std_min=-10.0,
+                    log_std_min=log_std_min,
+                    log_std_max=log_std_max,
                     clip_log_std=False,
                     d2rl=d2rl,
                 )(x)
