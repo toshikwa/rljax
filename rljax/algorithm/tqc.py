@@ -89,6 +89,7 @@ class TQC(SAC):
         )
         cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
         self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
+        self.num_critics = num_critics
         self.num_quantiles = num_quantiles
         self.num_quantiles_target = num_quantiles * num_critics - num_quantiles_to_drop
 
@@ -129,7 +130,8 @@ class TQC(SAC):
         loss = 0.0
         for curr_quantile in curr_quantile_list:
             loss += quantile_loss(target[:, None, :] - curr_quantile[:, :, None], self.cum_p_prime, weight, "huber")
-        abs_td = jnp.abs(target[:, None, :] - curr_quantile_list[0][:, :, None]).sum(axis=1).mean(axis=1, keepdims=True)
+        loss /= self.num_critics * self.num_quantiles
+        abs_td = jnp.abs(target[:, None, :] - curr_quantile_list[0][:, :, None]).mean(axis=1).mean(axis=1, keepdims=True)
         return loss, abs_td
 
     @partial(jax.jit, static_argnums=0)
