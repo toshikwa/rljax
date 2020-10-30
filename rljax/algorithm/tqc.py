@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Tuple
+from typing import List
 
 import haiku as hk
 import jax
@@ -94,6 +94,15 @@ class TQC(SAC):
         self.num_quantiles_target = num_quantiles * num_critics - num_quantiles_to_drop
 
     @partial(jax.jit, static_argnums=0)
+    def _calculate_q(
+        self,
+        params_critic: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+    ) -> jnp.ndarray:
+        return jnp.concatenate(self._calculate_q_list(params_critic, state, action), axis=1)
+
+    @partial(jax.jit, static_argnums=0)
     def _calculate_target(
         self,
         params_critic_target: hk.Params,
@@ -104,49 +113,21 @@ class TQC(SAC):
         next_action: jnp.ndarray,
         next_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
-        alpha = jnp.exp(log_alpha)
-        next_quantile = jnp.concatenate(self.critic.apply(params_critic_target, next_state, next_action), axis=1)
-        next_quantile = jnp.sort(next_quantile)[:, : self.num_quantiles_target] - alpha * next_log_pi
+        next_quantile = self._calculate_q(params_critic_target, next_state, next_action)
+        next_quantile = jnp.sort(next_quantile)[:, : self.num_quantiles_target]
+        next_quantile -= jnp.exp(log_alpha) * self._calculate_log_pi(next_action, next_log_pi)
         return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_quantile)
 
     @partial(jax.jit, static_argnums=0)
-    def _loss_critic(
+    def _calculate_loss_critic_and_abs_td(
         self,
-        params_critic: hk.Params,
-        params_critic_target: hk.Params,
-        params_actor: hk.Params,
-        log_alpha: jnp.ndarray,
-        state: np.ndarray,
-        action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
+        quantile_list: List[jnp.ndarray],
+        target: jnp.ndarray,
         weight: np.ndarray,
-        key: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action, next_log_pi = self._sample_action(params_actor, key, next_state)
-        target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_action, next_log_pi)
-        curr_quantile_list = self.critic.apply(params_critic, state, action)
-        loss = 0.0
-        for curr_quantile in curr_quantile_list:
-            loss += quantile_loss(target[:, None, :] - curr_quantile[:, :, None], self.cum_p_prime, weight, "huber")
-        loss /= self.num_critics * self.num_quantiles
-        abs_td = jnp.abs(target[:, None, :] - curr_quantile_list[0][:, :, None]).mean(axis=1).mean(axis=1, keepdims=True)
-        return loss, abs_td
-
-    @partial(jax.jit, static_argnums=0)
-    def _loss_actor(
-        self,
-        params_actor: hk.Params,
-        params_critic: hk.Params,
-        log_alpha: jnp.ndarray,
-        state: np.ndarray,
-        key: np.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
-        # Sample actions.
-        action, log_pi = self._sample_action(params_actor, key, state)
-        # Calculate soft q values with online critic.
-        mean_q = jnp.concatenate(self.critic.apply(params_critic, state, action), axis=1).mean()
-        mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
+    ) -> jnp.ndarray:
+        loss_critic = 0.0
+        for quantile in quantile_list:
+            loss_critic += quantile_loss(target[:, None, :] - quantile[:, :, None], self.cum_p_prime, weight, "huber")
+        loss_critic /= self.num_critics * self.num_quantiles
+        abs_td = jnp.abs(target[:, None, :] - quantile_list[0][:, :, None]).mean(axis=1).mean(axis=1, keepdims=True)
+        return loss_critic, abs_td

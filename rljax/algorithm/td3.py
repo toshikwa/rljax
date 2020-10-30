@@ -105,14 +105,14 @@ class TD3(DDPG):
         next_action = self.actor.apply(params_actor_target, next_state)
         next_action = add_noise(next_action, key, self.std_target, -1.0, 1.0, -self.clip_noise, self.clip_noise)
         # Calculate target q values (clipped double q) with target critic.
-        next_q1, next_q2 = self.critic.apply(params_critic_target, next_state, next_action)
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.minimum(next_q1, next_q2))
+        next_q_list = self.critic.apply(params_critic_target, next_state, next_action)
+        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.asarray(next_q_list).min(axis=0))
         # Calculate current q values with online critic.
-        curr_q_list = self.critic.apply(params_critic, state, action)
+        q_list = self.critic.apply(params_critic, state, action)
         loss = 0.0
-        for curr_q in curr_q_list:
-            loss += (jnp.square(target_q - curr_q) * weight).mean()
-        abs_td = jax.lax.stop_gradient(jnp.abs(target_q - curr_q[0]))
+        for q in q_list:
+            loss += (jnp.square(target_q - q) * weight).mean()
+        abs_td = jax.lax.stop_gradient(jnp.abs(target_q - q_list[0]))
         return loss, abs_td
 
     @partial(jax.jit, static_argnums=0)

@@ -96,7 +96,7 @@ class SAC_DisCor(SAC):
         state, action, reward, done, next_state = batch
 
         # Calculate weights.
-        weight_list = self.calculate_weight(
+        weight = self.calculate_weight(
             params_actor=self.params_actor,
             params_error_target=self.params_error_target,
             rm_error_list=self.rm_error_list,
@@ -120,7 +120,7 @@ class SAC_DisCor(SAC):
             reward=reward,
             done=done,
             next_state=next_state,
-            weight_list=weight_list,
+            weight=weight,
             **self.kwargs_critic,
         )
 
@@ -180,6 +180,19 @@ class SAC_DisCor(SAC):
                 writer.add_scalar(f"stat/rm_error{i+1}", rm_error, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
+    def _calculate_loss_critic_and_abs_td(
+        self,
+        q_list: List[jnp.ndarray],
+        target: jnp.ndarray,
+        weight: np.ndarray,
+    ) -> jnp.ndarray:
+        loss_critic = 0.0
+        for i, q in enumerate(q_list):
+            loss_critic += (jnp.square(target - q) * weight[i]).mean()
+        abs_td = jax.lax.stop_gradient(jnp.abs(target - q_list[0]))
+        return loss_critic, abs_td
+
+    @partial(jax.jit, static_argnums=0)
     def sample_next_error(
         self,
         params_actor: hk.Params,
@@ -201,37 +214,11 @@ class SAC_DisCor(SAC):
         key: jnp.ndarray,
     ) -> List[jnp.ndarray]:
         next_error_list = self.sample_next_error(params_actor, params_error_target, next_state, key)
-        weight_list = []
+        weight = []
         for next_error, rm_error in zip(next_error_list, rm_error_list):
             x = -(1.0 - done) * self.gamma * next_error / rm_error
-            weight_list.append(jax.lax.stop_gradient(jax.nn.softmax(x, axis=0)))
-        return weight_list
-
-    @partial(jax.jit, static_argnums=0)
-    def _loss_critic(
-        self,
-        params_critic: hk.Params,
-        params_critic_target: hk.Params,
-        params_actor: hk.Params,
-        log_alpha: jnp.ndarray,
-        state: np.ndarray,
-        action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        weight_list: List[np.ndarray],
-        key: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, List[jnp.ndarray]]:
-        next_action, next_log_pi = self._sample_action(params_actor, key, next_state)
-        target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_action, next_log_pi)
-        curr_q_list = self.critic.apply(params_critic, state, action)
-        loss = 0.0
-        abs_td_list = []
-        for curr_q, weight in zip(curr_q_list, weight_list):
-            abs_td = jnp.abs(target - curr_q)
-            loss += (jnp.square(abs_td) * weight).sum()
-            abs_td_list.append(jax.lax.stop_gradient(abs_td))
-        return loss, abs_td_list
+            weight.append(jax.lax.stop_gradient(jax.nn.softmax(x, axis=0)) * x.shape[0])
+        return weight
 
     @partial(jax.jit, static_argnums=0)
     def _loss_error(

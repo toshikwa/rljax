@@ -1,6 +1,6 @@
 import os
 from functools import partial
-from typing import Tuple
+from typing import List, Tuple
 
 import haiku as hk
 import jax
@@ -237,22 +237,14 @@ class SAC_AE(SAC):
             writer.add_scalar("stat/entropy", -mean_log_pi, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_target(
+    def _calculate_q_list(
         self,
-        params_critic_target: hk.Params,
-        log_alpha: jnp.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        next_action: jnp.ndarray,
-        next_log_pi: jnp.ndarray,
-    ) -> jnp.ndarray:
-        alpha = jnp.exp(log_alpha)
-        next_last_conv_prime = self.encoder.apply(params_critic_target["encoder"], next_state)
-        next_feature = self.linear.apply(params_critic_target["linear"], next_last_conv_prime)
-        next_q_list = self.critic.apply(params_critic_target["critic"], next_feature, next_action)
-        next_q = jnp.asarray(next_q_list).min(axis=0) - alpha * next_log_pi
-        return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+        params_critic: hk.Params,
+        last_conv: np.ndarray,
+        action: np.ndarray,
+    ) -> List[jnp.ndarray]:
+        feature = self.linear.apply(params_critic["linear"], last_conv)
+        return self.critic.apply(params_critic["critic"], feature, action)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -266,20 +258,24 @@ class SAC_AE(SAC):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight: np.ndarray,
-        key: jnp.ndarray,
+        weight: np.ndarray or List[jnp.ndarray],
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_last_conv = self.encoder.apply(params_critic["encoder"], next_state)
-        next_action, next_log_pi = self._sample_action(params_actor, key, next_last_conv)
-        target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_action, next_log_pi)
         last_conv = self.encoder.apply(params_critic["encoder"], state)
-        feature = self.linear.apply(params_critic["linear"], last_conv)
-        curr_q_list = self.critic.apply(params_critic["critic"], feature, action)
-        loss = 0.0
-        for curr_q in curr_q_list:
-            loss += (jnp.square(target - curr_q) * weight).mean()
-        abs_td = jax.lax.stop_gradient(jnp.abs(target - curr_q[0]))
-        return loss, abs_td
+        next_last_conv = jax.lax.stop_gradient(self.encoder.apply(params_critic["encoder"], next_state))
+        return super(SAC_AE, self)._loss_critic(
+            params_critic=params_critic,
+            params_critic_target=params_critic_target,
+            params_actor=params_actor,
+            log_alpha=log_alpha,
+            state=last_conv,
+            action=action,
+            reward=reward,
+            done=done,
+            next_state=next_last_conv,
+            weight=weight,
+            **kwargs,
+        )
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
@@ -288,15 +284,16 @@ class SAC_AE(SAC):
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
-        key: np.ndarray,
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
         last_conv = jax.lax.stop_gradient(self.encoder.apply(params_critic["encoder"], state))
-        action, log_pi = self._sample_action(params_actor, key, last_conv)
-        feature = self.linear.apply(params_critic["linear"], last_conv)
-        mean_q = jnp.asarray(self.critic.apply(params_critic["critic"], feature, action)).min(axis=0).mean()
-        mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
+        return super(SAC_AE, self)._loss_actor(
+            params_actor=params_actor,
+            params_critic=params_critic,
+            log_alpha=log_alpha,
+            state=last_conv,
+            **kwargs,
+        )
 
     @partial(jax.jit, static_argnums=0)
     def _loss_ae(

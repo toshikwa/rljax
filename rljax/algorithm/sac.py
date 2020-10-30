@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Tuple
+from typing import List, Tuple
 
 import haiku as hk
 import jax
@@ -199,6 +199,32 @@ class SAC(OffPolicyActorCritic):
         return reparameterize_gaussian_and_tanh(mean, log_std, key, True)
 
     @partial(jax.jit, static_argnums=0)
+    def _calculate_q_list(
+        self,
+        params_critic: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+    ) -> List[jnp.ndarray]:
+        return self.critic.apply(params_critic, state, action)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_q(
+        self,
+        params_critic: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+    ) -> jnp.ndarray:
+        return jnp.asarray(self._calculate_q_list(params_critic, state, action)).min(axis=0)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_log_pi(
+        self,
+        action: np.ndarray,
+        log_pi: np.ndarray,
+    ) -> jnp.ndarray:
+        return log_pi
+
+    @partial(jax.jit, static_argnums=0)
     def _calculate_target(
         self,
         params_critic_target: hk.Params,
@@ -209,10 +235,22 @@ class SAC(OffPolicyActorCritic):
         next_action: jnp.ndarray,
         next_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
-        alpha = jnp.exp(log_alpha)
-        next_q_list = self.critic.apply(params_critic_target, next_state, next_action)
-        next_q = jnp.asarray(next_q_list).min(axis=0) - alpha * next_log_pi
+        next_q = self._calculate_q(params_critic_target, next_state, next_action)
+        next_q -= jnp.exp(log_alpha) * self._calculate_log_pi(next_action, next_log_pi)
         return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_loss_critic_and_abs_td(
+        self,
+        q_list: List[jnp.ndarray],
+        target: jnp.ndarray,
+        weight: np.ndarray or List[jnp.ndarray],
+    ) -> jnp.ndarray:
+        loss_critic = 0.0
+        for q in q_list:
+            loss_critic += (jnp.square(target - q) * weight).mean()
+        abs_td = jax.lax.stop_gradient(jnp.abs(target - q_list[0]))
+        return loss_critic, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(
@@ -226,17 +264,13 @@ class SAC(OffPolicyActorCritic):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight: np.ndarray,
-        key: jnp.ndarray,
+        weight: np.ndarray or List[jnp.ndarray],
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action, next_log_pi = self._sample_action(params_actor, key, next_state)
+        next_action, next_log_pi = self._sample_action(params_actor=params_actor, state=next_state, **kwargs)
         target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_action, next_log_pi)
-        curr_q_list = self.critic.apply(params_critic, state, action)
-        loss = 0.0
-        for curr_q in curr_q_list:
-            loss += (jnp.square(target - curr_q) * weight).mean()
-        abs_td = jax.lax.stop_gradient(jnp.abs(target - curr_q[0]))
-        return loss, abs_td
+        q_list = self._calculate_q_list(params_critic, state, action)
+        return self._calculate_loss_critic_and_abs_td(q_list, target, weight)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
@@ -245,13 +279,12 @@ class SAC(OffPolicyActorCritic):
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
-        key: np.ndarray,
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
-        action, log_pi = self._sample_action(params_actor, key, state)
-        mean_q = jnp.asarray(self.critic.apply(params_critic, state, action)).min(axis=0).mean()
-        mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
+        action, log_pi = self._sample_action(params_actor=params_actor, state=state, **kwargs)
+        mean_q = self._calculate_q(params_critic, state, action).mean()
+        mean_log_pi = self._calculate_log_pi(action, log_pi).mean()
+        return jax.lax.stop_gradient(jnp.exp(log_alpha)) * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_alpha(

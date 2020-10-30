@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Tuple
+from typing import List, Tuple
 
 import haiku as hk
 import jax
@@ -92,8 +92,8 @@ class SAC_Discrete(SAC):
         params_actor: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        pi, _ = self.actor.apply(params_actor, state)
-        return jnp.argmax(pi, axis=1)
+        pi_s, _ = self.actor.apply(params_actor, state)
+        return jnp.argmax(pi_s, axis=1)
 
     @partial(jax.jit, static_argnums=0)
     def _explore(
@@ -102,59 +102,40 @@ class SAC_Discrete(SAC):
         key: jnp.ndarray,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        pi, _ = self.actor.apply(params_actor, state)
-        return jax.random.categorical(key, pi)
+        pi_s, _ = self.actor.apply(params_actor, state)
+        return jax.random.categorical(key, pi_s)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_target(
+    def _sample_action(
         self,
-        params_critic_target: hk.Params,
-        log_alpha: jnp.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        next_pi: jnp.ndarray,
-        next_log_pi: jnp.ndarray,
-    ) -> jnp.ndarray:
-        alpha = jnp.exp(log_alpha)
-        next_q_s_list = self.critic.apply(params_critic_target, next_state)
-        next_q = (next_pi * (jnp.asarray(next_q_s_list).min(axis=0) - alpha * next_log_pi)).sum(axis=1, keepdims=True)
-        return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+        params_actor: hk.Params,
+        state: np.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        return self.actor.apply(params_actor, state)
 
     @partial(jax.jit, static_argnums=0)
-    def _loss_critic(
+    def _calculate_q_list(
         self,
         params_critic: hk.Params,
-        params_critic_target: hk.Params,
-        params_actor: hk.Params,
-        log_alpha: jnp.ndarray,
         state: np.ndarray,
         action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        weight: np.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_pi, next_log_pi = self.actor.apply(params_actor, next_state)
-        target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_pi, next_log_pi)
-        curr_q_list = [get_q_at_action(curr_q_s, action) for curr_q_s in self.critic.apply(params_critic, state)]
-        loss = 0.0
-        for curr_q in curr_q_list:
-            loss += (jnp.square(target - curr_q) * weight).mean()
-        abs_td = jax.lax.stop_gradient(jnp.abs(target - curr_q[0]))
-        return loss, abs_td
+    ) -> List[jnp.ndarray]:
+        return [get_q_at_action(q_s, action) for q_s in self.critic.apply(params_critic, state)]
 
     @partial(jax.jit, static_argnums=0)
-    def _loss_actor(
+    def _calculate_q(
         self,
-        params_actor: hk.Params,
         params_critic: hk.Params,
-        log_alpha: jnp.ndarray,
         state: np.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
-        curr_q_s = jax.lax.stop_gradient(jnp.asarray(self.critic.apply(params_critic, state)).min(axis=0))
-        pi, log_pi = self.actor.apply(params_actor, state)
-        mean_q = (pi * curr_q_s).sum(axis=1).mean()
-        mean_log_pi = (pi * log_pi).sum(axis=1).mean()
-        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
+        pi_s: np.ndarray,
+    ) -> jnp.ndarray:
+        q_s = jax.lax.stop_gradient(jnp.asarray(self.critic.apply(params_critic, state)).min(axis=0))
+        return (pi_s * q_s).sum(axis=1, keepdims=True)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_log_pi(
+        self,
+        pi_s: np.ndarray,
+        log_pi_s: np.ndarray,
+    ) -> jnp.ndarray:
+        return (pi_s * log_pi_s).sum(axis=1, keepdims=True)

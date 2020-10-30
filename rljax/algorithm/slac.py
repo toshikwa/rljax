@@ -165,11 +165,9 @@ class SLAC(SlacAlgorithm, SAC):
         N = state_.shape[0]
         feature_ = self.model["encoder"].apply(params_model["encoder"], state_)
         z_ = jax.lax.stop_gradient(jnp.concatenate(self.sample_post(params_model, feature_, action_, key_list)[2:], axis=-1))
-        z, next_z = z_[:, -2], z_[:, -1]
-        action = action_[:, -1]
         feature_action = jnp.concatenate([feature_[:, :-1].reshape([N, -1]), action_[:, :-1].reshape([N, -1])], axis=-1)
         next_feature_action = jnp.concatenate([feature_[:, 1:].reshape([N, -1]), action_[:, 1:].reshape([N, -1])], axis=-1)
-        return z, next_z, action, feature_action, next_feature_action
+        return z_[:, -2], z_[:, -1], action_[:, -1], feature_action, next_feature_action
 
     def update_sac(self, writer=None):
         self.learning_step_sac += 1
@@ -180,6 +178,7 @@ class SLAC(SlacAlgorithm, SAC):
             action_=action_,
             key_list=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
         )
+        del state_, action_
 
         # Update critic.
         self.opt_state_critic, self.params_critic, loss_critic, _ = optimize(
@@ -261,15 +260,12 @@ class SLAC(SlacAlgorithm, SAC):
         reward: np.ndarray,
         done: np.ndarray,
         next_feature_action: np.ndarray,
-        key: jnp.ndarray,
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action, next_log_pi = self._sample_action(params_actor, key, next_feature_action)
+        next_action, next_log_pi = self._sample_action(params_actor=params_actor, state=next_feature_action, **kwargs)
         target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_z, next_action, next_log_pi)
-        curr_q_list = self.critic.apply(params_critic, z, action)
-        loss = 0.0
-        for curr_q in curr_q_list:
-            loss += jnp.square(target - curr_q).mean()
-        return loss, None
+        q_list = self._calculate_q_list(params_critic, z, action)
+        return self._calculate_loss_critic_and_abs_td(q_list, target, 1.0)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
@@ -279,13 +275,12 @@ class SLAC(SlacAlgorithm, SAC):
         log_alpha: jnp.ndarray,
         z: np.ndarray,
         feature_action: np.ndarray,
-        key: np.ndarray,
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jax.lax.stop_gradient(jnp.exp(log_alpha))
-        action, log_pi = self._sample_action(params_actor, key, feature_action)
-        mean_q = jnp.asarray(self.critic.apply(params_critic, z, action)).min(axis=0).mean()
-        mean_log_pi = log_pi.mean()
-        return alpha * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
+        action, log_pi = self._sample_action(params_actor=params_actor, state=feature_action, **kwargs)
+        mean_q = self._calculate_q(params_critic, z, action).mean()
+        mean_log_pi = self._calculate_log_pi(action, log_pi).mean()
+        return jax.lax.stop_gradient(jnp.exp(log_alpha)) * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
 
     def update_model(self, writer=None):
         self.learning_step_model += 1
@@ -323,7 +318,6 @@ class SLAC(SlacAlgorithm, SAC):
         img_ = state_.astype(jnp.float32) / 255.0
         # Calculate the sequence of features.
         feature_ = self.model["encoder"].apply(params_model["encoder"], state_)
-
         # Sample from stochastic latent variable model.
         z1_mean_pri_, z1_std_pri_ = self.sample_prior(params_model, action_, key_list1)
         z1_mean_post_, z1_std_post_, z1_, z2_ = self.sample_post(params_model, feature_, action_, key_list2)
@@ -348,31 +342,20 @@ class SLAC(SlacAlgorithm, SAC):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         z1_mean_ = []
         z1_std_ = []
-
-        # p(z1(0)) = N(0, I)
-        z1_mean, z1_std = self.model["z1_prior_init"].apply(params_model["z1_prior_init"], action_[:, 0])
-        z1 = z1_mean + jax.random.normal(key_list[0], z1_std.shape) * z1_std
-        # p(z2(0) | z1(0))
-        z2_mean, z2_std = self.model["z2_init"].apply(params_model["z2_init"], z1)
-        z2 = z2_mean + jax.random.normal(key_list[1], z2_std.shape) * z2_std
-
-        z1_mean_.append(z1_mean)
-        z1_std_.append(z1_std)
-
-        for t in range(1, action_.shape[1] + 1):
-            # p(z1(t) | z2(t-1), a(t-1))
-            z1_mean, z1_std = self.model["z1_prior"].apply(params_model["z1_prior"], z2, action_[:, t - 1])
-            z1 = z1_mean + jax.random.normal(key_list[2 * t], z1_std.shape) * z1_std
-            # p(z2(t) | z1(t), z2(t-1), a(t-1))
-            z2_mean, z2_std = self.model["z2"].apply(params_model["z2"], z1, z2, action_[:, t - 1])
-            z2 = z2_mean + jax.random.normal(key_list[2 * t + 1], z2_std.shape) * z2_std
-
+        for t in range(self.num_sequences + 1):
+            if t == 0:
+                z1_mean, z1_std = self.model["z1_prior_init"].apply(params_model["z1_prior_init"], action_[:, 0])
+                z1 = z1_mean + jax.random.normal(key_list[0], z1_std.shape) * z1_std
+                z2_mean, z2_std = self.model["z2_init"].apply(params_model["z2_init"], z1)
+                z2 = z2_mean + jax.random.normal(key_list[1], z2_std.shape) * z2_std
+            else:
+                z1_mean, z1_std = self.model["z1_prior"].apply(params_model["z1_prior"], z2, action_[:, t - 1])
+                z1 = z1_mean + jax.random.normal(key_list[2 * t], z1_std.shape) * z1_std
+                z2_mean, z2_std = self.model["z2"].apply(params_model["z2"], z1, z2, action_[:, t - 1])
+                z2 = z2_mean + jax.random.normal(key_list[2 * t + 1], z2_std.shape) * z2_std
             z1_mean_.append(z1_mean)
             z1_std_.append(z1_std)
-
-        z1_mean_ = jnp.stack(z1_mean_, axis=1)
-        z1_std_ = jnp.stack(z1_std_, axis=1)
-        return (z1_mean_, z1_std_)
+        return (jnp.stack(z1_mean_, axis=1), jnp.stack(z1_std_, axis=1))
 
     @partial(jax.jit, static_argnums=0)
     def sample_post(
@@ -386,34 +369,19 @@ class SLAC(SlacAlgorithm, SAC):
         z1_std_ = []
         z1_ = []
         z2_ = []
-
-        # q(z1(0) | feat(0))
-        z1_mean, z1_std = self.model["z1_post_init"].apply(params_model["z1_post_init"], feature_[:, 0])
-        z1 = z1_mean + jax.random.normal(key_list[0], z1_std.shape) * z1_std
-        # q(z2(0) | z1(0))
-        z2_mean, z2_std = self.model["z2_init"].apply(params_model["z2_init"], z1)
-        z2 = z2_mean + jax.random.normal(key_list[1], z2_std.shape) * z2_std
-
-        z1_mean_.append(z1_mean)
-        z1_std_.append(z1_std)
-        z1_.append(z1)
-        z2_.append(z2)
-
-        for t in range(1, action_.shape[1] + 1):
-            # q(z1(t+1) | feat(t+1), z2(t), a(t))
-            z1_mean, z1_std = self.model["z1_post"].apply(params_model["z1_post"], feature_[:, t], z2, action_[:, t - 1])
-            z1 = z1_mean + jax.random.normal(key_list[2 * t], z1_std.shape) * z1_std
-            # q(z2(t+1) | z1(t+1), z2(t), a(t))
-            z2_mean, z2_std = self.model["z2"].apply(params_model["z2"], z1, z2, action_[:, t - 1])
-            z2 = z2_mean + jax.random.normal(key_list[2 * t + 1], z2_std.shape) * z2_std
-
+        for t in range(self.num_sequences + 1):
+            if t == 0:
+                z1_mean, z1_std = self.model["z1_post_init"].apply(params_model["z1_post_init"], feature_[:, 0])
+                z1 = z1_mean + jax.random.normal(key_list[0], z1_std.shape) * z1_std
+                z2_mean, z2_std = self.model["z2_init"].apply(params_model["z2_init"], z1)
+                z2 = z2_mean + jax.random.normal(key_list[1], z2_std.shape) * z2_std
+            else:
+                z1_mean, z1_std = self.model["z1_post"].apply(params_model["z1_post"], feature_[:, t], z2, action_[:, t - 1])
+                z1 = z1_mean + jax.random.normal(key_list[2 * t], z1_std.shape) * z1_std
+                z2_mean, z2_std = self.model["z2"].apply(params_model["z2"], z1, z2, action_[:, t - 1])
+                z2 = z2_mean + jax.random.normal(key_list[2 * t + 1], z2_std.shape) * z2_std
             z1_mean_.append(z1_mean)
             z1_std_.append(z1_std)
             z1_.append(z1)
             z2_.append(z2)
-
-        z1_mean_ = jnp.stack(z1_mean_, axis=1)
-        z1_std_ = jnp.stack(z1_std_, axis=1)
-        z1_ = jnp.stack(z1_, axis=1)
-        z2_ = jnp.stack(z2_, axis=1)
-        return (z1_mean_, z1_std_, z1_, z2_)
+        return (jnp.stack(z1_mean_, axis=1), jnp.stack(z1_std_, axis=1), jnp.stack(z1_, axis=1), jnp.stack(z2_, axis=1))
