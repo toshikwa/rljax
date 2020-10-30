@@ -32,13 +32,13 @@ class QRDQN(DQN):
         eps=0.01,
         eps_eval=0.001,
         eps_decay_steps=250000,
+        loss_type="huber",
+        dueling_net=False,
+        double_q=False,
         fn=None,
         lr=5e-5,
         units=(512,),
         num_quantiles=200,
-        loss_type="huber",
-        dueling_net=False,
-        double_q=False,
     ):
         if fn is None:
 
@@ -67,20 +67,61 @@ class QRDQN(DQN):
             eps=eps,
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
+            loss_type=loss_type,
+            dueling_net=dueling_net,
+            double_q=double_q,
             fn=fn,
             lr=lr,
         )
-        self.cum_p_prime = jnp.expand_dims((jnp.arange(0, num_quantiles, dtype=jnp.float32) + 0.5) / num_quantiles, 0)
         self.num_quantiles = num_quantiles
 
     @partial(jax.jit, static_argnums=0)
-    def _forward(
+    def _calculate_q_s(
         self,
         params: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        q_s = self.net.apply(params, state).mean(axis=1)
-        return jnp.argmax(q_s, axis=1)
+        return self.net.apply(params, state).mean(axis=1)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_quantile(
+        self,
+        params: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+        **kwargs,
+    ) -> jnp.ndarray:
+        return get_quantile_at_action(self.net.apply(params, state, **kwargs), action)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_target(
+        self,
+        params: hk.Params,
+        params_target: hk.Params,
+        reward: np.ndarray,
+        done: np.ndarray,
+        next_state: np.ndarray,
+        **kwargs,
+    ) -> jnp.ndarray:
+        if self.double_q:
+            next_action = self._forward(params=params, state=next_state, **kwargs)[..., None]
+            next_quantile = self._calculate_quantile(params_target, next_state, next_action)
+        else:
+            next_quantile = jnp.max(self.net.apply(params_target, next_state), axis=-1, keepdims=True)
+        target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
+        return jax.lax.stop_gradient(target).reshape(-1, 1, self.num_quantiles)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_loss_and_abs_td(
+        self,
+        quantile: jnp.ndarray,
+        target: jnp.ndarray,
+        cum_p: jnp.ndarray,
+        weight: np.ndarray,
+    ) -> jnp.ndarray:
+        td = target - quantile
+        loss = quantile_loss(td, cum_p, weight, self.loss_type)
+        return loss, jax.lax.stop_gradient(jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True))
 
     @partial(jax.jit, static_argnums=0)
     def _loss(
@@ -93,22 +134,9 @@ class QRDQN(DQN):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        if self.double_q:
-            # Calculate greedy actions with online network.
-            next_action = self._forward(params, next_state)[..., None]
-            # Then calculate max quantile values with target network.
-            next_quantile = get_quantile_at_action(self.net.apply(params_target, next_state), next_action)
-        else:
-            # Calculate greedy actions and max quantile values with target network.
-            next_quantile = jnp.max(self.net.apply(params_target, next_state), axis=2, keepdims=True)
-
-        # Calculate target quantile values and reshape to (batch_size, 1, N).
-        target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
-        target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
-        # Calculate current quantile values, whose shape is (batch_size, N, 1).
-        curr_quantile = get_quantile_at_action(self.net.apply(params, state), action)
-        td = target_quantile - curr_quantile
-        loss = quantile_loss(td, self.cum_p_prime, weight, self.loss_type)
-        abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
-        return loss, jax.lax.stop_gradient(abs_td)
+        cum_p = (jnp.arange(0, self.num_quantiles, dtype=jnp.float32)[None, :] + 0.5) / self.num_quantiles
+        quantile = self._calculate_quantile(params, state, action)
+        target = self._calculate_target(params, params_target, reward, done, next_state)
+        return self._calculate_loss_and_abs_td(quantile, target, cum_p, weight)

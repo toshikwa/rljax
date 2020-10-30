@@ -193,7 +193,7 @@ class DiscreteQuantileFunction(hk.Module):
 
 class DiscreteImplicitQuantileFunction(hk.Module):
     """
-    Critic for IQN.
+    Critic for IQN and FQF.
     """
 
     def __init__(

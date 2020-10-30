@@ -30,7 +30,11 @@ class QLearning(OffPolicyAlgorithm):
         eps,
         eps_eval,
         eps_decay_steps,
+        loss_type,
+        dueling_net,
+        double_q,
     ):
+        assert loss_type in ["huber", "l2"]
         super(QLearning, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -49,6 +53,9 @@ class QLearning(OffPolicyAlgorithm):
         self.eps = eps
         self.eps_eval = eps_eval
         self.eps_decay_steps = eps_decay_steps
+        self.loss_type = loss_type
+        self.dueling_net = dueling_net
+        self.double_q = double_q
         # Define fake input.
         if not hasattr(self, "fake_args"):
             self.fake_args = (fake_state(state_space),)

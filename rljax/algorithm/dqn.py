@@ -33,14 +33,13 @@ class DQN(QLearning):
         eps=0.01,
         eps_eval=0.001,
         eps_decay_steps=250000,
-        fn=None,
-        lr=2.5e-4,
-        units=(512,),
         loss_type="huber",
         dueling_net=False,
         double_q=False,
+        fn=None,
+        lr=2.5e-4,
+        units=(512,),
     ):
-        assert loss_type in ["l2", "huber"]
         super(DQN, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -58,6 +57,9 @@ class DQN(QLearning):
             eps=eps,
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
+            loss_type=loss_type,
+            dueling_net=dueling_net,
+            double_q=double_q,
         )
         if fn is None:
 
@@ -73,18 +75,23 @@ class DQN(QLearning):
         opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
         self.opt_state = opt_init(self.params)
 
-        # Other parameters.
-        self.loss_type = loss_type
-        self.double_q = double_q
-
     @partial(jax.jit, static_argnums=0)
     def _forward(
         self,
         params: hk.Params,
         state: np.ndarray,
+        **kwargs,
     ) -> jnp.ndarray:
-        q_s = self.net.apply(params, state)
+        q_s = self._calculate_q_s(params=params, state=state, **kwargs)
         return jnp.argmax(q_s, axis=1)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_q_s(
+        self,
+        params: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
+        return self.net.apply(params, state)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -119,6 +126,45 @@ class DQN(QLearning):
             writer.add_scalar("loss/q", loss, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
+    def _calculate_q(
+        self,
+        params: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+    ) -> jnp.ndarray:
+        return get_q_at_action(self.net.apply(params, state), action)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_target(
+        self,
+        params: hk.Params,
+        params_target: hk.Params,
+        reward: np.ndarray,
+        done: np.ndarray,
+        next_state: np.ndarray,
+    ) -> jnp.ndarray:
+        if self.double_q:
+            next_action = self._forward(params, next_state)[..., None]
+            next_q = self._calculate_q(params_target, next_state, next_action)
+        else:
+            next_q = jnp.max(self.net.apply(params_target, next_state), axis=-1, keepdims=True)
+        return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_loss_and_abs_td(
+        self,
+        q: jnp.ndarray,
+        target: jnp.ndarray,
+        weight: np.ndarray,
+    ) -> jnp.ndarray:
+        td = target - q
+        if self.loss_type == "l2":
+            loss = jnp.mean(jnp.square(td) * weight)
+        elif self.loss_type == "huber":
+            loss = jnp.mean(huber(td) * weight)
+        return loss, jax.lax.stop_gradient(jnp.abs(td))
+
+    @partial(jax.jit, static_argnums=0)
     def _loss(
         self,
         params: hk.Params,
@@ -129,21 +175,8 @@ class DQN(QLearning):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        if self.double_q:
-            # Calculate greedy actions with online network.
-            next_action = self._forward(params, next_state)[..., None]
-            # Then calculate max q values with target network.
-            next_q = get_q_at_action(self.net.apply(params_target, next_state), next_action)
-        else:
-            # Calculate greedy actions and max q values with target network.
-            next_q = jnp.max(self.net.apply(params_target, next_state), axis=1, keepdims=True)
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        curr_q = get_q_at_action(self.net.apply(params, state), action)
-
-        td = target_q - curr_q
-        if self.loss_type == "l2":
-            loss = jnp.mean(jnp.square(td) * weight)
-        elif self.loss_type == "huber":
-            loss = jnp.mean(huber(td) * weight)
-        return loss, jax.lax.stop_gradient(jnp.abs(td))
+        q = self._calculate_q(params, state, action)
+        target = self._calculate_target(params, params_target, reward, done, next_state)
+        return self._calculate_loss_and_abs_td(q, target, weight)

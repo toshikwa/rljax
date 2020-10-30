@@ -34,17 +34,16 @@ class FQF(QLearning):
         eps=0.01,
         eps_eval=0.001,
         eps_decay_steps=250000,
+        loss_type="huber",
+        dueling_net=False,
+        double_q=False,
         fn=None,
         lr=5e-5,
         lr_cum_p=2.5e-9,
         units=(512,),
         num_quantiles=32,
         num_cosines=64,
-        loss_type="huber",
-        dueling_net=False,
-        double_q=False,
     ):
-        assert loss_type in ["l2", "huber"]
         super(FQF, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -62,6 +61,9 @@ class FQF(QLearning):
             eps=eps,
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
+            loss_type=loss_type,
+            dueling_net=dueling_net,
+            double_q=double_q,
         )
         if fn is None:
 
@@ -100,10 +102,19 @@ class FQF(QLearning):
         state: np.ndarray,
     ) -> jnp.ndarray:
         feature = self.net["feature"].apply(params["feature"], state)
+        return self._calculate_action(params_cum_p, params, feature)[0]
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_action(
+        self,
+        params_cum_p: hk.Params,
+        params: hk.Params,
+        feature: np.ndarray,
+    ) -> jnp.ndarray:
         cum_p, cum_p_prime = self.cum_p_net.apply(params_cum_p, feature)
         quantile_s = self.net["quantile"].apply(params["quantile"], feature, cum_p_prime)
         q_s = ((cum_p[:, 1:, None] - cum_p[:, :-1, None]) * quantile_s).sum(axis=1)
-        return jnp.argmax(q_s, axis=1)
+        return jnp.argmax(q_s, axis=1)[:, None]
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -153,6 +164,48 @@ class FQF(QLearning):
             writer.add_scalar("loss/cum_p", loss_cum_p, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
+    def _calculate_quantile(
+        self,
+        params: hk.Params,
+        feature: np.ndarray,
+        action: np.ndarray,
+        cum_p: jnp.ndarray,
+    ) -> jnp.ndarray:
+        return get_quantile_at_action(self.net["quantile"].apply(params["quantile"], feature, cum_p), action)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_target(
+        self,
+        params_cum_p: hk.Params,
+        params: hk.Params,
+        params_target: hk.Params,
+        reward: np.ndarray,
+        done: np.ndarray,
+        next_feature: np.ndarray,
+        cum_p_prime: jnp.ndarray,
+    ) -> jnp.ndarray:
+        if self.double_q:
+            next_action = self._calculate_action(params_cum_p, params, next_feature)
+            next_quantile = self._calculate_quantile(params_target, next_feature, next_action, cum_p_prime)
+        else:
+            next_quantile_s = self.net["quantile"].apply(params_target["quantile"], next_feature, cum_p_prime)
+            next_quantile = jnp.max(next_quantile_s, axis=-1, keepdims=True)
+        target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
+        return jax.lax.stop_gradient(target).reshape(-1, 1, self.num_quantiles)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_loss_and_abs_td(
+        self,
+        quantile: jnp.ndarray,
+        target: jnp.ndarray,
+        cum_p: jnp.ndarray,
+        weight: np.ndarray,
+    ) -> jnp.ndarray:
+        td = target - quantile
+        loss = quantile_loss(td, cum_p, weight, self.loss_type)
+        return loss, jax.lax.stop_gradient(jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True))
+
+    @partial(jax.jit, static_argnums=0)
     def _loss(
         self,
         params: hk.Params,
@@ -165,50 +218,19 @@ class FQF(QLearning):
         next_state: np.ndarray,
         weight: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        # Calculate features.
         feature = self.net["feature"].apply(params["feature"], state)
         next_feature = self.net["feature"].apply(params_target["feature"], next_state)
-
-        # Calculate proposed fractions at current states.
         cum_p_prime = jax.lax.stop_gradient(self.cum_p_net.apply(params_cum_p, feature)[1])
-
-        # Calculate greedy actions using fractions proposed at next states.
-        if self.double_q:
-            # With online network.
-            next_action = self._forward(params_cum_p, params, next_state)[..., None]
-        else:
-            # With target network.
-            next_cum_p, next_cum_p_prime = self.cum_p_net.apply(params_cum_p, next_feature)
-            next_quantile_s = self.net["quantile"].apply(params_target["quantile"], next_feature, next_cum_p_prime)
-            next_q_s = ((next_cum_p[:, 1:, None] - next_cum_p[:, :-1, None]) * next_quantile_s).sum(axis=1)
-            next_action = jnp.argmax(next_q_s, axis=1)[..., None]
-
-        # Calculate max quantile values with target network. Note that target quantiles share the same proposed fractions
-        # with current quantiles. (i.e. next_cum_p_prime = cum_p_prime)
-        next_quantile_s = self.net["quantile"].apply(params_target["quantile"], next_feature, cum_p_prime)
-        next_quantile = get_quantile_at_action(next_quantile_s, next_action)
-
-        # Calculate target quantile values and reshape to (batch_size, 1, N).
-        target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
-        target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
-
-        # Calculate current quantile values, whose shape is (batch_size, N, 1).
-        curr_quantile = get_quantile_at_action(self.net["quantile"].apply(params["quantile"], feature, cum_p_prime), action)
-        td = target_quantile - curr_quantile
-        loss = quantile_loss(td, cum_p_prime, weight, self.loss_type)
-        abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
-        return loss, jax.lax.stop_gradient(abs_td)
+        quantile = self._calculate_quantile(params, feature, action, cum_p_prime)
+        target = self._calculate_target(params_cum_p, params, params_target, reward, done, next_feature, cum_p_prime)
+        return self._calculate_loss_and_abs_td(quantile, target, cum_p_prime, weight)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_cum_p(self, params_cum_p, params, state, action):
-        # Calculate feature.
         feature = jax.lax.stop_gradient(self.net["feature"].apply(params["feature"], state))
-        # Calculate cumulative probabilities.
         cum_p, cum_p_prime = self.cum_p_net.apply(params_cum_p, feature)
-        # Caluculate quantile values.
         quantile = get_quantile_at_action(self.net["quantile"].apply(params["quantile"], feature, cum_p[:, 1:-1]), action)
         quantile_prime = get_quantile_at_action(self.net["quantile"].apply(params["quantile"], feature, cum_p_prime), action)
-
         # NOTE: Proposition 1 in the paper requires F^{-1} is non-decreasing. I relax this requirements and
         # calculate gradients of taus even when F^{-1} is not non-decreasing.
         val1 = quantile - quantile_prime[:, :-1]
