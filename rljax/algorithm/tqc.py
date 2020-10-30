@@ -23,6 +23,7 @@ class TQC(SAC):
         max_grad_norm=None,
         gamma=0.99,
         nstep=1,
+        num_critics=5,
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=256,
@@ -39,7 +40,6 @@ class TQC(SAC):
         log_std_min=-20.0,
         log_std_max=2.0,
         d2rl=False,
-        num_critics=5,
         num_quantiles=25,
         num_quantiles_to_drop=0,
     ):
@@ -75,6 +75,7 @@ class TQC(SAC):
             max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
+            num_critics=num_critics,
             buffer_size=buffer_size,
             use_per=use_per,
             batch_size=batch_size,
@@ -87,9 +88,7 @@ class TQC(SAC):
             lr_critic=lr_critic,
             lr_alpha=lr_alpha,
         )
-        cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
-        self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
-        self.num_critics = num_critics
+        self.cum_p_prime = jnp.expand_dims((jnp.arange(0, num_quantiles, dtype=jnp.float32) + 0.5) / num_quantiles, 0)
         self.num_quantiles = num_quantiles
         self.num_quantiles_target = num_quantiles * num_critics - num_quantiles_to_drop
 

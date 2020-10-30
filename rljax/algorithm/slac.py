@@ -57,6 +57,7 @@ class SLAC(SlacAlgorithm, SAC):
         max_grad_norm=None,
         gamma=0.99,
         num_sequences=8,
+        num_critics=2,
         buffer_size=50000,
         batch_size_sac=256,
         batch_size_model=32,
@@ -98,6 +99,7 @@ class SLAC(SlacAlgorithm, SAC):
             seed=seed,
             max_grad_norm=max_grad_norm,
             gamma=gamma,
+            num_critics=num_critics,
             num_sequences=num_sequences,
             buffer_size=buffer_size,
             batch_size_sac=batch_size_sac,
@@ -114,7 +116,7 @@ class SLAC(SlacAlgorithm, SAC):
 
             def fn_critic(z, a):
                 return ContinuousQFunction(
-                    num_critics=2,
+                    num_critics=num_critics,
                     hidden_units=units_critic,
                     d2rl=d2rl,
                 )(z, a)

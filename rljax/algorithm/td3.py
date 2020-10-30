@@ -23,6 +23,7 @@ class TD3(DDPG):
         max_grad_norm=None,
         gamma=0.99,
         nstep=1,
+        num_critics=2,
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=256,
@@ -41,27 +42,6 @@ class TD3(DDPG):
         clip_noise=0.5,
         update_interval_policy=2,
     ):
-        if d2rl:
-            self.name += "-D2RL"
-
-        if fn_critic is None:
-
-            def fn_critic(s, a):
-                return ContinuousQFunction(
-                    num_critics=2,
-                    hidden_units=units_critic,
-                    d2rl=d2rl,
-                )(s, a)
-
-        if fn_actor is None:
-
-            def fn_actor(s):
-                return DeterministicPolicy(
-                    action_space=action_space,
-                    hidden_units=units_actor,
-                    d2rl=d2rl,
-                )(s)
-
         if not hasattr(self, "use_key_critic"):
             self.use_key_critic = True
 
@@ -73,6 +53,7 @@ class TD3(DDPG):
             max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
+            num_critics=num_critics,
             buffer_size=buffer_size,
             use_per=use_per,
             batch_size=batch_size,

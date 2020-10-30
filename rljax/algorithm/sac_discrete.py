@@ -23,6 +23,7 @@ class SAC_Discrete(SAC):
         max_grad_norm=None,
         gamma=0.99,
         nstep=1,
+        num_critics=2,
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=64,
@@ -44,7 +45,7 @@ class SAC_Discrete(SAC):
             def fn_critic(s):
                 return DiscreteQFunction(
                     action_space=action_space,
-                    num_critics=2,
+                    num_critics=num_critics,
                     hidden_units=units_critic,
                     dueling_net=dueling_net,
                 )(s)
@@ -73,6 +74,7 @@ class SAC_Discrete(SAC):
             max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
+            num_critics=num_critics,
             buffer_size=buffer_size,
             use_per=use_per,
             batch_size=batch_size,

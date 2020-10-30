@@ -102,6 +102,7 @@ class OffPolicyActorCritic(ActorCriticMixIn, OffPolicyAlgorithm):
         max_grad_norm,
         gamma,
         nstep,
+        num_critics,
         buffer_size,
         use_per,
         batch_size,
@@ -128,6 +129,7 @@ class OffPolicyActorCritic(ActorCriticMixIn, OffPolicyAlgorithm):
             update_interval_target=update_interval_target,
             tau=tau,
         )
+        self.num_critics = num_critics
         # Define fake input for critic.
         if not hasattr(self, "fake_args_critic"):
             if self.discrete_action:

@@ -24,6 +24,7 @@ class SAC(OffPolicyActorCritic):
         max_grad_norm=None,
         gamma=0.99,
         nstep=1,
+        num_critics=2,
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=256,
@@ -57,6 +58,7 @@ class SAC(OffPolicyActorCritic):
             max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
+            num_critics=num_critics,
             buffer_size=buffer_size,
             use_per=use_per,
             batch_size=batch_size,
@@ -72,7 +74,7 @@ class SAC(OffPolicyActorCritic):
 
             def fn_critic(s, a):
                 return ContinuousQFunction(
-                    num_critics=2,
+                    num_critics=num_critics,
                     hidden_units=units_critic,
                     d2rl=d2rl,
                 )(s, a)

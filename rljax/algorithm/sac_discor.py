@@ -24,6 +24,7 @@ class SAC_DisCor(SAC):
         seed,
         max_grad_norm=None,
         gamma=0.99,
+        num_critics=2,
         buffer_size=10 ** 6,
         batch_size=256,
         start_steps=10000,
@@ -54,6 +55,7 @@ class SAC_DisCor(SAC):
             max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=1,
+            num_critics=num_critics,
             buffer_size=buffer_size,
             use_per=False,
             batch_size=batch_size,
@@ -78,7 +80,7 @@ class SAC_DisCor(SAC):
 
             def fn_error(s, a):
                 return ContinuousQFunction(
-                    num_critics=2,
+                    num_critics=num_critics,
                     hidden_units=units_error,
                 )(s, a)
 
@@ -88,7 +90,7 @@ class SAC_DisCor(SAC):
         opt_init, self.opt_error = optix.adam(lr_error)
         self.opt_state_error = opt_init(self.params_error)
         # Running mean of errors.
-        self.rm_error_list = [jnp.array(init_error, dtype=jnp.float32) for _ in range(2)]
+        self.rm_error_list = [jnp.array(init_error, dtype=jnp.float32) for _ in range(num_critics)]
 
     def update(self, writer=None):
         self.learning_step += 1

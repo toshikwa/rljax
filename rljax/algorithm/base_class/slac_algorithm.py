@@ -22,6 +22,7 @@ class SlacAlgorithm(OffPolicyAlgorithm):
         max_grad_norm,
         gamma,
         num_sequences,
+        num_critics,
         buffer_size,
         batch_size_sac,
         batch_size_model,
@@ -57,6 +58,7 @@ class SlacAlgorithm(OffPolicyAlgorithm):
         self.learning_step_model = 0
         self.learning_step_sac = 0
         self.num_sequences = num_sequences
+        self.num_critics = num_critics
         self.batch_size_sac = batch_size_sac
         self.batch_size_model = batch_size_model
         self.initial_learning_steps = initial_learning_steps

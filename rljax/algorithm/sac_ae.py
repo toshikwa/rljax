@@ -25,6 +25,7 @@ class SAC_AE(SAC):
         max_grad_norm=None,
         gamma=0.99,
         nstep=1,
+        num_critics=2,
         buffer_size=10 ** 6,
         use_per=False,
         batch_size=128,
@@ -62,7 +63,7 @@ class SAC_AE(SAC):
             def fn_critic(x, a):
                 # Define without linear layer.
                 return ContinuousQFunction(
-                    num_critics=2,
+                    num_critics=num_critics,
                     hidden_units=units_critic,
                     d2rl=d2rl,
                 )(x, a)
@@ -96,6 +97,7 @@ class SAC_AE(SAC):
             max_grad_norm=max_grad_norm,
             gamma=gamma,
             nstep=nstep,
+            num_critics=num_critics,
             buffer_size=buffer_size,
             use_per=use_per,
             batch_size=batch_size,
