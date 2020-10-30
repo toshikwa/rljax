@@ -73,7 +73,6 @@ class DQN_DisCor(DQN):
             def fn_error(s):
                 return DiscreteQFunction(
                     action_space=action_space,
-                    num_critics=1,
                     hidden_units=units_error,
                 )(s)
 

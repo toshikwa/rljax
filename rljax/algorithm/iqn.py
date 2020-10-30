@@ -47,7 +47,6 @@ class IQN(DQN):
             def fn(s, cum_p):
                 return DiscreteImplicitQuantileFunction(
                     action_space=action_space,
-                    num_critics=1,
                     hidden_units=units,
                     dueling_net=dueling_net,
                 )(s, cum_p)

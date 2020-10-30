@@ -63,8 +63,7 @@ class ContinuousQFunction(hk.Module):
             )(x)
 
         x = jnp.concatenate([s, a], axis=1)
-        if self.num_critics == 1:
-            return _fn(x)
+        # Return list even if num_critics == 1 for simple implementation.
         return [_fn(x) for _ in range(self.num_critics)]
 
 
@@ -97,8 +96,6 @@ class ContinuousQuantileFunction(hk.Module):
             )(x)
 
         x = jnp.concatenate([s, a], axis=1)
-        if self.num_critics == 1:
-            return _fn(x)
         return [_fn(x) for _ in range(self.num_critics)]
 
 

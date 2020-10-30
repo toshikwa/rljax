@@ -51,7 +51,6 @@ class PPO(OnPolicyActorCritic):
 
             def fn_critic(s):
                 return ContinuousVFunction(
-                    num_critics=1,
                     hidden_units=(units_critic),
                 )(s)
 

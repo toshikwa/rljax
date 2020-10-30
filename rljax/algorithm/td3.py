@@ -7,7 +7,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from rljax.algorithm.ddpg import DDPG
-from rljax.network import ContinuousQFunction, DeterministicPolicy
 from rljax.util import add_noise
 
 
@@ -69,40 +68,11 @@ class TD3(DDPG):
         self.clip_noise = clip_noise
 
     @partial(jax.jit, static_argnums=0)
-    def _loss_critic(
-        self,
-        params_critic: hk.Params,
-        params_critic_target: hk.Params,
-        params_actor_target: hk.Params,
-        state: np.ndarray,
-        action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        weight: np.ndarray,
-        key: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        # Calculate next actions and add clipped noises.
-        next_action = self.actor.apply(params_actor_target, next_state)
-        next_action = add_noise(next_action, key, self.std_target, -1.0, 1.0, -self.clip_noise, self.clip_noise)
-        # Calculate target q values (clipped double q) with target critic.
-        next_q_list = self.critic.apply(params_critic_target, next_state, next_action)
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * jnp.asarray(next_q_list).min(axis=0))
-        # Calculate current q values with online critic.
-        q_list = self.critic.apply(params_critic, state, action)
-        loss = 0.0
-        for q in q_list:
-            loss += (jnp.square(target_q - q) * weight).mean()
-        abs_td = jax.lax.stop_gradient(jnp.abs(target_q - q_list[0]))
-        return loss, abs_td
-
-    @partial(jax.jit, static_argnums=0)
-    def _loss_actor(
+    def _sample_action(
         self,
         params_actor: hk.Params,
-        params_critic: hk.Params,
+        key: jnp.ndarray,
         state: np.ndarray,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         action = self.actor.apply(params_actor, state)
-        q = self.critic.apply(params_critic, state, action)[0]
-        return -q.mean(), None
+        return add_noise(action, key, self.std_target, -1.0, 1.0, -self.clip_noise, self.clip_noise)

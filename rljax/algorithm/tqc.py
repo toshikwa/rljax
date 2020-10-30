@@ -129,4 +129,4 @@ class TQC(SAC):
             loss_critic += quantile_loss(target[:, None, :] - quantile[:, :, None], self.cum_p_prime, weight, "huber")
         loss_critic /= self.num_critics * self.num_quantiles
         abs_td = jnp.abs(target[:, None, :] - quantile_list[0][:, :, None]).mean(axis=1).mean(axis=1, keepdims=True)
-        return loss_critic, abs_td
+        return loss_critic, jax.lax.stop_gradient(abs_td)

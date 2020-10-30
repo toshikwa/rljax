@@ -64,7 +64,6 @@ class DQN(QLearning):
             def fn(s):
                 return DiscreteQFunction(
                     action_space=action_space,
-                    num_critics=1,
                     hidden_units=units,
                     dueling_net=dueling_net,
                 )(s)

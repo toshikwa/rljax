@@ -201,24 +201,6 @@ class SAC(OffPolicyActorCritic):
         return reparameterize_gaussian_and_tanh(mean, log_std, key, True)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q_list(
-        self,
-        params_critic: hk.Params,
-        state: np.ndarray,
-        action: np.ndarray,
-    ) -> List[jnp.ndarray]:
-        return self.critic.apply(params_critic, state, action)
-
-    @partial(jax.jit, static_argnums=0)
-    def _calculate_q(
-        self,
-        params_critic: hk.Params,
-        state: np.ndarray,
-        action: np.ndarray,
-    ) -> jnp.ndarray:
-        return jnp.asarray(self._calculate_q_list(params_critic, state, action)).min(axis=0)
-
-    @partial(jax.jit, static_argnums=0)
     def _calculate_log_pi(
         self,
         action: np.ndarray,
@@ -240,19 +222,6 @@ class SAC(OffPolicyActorCritic):
         next_q = self._calculate_q(params_critic_target, next_state, next_action)
         next_q -= jnp.exp(log_alpha) * self._calculate_log_pi(next_action, next_log_pi)
         return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-
-    @partial(jax.jit, static_argnums=0)
-    def _calculate_loss_critic_and_abs_td(
-        self,
-        q_list: List[jnp.ndarray],
-        target: jnp.ndarray,
-        weight: np.ndarray or List[jnp.ndarray],
-    ) -> jnp.ndarray:
-        loss_critic = 0.0
-        for q in q_list:
-            loss_critic += (jnp.square(target - q) * weight).mean()
-        abs_td = jax.lax.stop_gradient(jnp.abs(target - q_list[0]))
-        return loss_critic, abs_td
 
     @partial(jax.jit, static_argnums=0)
     def _loss_critic(

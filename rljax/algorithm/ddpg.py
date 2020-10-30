@@ -159,6 +159,26 @@ class DDPG(OffPolicyActorCritic):
                 writer.add_scalar("loss/actor", loss_actor, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
+    def _sample_action(
+        self,
+        params_actor: hk.Params,
+        state: np.ndarray,
+    ) -> jnp.ndarray:
+        return self.actor.apply(params_actor, state)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_target(
+        self,
+        params_critic_target: hk.Params,
+        reward: np.ndarray,
+        done: np.ndarray,
+        next_state: np.ndarray,
+        next_action: jnp.ndarray,
+    ) -> jnp.ndarray:
+        next_q = self._calculate_q(params_critic_target, next_state, next_action)
+        return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+
+    @partial(jax.jit, static_argnums=0)
     def _loss_critic(
         self,
         params_critic: hk.Params,
@@ -170,17 +190,12 @@ class DDPG(OffPolicyActorCritic):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
+        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        # Calculate next actions.
-        next_action = self.actor.apply(params_actor_target, next_state)
-        # Calculate target q values with target critic.
-        next_q = self.critic.apply(params_critic_target, next_state, next_action)
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        # Calculate current q values with online critic.
-        curr_q = self.critic.apply(params_critic, state, action)
-        abs_td = jnp.abs(target_q - curr_q)
-        loss = (jnp.square(abs_td) * weight).mean()
-        return loss, jax.lax.stop_gradient(abs_td)
+        next_action = self._sample_action(params_actor=params_actor_target, state=next_state, **kwargs)
+        target_q = self._calculate_target(params_critic_target, reward, done, next_state, next_action)
+        q_list = self._calculate_q_list(params_critic, state, action)
+        return self._calculate_loss_critic_and_abs_td(q_list, target_q, weight)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
@@ -190,5 +205,5 @@ class DDPG(OffPolicyActorCritic):
         state: np.ndarray,
     ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, state)
-        q = self.critic.apply(params_critic, state, action)
-        return -q.mean(), None
+        mean_q = self.critic.apply(params_critic, state, action)[0].mean()
+        return -mean_q, None

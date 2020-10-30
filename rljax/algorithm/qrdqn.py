@@ -45,7 +45,6 @@ class QRDQN(DQN):
             def fn(s):
                 return DiscreteQuantileFunction(
                     action_space=action_space,
-                    num_critics=1,
                     num_quantiles=num_quantiles,
                     hidden_units=units,
                     dueling_net=dueling_net,
@@ -71,8 +70,7 @@ class QRDQN(DQN):
             fn=fn,
             lr=lr,
         )
-        cum_p = jnp.arange(0, num_quantiles + 1, dtype=jnp.float32) / num_quantiles
-        self.cum_p_prime = jnp.expand_dims((cum_p[1:] + cum_p[:-1]) / 2.0, 0)
+        self.cum_p_prime = jnp.expand_dims((jnp.arange(0, num_quantiles, dtype=jnp.float32) + 0.5) / num_quantiles, 0)
         self.num_quantiles = num_quantiles
 
     @partial(jax.jit, static_argnums=0)

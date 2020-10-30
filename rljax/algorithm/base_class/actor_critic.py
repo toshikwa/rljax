@@ -1,6 +1,11 @@
 import os
 from abc import abstractmethod
+from functools import partial
+from typing import List
 
+import haiku as hk
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 from rljax.algorithm.base_class.base_algoirithm import OffPolicyAlgorithm, OnPolicyAlgorithm
@@ -143,3 +148,34 @@ class OffPolicyActorCritic(ActorCriticMixIn, OffPolicyAlgorithm):
     def explore(self, state):
         action = self._explore(self.params_actor, next(self.rng), state[None, ...])
         return np.array(action[0])
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_q_list(
+        self,
+        params_critic: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+    ) -> List[jnp.ndarray]:
+        return self.critic.apply(params_critic, state, action)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_q(
+        self,
+        params_critic: hk.Params,
+        state: np.ndarray,
+        action: np.ndarray,
+    ) -> jnp.ndarray:
+        return jnp.asarray(self._calculate_q_list(params_critic, state, action)).min(axis=0)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_loss_critic_and_abs_td(
+        self,
+        q_list: List[jnp.ndarray],
+        target: jnp.ndarray,
+        weight: np.ndarray,
+    ) -> jnp.ndarray:
+        abs_td = jnp.abs(target - q_list[0])
+        loss_critic = (jnp.square(abs_td) * weight).mean()
+        for q in q_list[1:]:
+            loss_critic += (jnp.square(target - q) * weight).mean()
+        return loss_critic, jax.lax.stop_gradient(abs_td)
