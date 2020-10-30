@@ -193,9 +193,9 @@ class DDPG(OffPolicyActorCritic):
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         next_action = self._sample_action(params_actor=params_actor_target, state=next_state, **kwargs)
-        target_q = self._calculate_target(params_critic_target, reward, done, next_state, next_action)
+        target = self._calculate_target(params_critic_target, reward, done, next_state, next_action)
         q_list = self._calculate_q_list(params_critic, state, action)
-        return self._calculate_loss_critic_and_abs_td(q_list, target_q, weight)
+        return self._calculate_loss_critic_and_abs_td(q_list, target, weight)
 
     @partial(jax.jit, static_argnums=0)
     def _loss_actor(
