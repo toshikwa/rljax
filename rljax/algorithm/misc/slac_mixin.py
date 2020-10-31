@@ -1,36 +1,62 @@
 import os
 from abc import abstractmethod
+from collections import deque
 
+import jax.numpy as jnp
 import numpy as np
 
-from rljax.algorithm.base_class.base_algoirithm import OffPolicyAlgorithm
 from rljax.buffer import SLACReplayBuffer
-from rljax.util import load_params, save_params
+from rljax.util import fake_action, load_params, save_params
 
 
-class SlacAlgorithm(OffPolicyAlgorithm):
+class SlacObservation:
     """
-    Base class for SLAC-based algorithms.
+    Observation for SLAC.
+    """
+
+    def __init__(self, state_space, action_space, num_sequences):
+        self.state_shape = state_space.shape
+        self.action_shape = action_space.shape
+        self.num_sequences = num_sequences
+
+    def reset_episode(self, state):
+        self._state = deque(maxlen=self.num_sequences)
+        self._action = deque(maxlen=self.num_sequences - 1)
+        for _ in range(self.num_sequences - 1):
+            self._state.append(np.zeros(self.state_shape, dtype=np.uint8))
+            self._action.append(np.zeros(self.action_shape, dtype=np.float32))
+        self._state.append(state)
+
+    def append(self, state, action):
+        self._state.append(state)
+        self._action.append(action)
+
+    @property
+    def state(self):
+        return np.array(self._state, dtype=np.uint8)[None, ...]
+
+    @property
+    def action(self):
+        return np.array(self._action, dtype=np.float32).reshape(1, -1)
+
+
+class SlacMixIn:
+    """
+    MixIn for SLAC-based algorithms.
     """
 
     def __init__(
         self,
-        num_agent_steps,
         state_space,
         action_space,
-        seed,
-        max_grad_norm,
-        gamma,
         num_sequences,
-        num_critics,
         buffer_size,
         batch_size_sac,
         batch_size_model,
-        start_steps,
         initial_learning_steps,
-        update_interval,
-        update_interval_target=None,
-        tau=None,
+        feature_dim,
+        z1_dim,
+        z2_dim,
     ):
         self.buffer = SLACReplayBuffer(
             buffer_size=buffer_size,
@@ -38,27 +64,18 @@ class SlacAlgorithm(OffPolicyAlgorithm):
             action_space=action_space,
             num_sequences=num_sequences,
         )
-        super(SlacAlgorithm, self).__init__(
-            num_agent_steps=num_agent_steps,
-            state_space=state_space,
-            action_space=action_space,
-            seed=seed,
-            max_grad_norm=max_grad_norm,
-            gamma=gamma,
-            nstep=1,
-            buffer_size=buffer_size,
-            use_per=False,
-            batch_size=None,
-            start_steps=start_steps,
-            update_interval=update_interval,
-            update_interval_target=update_interval_target,
-            tau=tau,
-        )
+        # Define fake input for critic.
+        if not hasattr(self, "fake_args_critic"):
+            fake_z = jnp.empty((1, z1_dim + z2_dim))
+            self.fake_args_critic = (fake_z, fake_action(action_space))
+        # Define fake input for actor.
+        if not hasattr(self, "fake_args_actor"):
+            fake_feature_action = jnp.empty((1, num_sequences * feature_dim + (num_sequences - 1) * action_space.shape[0]))
+            self.fake_args_actor = (fake_feature_action,)
 
         self.learning_step_model = 0
         self.learning_step_sac = 0
         self.num_sequences = num_sequences
-        self.num_critics = num_critics
         self.batch_size_sac = batch_size_sac
         self.batch_size_model = batch_size_model
         self.initial_learning_steps = initial_learning_steps

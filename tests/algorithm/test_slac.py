@@ -1,6 +1,7 @@
 import pytest
 
-from rljax.algorithm.slac import SLAC, SlacObservation
+from rljax.algorithm.misc import SlacObservation
+from rljax.algorithm.slac import SLAC
 
 
 def _test_slac(env, algo):

@@ -1,4 +1,3 @@
-from collections import deque
 from functools import partial
 from typing import List, Tuple
 
@@ -8,44 +7,13 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base_class import SlacAlgorithm
+from rljax.algorithm.misc import SlacMixIn
 from rljax.algorithm.sac import SAC
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy, make_stochastic_latent_variable_model
-from rljax.util import calculate_kl_divergence, fake_action, gaussian_log_prob, optimize
+from rljax.util import calculate_kl_divergence, gaussian_log_prob, optimize
 
 
-class SlacObservation:
-    """
-    Observation for SLAC.
-    """
-
-    def __init__(self, state_space, action_space, num_sequences):
-        self.state_shape = state_space.shape
-        self.action_shape = action_space.shape
-        self.num_sequences = num_sequences
-
-    def reset_episode(self, state):
-        self._state = deque(maxlen=self.num_sequences)
-        self._action = deque(maxlen=self.num_sequences - 1)
-        for _ in range(self.num_sequences - 1):
-            self._state.append(np.zeros(self.state_shape, dtype=np.uint8))
-            self._action.append(np.zeros(self.action_shape, dtype=np.float32))
-        self._state.append(state)
-
-    def append(self, state, action):
-        self._state.append(state)
-        self._action.append(action)
-
-    @property
-    def state(self):
-        return np.array(self._state, dtype=np.uint8)[None, ...]
-
-    @property
-    def action(self):
-        return np.array(self._action, dtype=np.float32).reshape(1, -1)
-
-
-class SLAC(SlacAlgorithm, SAC):
+class SLAC(SlacMixIn, SAC):
     name = "SLAC"
 
     def __init__(
@@ -85,29 +53,18 @@ class SLAC(SlacAlgorithm, SAC):
     ):
         assert len(state_space.shape) == 3 and state_space.shape[:2] == (64, 64)
         assert (state_space.high == 255).all()
-
-        fake_z = jnp.empty((1, z1_dim + z2_dim))
-        fake_feature_action = jnp.empty((1, num_sequences * feature_dim + (num_sequences - 1) * action_space.shape[0]))
-        self.fake_args_critic = (fake_z, fake_action(action_space))
-        self.fake_args_actor = (fake_feature_action,)
-
-        SlacAlgorithm.__init__(
+        SlacMixIn.__init__(
             self,
-            num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
-            seed=seed,
-            max_grad_norm=max_grad_norm,
-            gamma=gamma,
-            num_critics=num_critics,
             num_sequences=num_sequences,
             buffer_size=buffer_size,
             batch_size_sac=batch_size_sac,
             batch_size_model=batch_size_model,
-            start_steps=start_steps,
             initial_learning_steps=initial_learning_steps,
-            update_interval=update_interval,
-            tau=tau,
+            feature_dim=feature_dim,
+            z1_dim=z1_dim,
+            z2_dim=z2_dim,
         )
         if d2rl:
             self.name += "-D2RL"
@@ -132,7 +89,30 @@ class SLAC(SlacAlgorithm, SAC):
                     d2rl=d2rl,
                 )(x)
 
-        self.setup_sac(fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha)
+        SAC.__init__(
+            self,
+            num_agent_steps=num_agent_steps,
+            state_space=state_space,
+            action_space=action_space,
+            seed=seed,
+            max_grad_norm=max_grad_norm,
+            gamma=gamma,
+            nstep=1,
+            num_critics=num_critics,
+            buffer_size=None,
+            use_per=False,
+            batch_size=None,
+            start_steps=start_steps,
+            update_interval=update_interval,
+            tau=tau,
+            fn_actor=fn_actor,
+            fn_critic=fn_critic,
+            lr_actor=lr_actor,
+            lr_critic=lr_critic,
+            lr_alpha=lr_alpha,
+            init_alpha=init_alpha,
+            adam_b1_alpha=adam_b1_alpha,
+        )
         self.model, self.params_model = make_stochastic_latent_variable_model(
             rng=self.rng,
             state_space=state_space,

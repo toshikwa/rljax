@@ -13,6 +13,8 @@ from rljax.util import fake_action, fake_state, load_params, save_params
 
 
 class ActorCriticMixIn:
+    """ MixIn for Actor-Critic algorithms. """
+
     def __init__(self):
         # If _loss_critic() method uses random key or not.
         if not hasattr(self, "use_key_critic"):

@@ -4,7 +4,7 @@ from time import sleep, time
 import pandas as pd
 from tqdm import tqdm
 
-from rljax.algorithm.slac import SlacObservation
+from rljax.algorithm.misc import SlacObservation
 from rljax.trainer.base_trainer import Trainer
 
 

@@ -92,9 +92,6 @@ class SAC(OffPolicyActorCritic):
                     d2rl=d2rl,
                 )(s)
 
-        self.setup_sac(fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha)
-
-    def setup_sac(self, fn_actor, fn_critic, lr_actor, lr_critic, lr_alpha, init_alpha, adam_b1_alpha):
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(fn_critic))
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), *self.fake_args_critic)
