@@ -18,10 +18,10 @@ class SlacObservation:
         self.state_shape = state_space.shape
         self.action_shape = action_space.shape
         self.num_sequences = num_sequences
-
-    def reset_episode(self, state):
         self._state = deque(maxlen=self.num_sequences)
         self._action = deque(maxlen=self.num_sequences - 1)
+
+    def reset_episode(self, state):
         for _ in range(self.num_sequences - 1):
             self._state.append(np.zeros(self.state_shape, dtype=np.uint8))
             self._action.append(np.zeros(self.action_shape, dtype=np.float32))
@@ -109,7 +109,7 @@ class SlacMixIn:
 
     def explore(self, ob):
         feature_action = self._preprocess(self.params_model, ob.state, ob.action)
-        action = self._explore(self.params_actor, feature_action, next(self.rng))[0]
+        action = self._explore(self.params_actor, feature_action, next(self.rng))
         return np.array(action[0])
 
     def update(self, writer):

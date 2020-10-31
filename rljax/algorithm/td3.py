@@ -61,6 +61,11 @@ class TD3(DDPG):
             tau=tau,
             fn_actor=fn_actor,
             fn_critic=fn_critic,
+            lr_actor=lr_actor,
+            lr_critic=lr_critic,
+            units_actor=units_actor,
+            units_critic=units_critic,
+            d2rl=d2rl,
             std=std,
             update_interval_policy=update_interval_policy,
         )
