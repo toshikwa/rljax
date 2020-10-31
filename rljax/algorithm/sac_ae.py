@@ -239,7 +239,7 @@ class SAC_AE(SAC):
             writer.add_scalar("stat/entropy", -mean_log_pi, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q_list(
+    def _calculate_value_list(
         self,
         params_critic: hk.Params,
         last_conv: np.ndarray,

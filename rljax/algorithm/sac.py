@@ -219,7 +219,7 @@ class SAC(OffPolicyActorCritic):
         next_action: jnp.ndarray,
         next_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
-        next_q = self._calculate_q(params_critic_target, next_state, next_action)
+        next_q = self._calculate_value(params_critic_target, next_state, next_action)
         next_q -= jnp.exp(log_alpha) * self._calculate_log_pi(next_action, next_log_pi)
         return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
 
@@ -240,7 +240,7 @@ class SAC(OffPolicyActorCritic):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         next_action, next_log_pi = self._sample_action(params_actor=params_actor, state=next_state, **kwargs)
         target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_action, next_log_pi)
-        q_list = self._calculate_q_list(params_critic, state, action)
+        q_list = self._calculate_value_list(params_critic, state, action)
         return self._calculate_loss_critic_and_abs_td(q_list, target, weight)
 
     @partial(jax.jit, static_argnums=0)
@@ -253,7 +253,7 @@ class SAC(OffPolicyActorCritic):
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         action, log_pi = self._sample_action(params_actor=params_actor, state=state, **kwargs)
-        mean_q = self._calculate_q(params_critic, state, action).mean()
+        mean_q = self._calculate_value(params_critic, state, action).mean()
         mean_log_pi = self._calculate_log_pi(action, log_pi).mean()
         return jax.lax.stop_gradient(jnp.exp(log_alpha)) * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)
 

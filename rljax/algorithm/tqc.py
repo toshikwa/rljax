@@ -93,13 +93,13 @@ class TQC(SAC):
         self.num_quantiles_target = num_quantiles * num_critics - num_quantiles_to_drop
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q(
+    def _calculate_value(
         self,
         params_critic: hk.Params,
         state: np.ndarray,
         action: np.ndarray,
     ) -> jnp.ndarray:
-        return jnp.concatenate(self._calculate_q_list(params_critic, state, action), axis=1)
+        return jnp.concatenate(self._calculate_value_list(params_critic, state, action), axis=1)
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_target(
@@ -112,7 +112,7 @@ class TQC(SAC):
         next_action: jnp.ndarray,
         next_log_pi: jnp.ndarray,
     ) -> jnp.ndarray:
-        next_quantile = self._calculate_q(params_critic_target, next_state, next_action)
+        next_quantile = self._calculate_value(params_critic_target, next_state, next_action)
         next_quantile = jnp.sort(next_quantile)[:, : self.num_quantiles_target]
         next_quantile -= jnp.exp(log_alpha) * self._calculate_log_pi(next_action, next_log_pi)
         return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_quantile)

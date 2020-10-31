@@ -104,7 +104,7 @@ class PPO(OnPolicyActorCritic):
         state, action, reward, done, log_pi_old, next_state = self.buffer.get()
 
         # Calculate gamma-returns and GAEs.
-        target, gae = self.calculate_gae(
+        gae, target = self.calculate_gae(
             params_critic=self.params_critic,
             state=state,
             reward=reward,
@@ -193,4 +193,4 @@ class PPO(OnPolicyActorCritic):
         for t in jnp.arange(self.buffer_size - 2, -1, -1):
             gae.insert(0, delta[t] + self.gamma * self.lambd * (1 - done[t]) * gae[0])
         gae = jnp.array(gae)
-        return gae + value, (gae - gae.mean()) / (gae.std() + 1e-8)
+        return (gae - gae.mean()) / (gae.std() + 1e-8), gae + value

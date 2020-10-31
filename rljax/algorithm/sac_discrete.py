@@ -116,7 +116,7 @@ class SAC_Discrete(SAC):
         return self.actor.apply(params_actor, state)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q_list(
+    def _calculate_value_list(
         self,
         params_critic: hk.Params,
         state: np.ndarray,
@@ -125,7 +125,7 @@ class SAC_Discrete(SAC):
         return [get_q_at_action(q_s, action) for q_s in self.critic.apply(params_critic, state)]
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q(
+    def _calculate_value(
         self,
         params_critic: hk.Params,
         state: np.ndarray,

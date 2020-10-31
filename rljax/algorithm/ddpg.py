@@ -175,7 +175,7 @@ class DDPG(OffPolicyActorCritic):
         next_state: np.ndarray,
         next_action: jnp.ndarray,
     ) -> jnp.ndarray:
-        next_q = self._calculate_q(params_critic_target, next_state, next_action)
+        next_q = self._calculate_value(params_critic_target, next_state, next_action)
         return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
 
     @partial(jax.jit, static_argnums=0)
@@ -194,7 +194,7 @@ class DDPG(OffPolicyActorCritic):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         next_action = self._sample_action(params_actor=params_actor_target, state=next_state, **kwargs)
         target = self._calculate_target(params_critic_target, reward, done, next_state, next_action)
-        q_list = self._calculate_q_list(params_critic, state, action)
+        q_list = self._calculate_value_list(params_critic, state, action)
         return self._calculate_loss_critic_and_abs_td(q_list, target, weight)
 
     @partial(jax.jit, static_argnums=0)
