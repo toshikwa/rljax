@@ -1,6 +1,5 @@
-import os
 from functools import partial
-from typing import Any, Tuple
+from typing import Tuple
 
 import haiku as hk
 import jax
@@ -8,9 +7,9 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base import QLearning
+from rljax.algorithm.base_class import QLearning
 from rljax.network import DiscreteQFunction
-from rljax.util import clip_gradient_norm, get_q_at_action, huber, load_params, save_params
+from rljax.util import get_q_at_action, huber, optimize
 
 
 class DQN(QLearning):
@@ -34,13 +33,14 @@ class DQN(QLearning):
         eps=0.01,
         eps_eval=0.001,
         eps_decay_steps=250000,
-        lr=2.5e-4,
-        units=(512,),
         loss_type="huber",
         dueling_net=False,
         double_q=False,
+        setup_net=True,
+        fn=None,
+        lr=2.5e-4,
+        units=(512,),
     ):
-        assert loss_type in ["l2", "huber"]
         super(DQN, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -58,25 +58,24 @@ class DQN(QLearning):
             eps=eps,
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
+            loss_type=loss_type,
+            dueling_net=dueling_net,
+            double_q=double_q,
         )
+        if setup_net:
+            if fn is None:
 
-        def q_fn(s):
-            return DiscreteQFunction(
-                action_space=action_space,
-                num_critics=1,
-                hidden_units=units,
-                dueling_net=dueling_net,
-            )(s)
+                def fn(s):
+                    return DiscreteQFunction(
+                        action_space=action_space,
+                        hidden_units=units,
+                        dueling_net=dueling_net,
+                    )(s)
 
-        # DQN.
-        self.q_net = hk.without_apply_rng(hk.transform(q_fn))
-        self.params = self.params_target = self.q_net.init(next(self.rng), self.fake_state)
-        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
-        self.opt_state = opt_init(self.params)
-
-        # Other parameters.
-        self.loss_type = loss_type
-        self.double_q = double_q
+            self.net = hk.without_apply_rng(hk.transform(fn))
+            self.params = self.params_target = self.net.init(next(self.rng), *self.fake_args)
+            opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
+            self.opt_state = opt_init(self.params)
 
     @partial(jax.jit, static_argnums=0)
     def _forward(
@@ -84,17 +83,19 @@ class DQN(QLearning):
         params: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        q_s = self.q_net.apply(params, state)
-        return jnp.argmax(q_s, axis=1)
+        return jnp.argmax(self.net.apply(params, state), axis=1)
 
     def update(self, writer=None):
         self.learning_step += 1
         weight, batch = self.buffer.sample(self.batch_size)
         state, action, reward, done, next_state = batch
 
-        self.opt_state, self.params, loss, abs_td = self._update(
-            opt_state=self.opt_state,
-            params=self.params,
+        self.opt_state, self.params, loss, abs_td = optimize(
+            self._loss,
+            self.opt,
+            self.opt_state,
+            self.params,
+            self.max_grad_norm,
             params_target=self.params_target,
             state=state,
             action=action,
@@ -102,6 +103,7 @@ class DQN(QLearning):
             done=done,
             next_state=next_state,
             weight=weight,
+            **self.kwargs_update,
         )
 
         # Update priority.
@@ -116,33 +118,43 @@ class DQN(QLearning):
             writer.add_scalar("loss/q", loss, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def _update(
+    def _calculate_value(
         self,
-        opt_state: Any,
         params: hk.Params,
-        params_target: hk.Params,
         state: np.ndarray,
         action: np.ndarray,
+    ) -> jnp.ndarray:
+        return get_q_at_action(self.net.apply(params, state), action)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_target(
+        self,
+        params: hk.Params,
+        params_target: hk.Params,
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
+    ) -> jnp.ndarray:
+        if self.double_q:
+            next_action = self._forward(params, next_state)[..., None]
+            next_q = self._calculate_value(params_target, next_state, next_action)
+        else:
+            next_q = jnp.max(self.net.apply(params_target, next_state), axis=-1, keepdims=True)
+        return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
+
+    @partial(jax.jit, static_argnums=0)
+    def _calculate_loss_and_abs_td(
+        self,
+        q: jnp.ndarray,
+        target: jnp.ndarray,
         weight: np.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss, abs_td), grad = jax.value_and_grad(self._loss, has_aux=True)(
-            params,
-            params_target=params_target,
-            state=state,
-            action=action,
-            reward=reward,
-            done=done,
-            next_state=next_state,
-            weight=weight,
-        )
-        if self.max_grad_norm is not None:
-            grad = clip_gradient_norm(grad, self.max_grad_norm)
-        update, opt_state = self.opt(grad, opt_state)
-        params = optix.apply_updates(params, update)
-        return opt_state, params, loss, abs_td
+    ) -> jnp.ndarray:
+        td = target - q
+        if self.loss_type == "l2":
+            loss = jnp.mean(jnp.square(td) * weight)
+        elif self.loss_type == "huber":
+            loss = jnp.mean(huber(td) * weight)
+        return loss, jax.lax.stop_gradient(jnp.abs(td))
 
     @partial(jax.jit, static_argnums=0)
     def _loss(
@@ -156,26 +168,6 @@ class DQN(QLearning):
         next_state: np.ndarray,
         weight: np.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        if self.double_q:
-            # Calculate greedy actions with online network.
-            next_action = self._forward(params, next_state)[..., None]
-            # Then calculate max q values with target network.
-            next_q = get_q_at_action(self.q_net.apply(params_target, next_state), next_action)
-        else:
-            # Calculate greedy actions and max q values with target network.
-            next_q = jnp.max(self.q_net.apply(params_target, next_state), axis=1, keepdims=True)
-        target_q = jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
-        curr_q = get_q_at_action(self.q_net.apply(params, state), action)
-
-        td = target_q - curr_q
-        if self.loss_type == "l2":
-            loss = jnp.mean(jnp.square(td) * weight)
-        elif self.loss_type == "huber":
-            loss = jnp.mean(huber(td) * weight)
-        return loss, jax.lax.stop_gradient(jnp.abs(td))
-
-    def save_params(self, save_dir):
-        save_params(self.params, os.path.join(save_dir, "params.npz"))
-
-    def load_params(self, save_dir):
-        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))
+        q = self._calculate_value(params, state, action)
+        target = self._calculate_target(params, params_target, reward, done, next_state)
+        return self._calculate_loss_and_abs_td(q, target, weight)

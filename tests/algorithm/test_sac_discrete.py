@@ -21,6 +21,7 @@ def test_sac_discrete(use_per, dueling_net):
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
+        batch_size=4,
         use_per=use_per,
         dueling_net=dueling_net,
     )

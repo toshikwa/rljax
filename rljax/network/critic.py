@@ -63,8 +63,39 @@ class ContinuousQFunction(hk.Module):
             )(x)
 
         x = jnp.concatenate([s, a], axis=1)
-        if self.num_critics == 1:
-            return _fn(x)
+        # Return list even if num_critics == 1 for simple implementation.
+        return [_fn(x) for _ in range(self.num_critics)]
+
+
+class ContinuousQuantileFunction(hk.Module):
+    """
+    Critic for TQC.
+    """
+
+    def __init__(
+        self,
+        num_critics=5,
+        hidden_units=(512, 512, 512),
+        num_quantiles=25,
+        d2rl=False,
+    ):
+        super(ContinuousQuantileFunction, self).__init__()
+        self.num_critics = num_critics
+        self.hidden_units = hidden_units
+        self.num_quantiles = num_quantiles
+        self.d2rl = d2rl
+
+    def __call__(self, s, a):
+        def _fn(x):
+            return MLP(
+                self.num_quantiles,
+                self.hidden_units,
+                hidden_activation=nn.relu,
+                hidden_scale=np.sqrt(2),
+                d2rl=self.d2rl,
+            )(x)
+
+        x = jnp.concatenate([s, a], axis=1)
         return [_fn(x) for _ in range(self.num_critics)]
 
 
@@ -162,7 +193,7 @@ class DiscreteQuantileFunction(hk.Module):
 
 class DiscreteImplicitQuantileFunction(hk.Module):
     """
-    Critic for IQN.
+    Critic for IQN and FQF.
     """
 
     def __init__(

@@ -1,19 +1,17 @@
-import os
 from functools import partial
-from typing import Any, Tuple
+from typing import List, Tuple
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental import optix
 
-from rljax.algorithm.base import QLearning
+from rljax.algorithm.qrdqn import QRDQN
 from rljax.network import DiscreteImplicitQuantileFunction
-from rljax.util import clip_gradient_norm, get_quantile_at_action, load_params, quantile_loss, save_params
+from rljax.util import fake_state
 
 
-class IQN(QLearning):
+class IQN(QRDQN):
     name = "IQN"
 
     def __init__(
@@ -34,16 +32,34 @@ class IQN(QLearning):
         eps=0.01,
         eps_eval=0.001,
         eps_decay_steps=250000,
+        loss_type="huber",
+        dueling_net=False,
+        double_q=False,
+        setup_net=True,
+        fn=None,
         lr=5e-5,
         units=(512,),
         num_quantiles=64,
         num_quantiles_eval=32,
         num_cosines=64,
-        loss_type="huber",
-        dueling_net=False,
-        double_q=False,
     ):
-        assert loss_type in ["l2", "huber"]
+        if fn is None:
+
+            def fn(s, cum_p):
+                return DiscreteImplicitQuantileFunction(
+                    num_cosines=num_cosines,
+                    action_space=action_space,
+                    hidden_units=units,
+                    dueling_net=dueling_net,
+                )(s, cum_p)
+
+        if not hasattr(self, "fake_args"):
+            self.fake_args = (fake_state(state_space), np.empty((1, num_quantiles), dtype=np.float32))
+        if not hasattr(self, "use_key_forward"):
+            self.use_key_forward = True
+        if not hasattr(self, "num_keys_loss"):
+            self.num_keys_loss = 3
+
         super(IQN, self).__init__(
             num_agent_steps=num_agent_steps,
             state_space=state_space,
@@ -61,106 +77,44 @@ class IQN(QLearning):
             eps=eps,
             eps_eval=eps_eval,
             eps_decay_steps=eps_decay_steps,
+            loss_type=loss_type,
+            dueling_net=dueling_net,
+            double_q=double_q,
+            setup_net=setup_net,
+            fn=fn,
+            lr=lr,
+            num_quantiles=num_quantiles,
         )
-
-        def quantile_fn(s, cum_p):
-            return DiscreteImplicitQuantileFunction(
-                action_space=action_space,
-                num_critics=1,
-                hidden_units=units,
-                dueling_net=dueling_net,
-            )(s, cum_p)
-
-        # Quantile network.
-        fake_cum_p = np.empty((1, num_quantiles), dtype=np.float32)
-        self.quantile_net = hk.without_apply_rng(hk.transform(quantile_fn))
-        self.params = self.params_target = self.quantile_net.init(next(self.rng), self.fake_state, fake_cum_p)
-        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
-        self.opt_state = opt_init(self.params)
-
-        # Other parameters.
-        self.num_quantiles = num_quantiles
         self.num_quantiles_eval = num_quantiles_eval
-        self.num_cosines = num_cosines
-        self.loss_type = loss_type
-        self.double_q = double_q
-
-    def forward(self, state):
-        return self._forward(self.params, next(self.rng), state)
 
     @partial(jax.jit, static_argnums=0)
     def _forward(
         self,
         params: hk.Params,
-        key: jnp.ndarray,
         state: np.ndarray,
+        key: jnp.ndarray,
     ) -> jnp.ndarray:
-        cum_p = jax.random.uniform(key, (1, self.num_quantiles_eval))
-        q_s = self.quantile_net.apply(params, state, cum_p).mean(axis=1)
-        return jnp.argmax(q_s, axis=1)
-
-    def update(self, writer=None):
-        self.learning_step += 1
-        weight, batch = self.buffer.sample(self.batch_size)
-        state, action, reward, done, next_state = batch
-
-        self.opt_state, self.params, loss, abs_td = self._update(
-            opt_state=self.opt_state,
-            params=self.params,
-            params_target=self.params_target,
-            state=state,
-            action=action,
-            reward=reward,
-            done=done,
-            next_state=next_state,
-            weight=weight,
-            key1=next(self.rng),
-            key2=next(self.rng),
-        )
-
-        # Update priority.
-        if self.use_per:
-            self.buffer.update_priority(abs_td)
-
-        # Update target network.
-        if self.agent_step % self.update_interval_target == 0:
-            self.params_target = self._update_target(self.params_target, self.params)
-
-        if writer and self.learning_step % 1000 == 0:
-            writer.add_scalar("loss/quantile", loss, self.learning_step)
+        cum_p = jax.random.uniform(key, (state.shape[0], self.num_quantiles_eval))
+        return jnp.argmax(self.net.apply(params, state, cum_p).mean(axis=1), axis=1)
 
     @partial(jax.jit, static_argnums=0)
-    def _update(
+    def _calculate_target(
         self,
-        opt_state: Any,
         params: hk.Params,
         params_target: hk.Params,
-        state: np.ndarray,
-        action: np.ndarray,
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
-        weight: np.ndarray,
-        key1: np.ndarray,
-        key2: np.ndarray,
-    ) -> Tuple[Any, hk.Params, jnp.ndarray, jnp.ndarray]:
-        (loss, abs_td), grad = jax.value_and_grad(self._loss, has_aux=True)(
-            params,
-            params_target=params_target,
-            state=state,
-            action=action,
-            reward=reward,
-            done=done,
-            next_state=next_state,
-            weight=weight,
-            key1=key1,
-            key2=key2,
-        )
-        if self.max_grad_norm is not None:
-            grad = clip_gradient_norm(grad, self.max_grad_norm)
-        update, opt_state = self.opt(grad, opt_state)
-        params = optix.apply_updates(params, update)
-        return opt_state, params, loss, abs_td
+        cum_p_prime: jnp.ndarray,
+        key: jnp.ndarray,
+    ) -> jnp.ndarray:
+        if self.double_q:
+            next_action = self._forward(params, next_state, key=key)[..., None]
+            next_quantile = self._calculate_value(params_target, next_state, next_action, cum_p=cum_p_prime)
+        else:
+            next_quantile = jnp.max(self.net.apply(params_target, next_state, cum_p_prime), axis=-1, keepdims=True)
+        target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
+        return jax.lax.stop_gradient(target).reshape(-1, 1, self.num_quantiles)
 
     @partial(jax.jit, static_argnums=0)
     def _loss(
@@ -173,35 +127,10 @@ class IQN(QLearning):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-        key1: np.ndarray,
-        key2: np.ndarray,
+        key_list: List[np.ndarray],
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        # Sample cumulative probabilities.
-        cum_p1 = jax.random.uniform(key1, (state.shape[0], self.num_quantiles))
-        cum_p2 = jax.random.uniform(key2, (state.shape[0], self.num_quantiles))
-
-        if self.double_q:
-            # Calculate greedy actions with online network. (NOTE: We reuse key1 here for the simple implementation.)
-            next_action = self._forward(params, key1, next_state)[..., None]
-            # Then calculate max quantile values with target network.
-            next_quantile = get_quantile_at_action(self.quantile_net.apply(params_target, next_state, cum_p2), next_action)
-        else:
-            # Calculate greedy actions and max quantile values with target network.
-            next_quantile = jnp.max(self.quantile_net.apply(params_target, next_state, cum_p2), axis=2, keepdims=True)
-
-        # Calculate target quantile values and reshape to (batch_size, 1, N).
-        target_quantile = jnp.expand_dims(reward, 2) + (1.0 - jnp.expand_dims(done, 2)) * self.discount * next_quantile
-        target_quantile = jax.lax.stop_gradient(target_quantile).reshape(-1, 1, self.num_quantiles)
-
-        # Calculate current quantile values, whose shape is (batch_size, N, 1).
-        curr_quantile = get_quantile_at_action(self.quantile_net.apply(params, state, cum_p1), action)
-        td = target_quantile - curr_quantile
-        loss = quantile_loss(td, cum_p1, weight, self.loss_type)
-        abs_td = jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True)
-        return loss, jax.lax.stop_gradient(abs_td)
-
-    def save_params(self, save_dir):
-        save_params(self.params, os.path.join(save_dir, "params.npz"))
-
-    def load_params(self, save_dir):
-        self.params = self.params_target = load_params(os.path.join(save_dir, "params.npz"))
+        cum_p = jax.random.uniform(key_list[0], (state.shape[0], self.num_quantiles))
+        cum_p_prime = jax.random.uniform(key_list[1], (state.shape[0], self.num_quantiles))
+        quantile = self._calculate_value(params, state, action, cum_p=cum_p)
+        target = self._calculate_target(params, params_target, reward, done, next_state, cum_p_prime, key_list[2])
+        return self._calculate_loss_and_abs_td(quantile, target, cum_p, weight)

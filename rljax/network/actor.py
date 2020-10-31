@@ -117,6 +117,6 @@ class CategoricalPolicy(hk.Module):
             hidden_activation=nn.relu,
             output_scale=0.01,
         )(x)
-        pi = nn.softmax(x, axis=1)
-        log_pi = jnp.log(pi + (pi == 0.0) * 1e-8)
-        return pi, log_pi
+        pi_s = nn.softmax(x, axis=1)
+        log_pi_s = jnp.log(pi_s + (pi_s == 0.0) * 1e-8)
+        return pi_s, log_pi_s

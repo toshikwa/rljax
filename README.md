@@ -24,19 +24,21 @@ pip install mujoco_py==2.0.2.11
 ## Algorithm
 Currently, following algorithms have been implemented.
 
-| **Algorithm** | **Action Space** | **Vector State** | **Pixel State** | **PER**[[11]](#reference) | **DisCor**[[12]](#reference) | **D2RL**[[15]](#reference) |
-| :--                            | :--                | :--:               | :--:               | :--:                       | :--: | :--: |
-| PPO[[1]](#reference)           | Continuous         | :heavy_check_mark: | -                  | -                          | -    | -    |
-| DDPG[[2]](#reference)          | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
-| TD3[[3]](#reference)           | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | -    | :heavy_check_mark: |
-| SAC[[4,5]](#reference)         | Continuous         | :heavy_check_mark: | -                  | :heavy_check_mark:         | :heavy_check_mark: | :heavy_check_mark: |
-| SAC+AE[[13]](#reference)       | Continuous         | -                  | :heavy_check_mark: | :heavy_check_mark:         | -    | :heavy_check_mark: |
-| SLAC[[14]](#reference)         | Continuous         | -                  | :heavy_check_mark: | -                          | -    | :heavy_check_mark: |
-| DQN[[6]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | :heavy_check_mark: | -    |
-| QR-DQN[[7]](#reference)        | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
-| IQN[[8]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
-| FQF[[9]](#reference)           | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
-| SAC-Discrete[[10]](#reference) | Discrete           | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:         | -    | -    |
+|**Algorithm**|**Action**|**Vector State**|**Pixel State**|**PER**[[11]](#reference)|**D2RL**[[15]](#reference)|
+| :--         | :--      | :--:           | :--:          | :--:                    |:--:                      |
+| PPO[[1]](#reference)        | Continuous | :heavy_check_mark: | - | -                  | -                  |
+| DDPG[[2]](#reference)       | Continuous | :heavy_check_mark: | - | :heavy_check_mark: | :heavy_check_mark: |
+| TD3[[3]](#reference)        | Continuous | :heavy_check_mark: | - | :heavy_check_mark: | :heavy_check_mark: |
+| SAC[[4,5]](#reference)      | Continuous | :heavy_check_mark: | - | :heavy_check_mark: | :heavy_check_mark: |
+| SAC+DisCor[[12]](#reference)| Continuous | :heavy_check_mark: | - | -                  | :heavy_check_mark: |
+| TQC[[16]](#reference)       | Continuous | :heavy_check_mark: | - | :heavy_check_mark: | :heavy_check_mark: |
+| SAC+AE[[13]](#reference)    | Continuous | - | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| SLAC[[14]](#reference)      | Continuous | - | :heavy_check_mark: | -                  | :heavy_check_mark: |
+| DQN[[6]](#reference)          | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
+| QR-DQN[[7]](#reference)       | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
+| IQN[[8]](#reference)          | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
+| FQF[[9]](#reference)          | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
+| SAC-Discrete[[10]](#reference)| Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
 
 ## Example
 All algorithms can be trained in a few lines of code.
@@ -87,21 +89,30 @@ trainer.train()
 </details>
 
 <details>
-<summary>Gym(MuJoCo)</summary>
+<summary>MuJoCo(Gym)</summary>
 
-I benchmarked my implementations in some environments from MuJoCo's `-v3` task suite, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/mujoco)).
+I benchmarked my implementations in some environments from MuJoCo's `-v3` task suite, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/mujoco)). In TQC, I set num_quantiles_to_drop to 0 for HalfCheetath-v3 and 2 for other environments. Note that I benchmarked with 3M agent steps, not 5M agent steps as in TQC's paper.
 
-<img src="https://user-images.githubusercontent.com/37267851/97110604-72a77680-171d-11eb-8220-3b66ba141deb.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110603-720ee000-171d-11eb-9a24-f3a3297c78b8.png" title="Walker2d-v3" width=400>
-<img src="https://user-images.githubusercontent.com/37267851/97110602-70ddb300-171d-11eb-9428-75d4334724ed.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110606-73400d00-171d-11eb-8f23-f060b7a5721b.png" title="Ant-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97766058-2d89a700-1b58-11eb-9266-29c3605f7d6c.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97766061-2e223d80-1b58-11eb-94a0-44efb7e5d9b7.png" title="Walker2d-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97766056-2c587a00-1b58-11eb-9844-d704657857f8.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97766062-2ebad400-1b58-11eb-8cf1-6d3bd338c414.png" title="Ant-v3" width=400>
 
 </details>
 
 <details>
 <summary>DeepMind Control Suite</summary>
 
-I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind Control Suite ([code](https://github.com/ku2482/rljax/blob/master/examples/dm_control)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat.
+I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind Control Suite ([code](https://github.com/ku2482/rljax/blob/master/examples/dm_control)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by action_repeat. I set action_repeat to 4 for cheetah-run and 2 for walker-walk.
 
 <img src="https://user-images.githubusercontent.com/37267851/97359828-b7c7d600-18e0-11eb-8c79-852624dfa1e8.png" title="cheetah-run" width=400><img src="https://user-images.githubusercontent.com/37267851/97359825-b696a900-18e0-11eb-88e2-b532076de7e8.png" title="walker-walk" width=400>
+
+</details>
+
+<details>
+<summary>Atari(Arcade Learning Environment)</summary>
+
+I benchmarked SAC-Discrete implementation in `MsPacmanNoFrameskip-v4` from the Arcade Learning Environment(ALE) ([code](https://github.com/ku2482/rljax/blob/master/examples/atari)). Note that the horizontal axis represents the environment step, which is obtained by multiplying agent_step by 4.
+
+<img src="https://user-images.githubusercontent.com/37267851/97410160-0e193100-1942-11eb-8056-df445eb6f5e9.png" title="MsPacmanNoFrameskip-v4" width=400>
 
 </details>
 
@@ -135,3 +146,5 @@ I benchmarked SAC+AE and SLAC implementations in some environments from DeepMind
 [[14]](https://arxiv.org/abs/1907.00953) Lee, Alex X., et al. "Stochastic latent actor-critic: Deep reinforcement learning with a latent variable model." arXiv preprint arXiv:1907.00953 (2019).
 
 [[15]](https://arxiv.org/abs/2010.09163) Sinha, Samarth, et al. "D2RL: Deep Dense Architectures in Reinforcement Learning." arXiv preprint arXiv:2010.09163 (2020).
+
+[[16]](https://arxiv.org/abs/2005.04269) Kuznetsov, Arsenii, et al. "Controlling Overestimation Bias with Truncated Mixture of Continuous Distributional Quantile Critics." arXiv preprint arXiv:2005.04269 (2020).

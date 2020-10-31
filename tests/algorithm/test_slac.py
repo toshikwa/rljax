@@ -1,6 +1,7 @@
 import pytest
 
-from rljax.algorithm.slac import SLAC, SlacObservation
+from rljax.algorithm.misc import SlacObservation
+from rljax.algorithm.slac import SLAC
 
 
 def _test_slac(env, algo):
@@ -9,15 +10,25 @@ def _test_slac(env, algo):
     ob.reset_episode(state)
     algo.buffer.reset_episode(state)
 
-    # Test step() method.
-    algo.step(env, ob)
+    for _ in range(10):
+        # Test step() method.
+        algo.step(env, ob)
 
-    # Test select_action() method.
-    action = algo.select_action(ob)
-    assert env.action_space.contains(action)
+        # Test select_action() method.
+        action = algo.select_action(ob)
+        assert env.action_space.contains(action)
 
     # Test is_update() method.
     assert isinstance(algo.is_update(), bool)
+
+    # Test update_sac() method.
+    algo.update_sac()
+    # Test update_model() method.
+    algo.update_model()
+    # Test save_params() method.
+    algo.save_params("/tmp/rljax/test")
+    # Test load_params() method.
+    algo.load_params("/tmp/rljax/test")
 
 
 @pytest.mark.mujoco
@@ -32,6 +43,8 @@ def test_slac(d2rl):
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
+        batch_size_model=2,
+        batch_size_sac=2,
         d2rl=d2rl,
     )
     _test_slac(env, algo)

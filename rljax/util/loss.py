@@ -16,7 +16,7 @@ def quantile_loss(
     td: jnp.ndarray,
     cum_p: jnp.ndarray,
     weight: jnp.ndarray,
-    loss_type: float = "l2",
+    loss_type: str,
 ) -> jnp.ndarray:
     """
     Calculate quantile loss.

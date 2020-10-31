@@ -1,6 +1,25 @@
+import haiku as hk
+import jax.numpy as jnp
 import numpy as np
+import pytest
+from jax.experimental import optix
 
-from rljax.util.optim import clip_gradient, clip_gradient_norm, soft_update, weight_decay
+from rljax.util.optim import clip_gradient, clip_gradient_norm, optimize, soft_update, weight_decay
+
+
+@pytest.mark.parametrize("lr, w, x", [(0.1, 1.0, 1.0), (0.1, 20.0, 10.0), (1e-3, 0.0, -10.0)])
+def test_optimize(lr, w, x):
+    net = hk.without_apply_rng(hk.transform(lambda x: hk.Linear(1, with_bias=False, w_init=hk.initializers.Constant(w))(x)))
+    params = net.init(next(hk.PRNGSequence(0)), jnp.zeros((1, 1)))
+    opt_init, opt = optix.sgd(lr)
+    opt_state = opt_init(params)
+
+    def _loss(params, x):
+        return net.apply(params, x).mean(), None
+
+    opt_state, params, loss, _ = optimize(_loss, opt, opt_state, params, None, x=jnp.ones((1, 1)) * x)
+    assert np.isclose(loss, w * x)
+    assert np.isclose(params["linear"]["w"], w - lr * x)
 
 
 def test_clip_gradient():
