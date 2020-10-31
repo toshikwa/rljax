@@ -92,7 +92,7 @@ class SlacAlgorithm(OffPolicyAlgorithm):
 
     def explore(self, ob):
         feature_action = self._preprocess(self.params_model, ob.state, ob.action)
-        action = self._explore(self.params_actor, next(self.rng), feature_action)[0]
+        action = self._explore(self.params_actor, feature_action, next(self.rng))[0]
         return np.array(action[0])
 
     def update(self, writer):

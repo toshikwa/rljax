@@ -43,6 +43,7 @@ class SAC(OffPolicyActorCritic):
         d2rl=False,
         init_alpha=1.0,
         adam_b1_alpha=0.9,
+        *args,
         **kwargs,
     ):
         if not hasattr(self, "use_key_critic"):
@@ -65,6 +66,7 @@ class SAC(OffPolicyActorCritic):
             start_steps=start_steps,
             update_interval=update_interval,
             tau=tau,
+            *args,
             **kwargs,
         )
         if d2rl:
@@ -123,8 +125,8 @@ class SAC(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        key: jnp.ndarray,
         state: np.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
         return reparameterize_gaussian_and_tanh(mean, log_std, key, False)
@@ -194,8 +196,8 @@ class SAC(OffPolicyActorCritic):
     def _sample_action(
         self,
         params_actor: hk.Params,
-        key: jnp.ndarray,
         state: np.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
         return reparameterize_gaussian_and_tanh(mean, log_std, key, True)
@@ -236,9 +238,10 @@ class SAC(OffPolicyActorCritic):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray or List[jnp.ndarray],
+        *args,
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action, next_log_pi = self._sample_action(params_actor=params_actor, state=next_state, **kwargs)
+        next_action, next_log_pi = self._sample_action(params_actor, next_state, *args, **kwargs)
         target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_state, next_action, next_log_pi)
         q_list = self._calculate_value_list(params_critic, state, action)
         return self._calculate_loss_critic_and_abs_td(q_list, target, weight)
@@ -250,9 +253,10 @@ class SAC(OffPolicyActorCritic):
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
+        *args,
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        action, log_pi = self._sample_action(params_actor=params_actor, state=state, **kwargs)
+        action, log_pi = self._sample_action(params_actor, state, *args, **kwargs)
         mean_q = self._calculate_value(params_critic, state, action).mean()
         mean_log_pi = self._calculate_log_pi(action, log_pi).mean()
         return jax.lax.stop_gradient(jnp.exp(log_alpha)) * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)

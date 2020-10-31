@@ -94,8 +94,8 @@ class PPO(OnPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        key: jnp.ndarray,
         state: np.ndarray,
+        key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         mean, log_std = self.actor.apply(params_actor, state)
         return reparameterize_gaussian_and_tanh(mean, log_std, key, True)

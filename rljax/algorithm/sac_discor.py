@@ -203,7 +203,7 @@ class SAC_DisCor(SAC):
         next_state: np.ndarray,
         key: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action = self._explore(params_actor, key, next_state)
+        next_action = self._explore(params_actor, next_state, key)
         return self.error.apply(params_error_target, next_state, next_action)
 
     @partial(jax.jit, static_argnums=0)

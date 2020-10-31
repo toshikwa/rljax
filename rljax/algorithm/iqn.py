@@ -86,14 +86,14 @@ class IQN(QRDQN):
         self.num_cosines = num_cosines
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q_s(
+    def _forward(
         self,
         params: hk.Params,
-        key: jnp.ndarray,
         state: np.ndarray,
+        key: jnp.ndarray,
     ) -> jnp.ndarray:
         cum_p = jax.random.uniform(key, (state.shape[0], self.num_quantiles_eval))
-        return self.net.apply(params, state, cum_p).mean(axis=1)
+        return jnp.argmax(self.net.apply(params, state, cum_p).mean(axis=1), axis=1)
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_target(
@@ -108,7 +108,7 @@ class IQN(QRDQN):
     ) -> jnp.ndarray:
         if self.double_q:
             next_action = self._forward(params, next_state, key=key)[..., None]
-            next_quantile = self._calculate_quantile(params_target, next_state, next_action, cum_p=cum_p_prime)
+            next_quantile = self._calculate_value(params_target, next_state, next_action, cum_p=cum_p_prime)
         else:
             next_quantile = jnp.max(self.net.apply(params_target, next_state, cum_p_prime), axis=-1, keepdims=True)
         target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
@@ -129,6 +129,6 @@ class IQN(QRDQN):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         cum_p = jax.random.uniform(key_list[0], (state.shape[0], self.num_quantiles))
         cum_p_prime = jax.random.uniform(key_list[1], (state.shape[0], self.num_quantiles))
-        quantile = self._calculate_quantile(params, state, action, cum_p=cum_p)
+        quantile = self._calculate_value(params, state, action, cum_p=cum_p)
         target = self._calculate_target(params, params_target, reward, done, next_state, cum_p_prime, key_list[2])
         return self._calculate_loss_and_abs_td(quantile, target, cum_p, weight)

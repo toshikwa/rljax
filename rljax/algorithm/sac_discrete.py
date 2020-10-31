@@ -101,8 +101,8 @@ class SAC_Discrete(SAC):
     def _explore(
         self,
         params_actor: hk.Params,
-        key: jnp.ndarray,
         state: np.ndarray,
+        key: jnp.ndarray,
     ) -> jnp.ndarray:
         pi_s, _ = self.actor.apply(params_actor, state)
         return jax.random.categorical(key, pi_s)

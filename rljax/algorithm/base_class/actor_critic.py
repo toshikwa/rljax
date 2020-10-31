@@ -38,7 +38,7 @@ class ActorCriticMixIn:
         pass
 
     @abstractmethod
-    def _explore(self, params_actor, key, state):
+    def _explore(self, params_actor, state, key):
         pass
 
     def save_params(self, save_dir):
@@ -89,7 +89,7 @@ class OnPolicyActorCritic(ActorCriticMixIn, OnPolicyAlgorithm):
         return self.agent_step % self.buffer_size == 0
 
     def explore(self, state):
-        action, log_pi = self._explore(self.params_actor, next(self.rng), state[None, ...])
+        action, log_pi = self._explore(self.params_actor, state[None, ...], next(self.rng))
         return np.array(action[0]), np.array(log_pi[0])
 
 
@@ -146,8 +146,12 @@ class OffPolicyActorCritic(ActorCriticMixIn, OffPolicyAlgorithm):
             self.fake_args_actor = (fake_state(state_space),)
 
     def explore(self, state):
-        action = self._explore(self.params_actor, next(self.rng), state[None, ...])
+        action = self._explore(self.params_actor, state[None, ...], next(self.rng))
         return np.array(action[0])
+
+    @abstractmethod
+    def _sample_action(self, params_actor, state, *args, **kwargs):
+        pass
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_value_list(
@@ -166,6 +170,10 @@ class OffPolicyActorCritic(ActorCriticMixIn, OffPolicyAlgorithm):
         action: np.ndarray,
     ) -> jnp.ndarray:
         return jnp.asarray(self._calculate_value_list(params_critic, state, action)).min(axis=0)
+
+    @abstractmethod
+    def _calculate_target(self, params_critic_target, reward, done, next_state, next_action, *args, **kwargs):
+        pass
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_loss_critic_and_abs_td(

@@ -262,9 +262,10 @@ class SLAC(SlacAlgorithm, SAC):
         reward: np.ndarray,
         done: np.ndarray,
         next_feature_action: np.ndarray,
+        *args,
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action, next_log_pi = self._sample_action(params_actor=params_actor, state=next_feature_action, **kwargs)
+        next_action, next_log_pi = self._sample_action(params_actor, next_feature_action, *args, **kwargs)
         target = self._calculate_target(params_critic_target, log_alpha, reward, done, next_z, next_action, next_log_pi)
         q_list = self._calculate_value_list(params_critic, z, action)
         return self._calculate_loss_critic_and_abs_td(q_list, target, 1.0)
@@ -277,9 +278,10 @@ class SLAC(SlacAlgorithm, SAC):
         log_alpha: jnp.ndarray,
         z: np.ndarray,
         feature_action: np.ndarray,
+        *args,
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        action, log_pi = self._sample_action(params_actor=params_actor, state=feature_action, **kwargs)
+        action, log_pi = self._sample_action(params_actor=params_actor, state=feature_action, *args, **kwargs)
         mean_q = self._calculate_value(params_critic, z, action).mean()
         mean_log_pi = self._calculate_log_pi(action, log_pi).mean()
         return jax.lax.stop_gradient(jnp.exp(log_alpha)) * mean_log_pi - mean_q, jax.lax.stop_gradient(mean_log_pi)

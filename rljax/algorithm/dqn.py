@@ -80,18 +80,8 @@ class DQN(QLearning):
         self,
         params: hk.Params,
         state: np.ndarray,
-        **kwargs,
     ) -> jnp.ndarray:
-        q_s = self._calculate_q_s(params=params, state=state, **kwargs)
-        return jnp.argmax(q_s, axis=1)
-
-    @partial(jax.jit, static_argnums=0)
-    def _calculate_q_s(
-        self,
-        params: hk.Params,
-        state: np.ndarray,
-    ) -> jnp.ndarray:
-        return self.net.apply(params, state)
+        return jnp.argmax(self.net.apply(params, state), axis=1)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -126,7 +116,7 @@ class DQN(QLearning):
             writer.add_scalar("loss/q", loss, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q(
+    def _calculate_value(
         self,
         params: hk.Params,
         state: np.ndarray,
@@ -145,7 +135,7 @@ class DQN(QLearning):
     ) -> jnp.ndarray:
         if self.double_q:
             next_action = self._forward(params, next_state)[..., None]
-            next_q = self._calculate_q(params_target, next_state, next_action)
+            next_q = self._calculate_value(params_target, next_state, next_action)
         else:
             next_q = jnp.max(self.net.apply(params_target, next_state), axis=-1, keepdims=True)
         return jax.lax.stop_gradient(reward + (1.0 - done) * self.discount * next_q)
@@ -175,8 +165,7 @@ class DQN(QLearning):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        q = self._calculate_q(params, state, action)
+        q = self._calculate_value(params, state, action)
         target = self._calculate_target(params, params_target, reward, done, next_state)
         return self._calculate_loss_and_abs_td(q, target, weight)

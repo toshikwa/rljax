@@ -164,7 +164,7 @@ class FQF(QLearning):
             writer.add_scalar("loss/cum_p", loss_cum_p, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_quantile(
+    def _calculate_value(
         self,
         params: hk.Params,
         feature: np.ndarray,
@@ -186,7 +186,7 @@ class FQF(QLearning):
     ) -> jnp.ndarray:
         if self.double_q:
             next_action = self._calculate_action(params_cum_p, params, next_feature)
-            next_quantile = self._calculate_quantile(params_target, next_feature, next_action, cum_p_prime)
+            next_quantile = self._calculate_value(params_target, next_feature, next_action, cum_p_prime)
         else:
             next_quantile_s = self.net["quantile"].apply(params_target["quantile"], next_feature, cum_p_prime)
             next_quantile = jnp.max(next_quantile_s, axis=-1, keepdims=True)
@@ -221,7 +221,7 @@ class FQF(QLearning):
         feature = self.net["feature"].apply(params["feature"], state)
         next_feature = self.net["feature"].apply(params_target["feature"], next_state)
         cum_p_prime = jax.lax.stop_gradient(self.cum_p_net.apply(params_cum_p, feature)[1])
-        quantile = self._calculate_quantile(params, feature, action, cum_p_prime)
+        quantile = self._calculate_value(params, feature, action, cum_p_prime)
         target = self._calculate_target(params_cum_p, params, params_target, reward, done, next_feature, cum_p_prime)
         return self._calculate_loss_and_abs_td(quantile, target, cum_p_prime, weight)
 

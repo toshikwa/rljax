@@ -106,8 +106,8 @@ class DDPG(OffPolicyActorCritic):
     def _explore(
         self,
         params_actor: hk.Params,
-        key: jnp.ndarray,
         state: np.ndarray,
+        key: jnp.ndarray,
     ) -> jnp.ndarray:
         action = self.actor.apply(params_actor, state)
         return add_noise(action, key, self.std, -1.0, 1.0)
@@ -190,9 +190,10 @@ class DDPG(OffPolicyActorCritic):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
+        *args,
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action = self._sample_action(params_actor=params_actor_target, state=next_state, **kwargs)
+        next_action = self._sample_action(params_actor_target, next_state, *args, **kwargs)
         target = self._calculate_target(params_critic_target, reward, done, next_state, next_action)
         q_list = self._calculate_value_list(params_critic, state, action)
         return self._calculate_loss_critic_and_abs_td(q_list, target, weight)

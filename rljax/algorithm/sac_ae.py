@@ -145,7 +145,7 @@ class SAC_AE(SAC):
 
     def explore(self, state):
         last_conv = self._preprocess(self.params_encoder, state[None, ...])
-        action = self._explore(self.params_actor, next(self.rng), last_conv)
+        action = self._explore(self.params_actor, last_conv, next(self.rng))
         return np.array(action[0])
 
     @partial(jax.jit, static_argnums=0)
@@ -261,6 +261,7 @@ class SAC_AE(SAC):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray or List[jnp.ndarray],
+        *args,
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         last_conv = self.encoder.apply(params_critic["encoder"], state)
@@ -276,6 +277,7 @@ class SAC_AE(SAC):
             done=done,
             next_state=next_last_conv,
             weight=weight,
+            *args,
             **kwargs,
         )
 
@@ -286,6 +288,7 @@ class SAC_AE(SAC):
         params_critic: hk.Params,
         log_alpha: jnp.ndarray,
         state: np.ndarray,
+        *args,
         **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         last_conv = jax.lax.stop_gradient(self.encoder.apply(params_critic["encoder"], state))
@@ -294,6 +297,7 @@ class SAC_AE(SAC):
             params_critic=params_critic,
             log_alpha=log_alpha,
             state=last_conv,
+            *args,
             **kwargs,
         )
 

@@ -15,10 +15,12 @@ def optimize(
     opt_state: Any,
     params_to_update: hk.Params,
     max_grad_norm: float or None,
+    *args,
     **kwargs,
 ) -> Tuple[Any, hk.Params, jnp.ndarray, Any]:
     (loss, aux), grad = jax.value_and_grad(fn_loss, has_aux=True)(
         params_to_update,
+        *args,
         **kwargs,
     )
     if max_grad_norm is not None:

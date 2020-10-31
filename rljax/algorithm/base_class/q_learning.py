@@ -83,10 +83,22 @@ class QLearning(OffPolicyAlgorithm):
         return action
 
     def forward(self, state):
-        return self._forward(params=self.params, state=state, **self.kwargs_forward)
+        return self._forward(self.params, state, **self.kwargs_forward)
 
     @abstractmethod
-    def _forward(self, params, state, **kwargs):
+    def _forward(self, params, state, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def _calculate_value(self, params, state, action, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def _calculate_target(self, params, params_target, reward, done, next_state, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def _calculate_loss_and_abs_td(self, value, target, weight, *args, **kwargs):
         pass
 
     @property

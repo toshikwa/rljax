@@ -73,25 +73,27 @@ class QRDQN(DQN):
             fn=fn,
             lr=lr,
         )
+        self.cum_p_prime = jnp.expand_dims((jnp.arange(0, num_quantiles, dtype=jnp.float32) + 0.5) / num_quantiles, 0)
         self.num_quantiles = num_quantiles
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_q_s(
+    def _forward(
         self,
         params: hk.Params,
         state: np.ndarray,
     ) -> jnp.ndarray:
-        return self.net.apply(params, state).mean(axis=1)
+        return jnp.argmax(self.net.apply(params, state).mean(axis=1), axis=1)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_quantile(
+    def _calculate_value(
         self,
         params: hk.Params,
         state: np.ndarray,
         action: np.ndarray,
+        *args,
         **kwargs,
     ) -> jnp.ndarray:
-        return get_quantile_at_action(self.net.apply(params, state, **kwargs), action)
+        return get_quantile_at_action(self.net.apply(params, state, *args, **kwargs), action)
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_target(
@@ -101,11 +103,12 @@ class QRDQN(DQN):
         reward: np.ndarray,
         done: np.ndarray,
         next_state: np.ndarray,
+        *args,
         **kwargs,
     ) -> jnp.ndarray:
         if self.double_q:
-            next_action = self._forward(params=params, state=next_state, **kwargs)[..., None]
-            next_quantile = self._calculate_quantile(params_target, next_state, next_action)
+            next_action = self._forward(params, next_state, *args, **kwargs)[..., None]
+            next_quantile = self._calculate_value(params_target, next_state, next_action)
         else:
             next_quantile = jnp.max(self.net.apply(params_target, next_state), axis=-1, keepdims=True)
         target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
@@ -134,9 +137,7 @@ class QRDQN(DQN):
         done: np.ndarray,
         next_state: np.ndarray,
         weight: np.ndarray,
-        **kwargs,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        cum_p = (jnp.arange(0, self.num_quantiles, dtype=jnp.float32)[None, :] + 0.5) / self.num_quantiles
-        quantile = self._calculate_quantile(params, state, action)
+        quantile = self._calculate_value(params, state, action)
         target = self._calculate_target(params, params_target, reward, done, next_state)
-        return self._calculate_loss_and_abs_td(quantile, target, cum_p, weight)
+        return self._calculate_loss_and_abs_td(quantile, target, self.cum_p_prime, weight)
