@@ -92,10 +92,10 @@ trainer.train()
 <details>
 <summary>MuJoCo(Gym)</summary>
 
-I benchmarked my implementations in some environments from MuJoCo's `-v3` task suite, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/mujoco)).
+I benchmarked my implementations in some environments from MuJoCo's `-v3` task suite, following [Spinning Up's benchmarks](https://spinningup.openai.com/en/latest/spinningup/bench.html) ([code](https://github.com/ku2482/rljax/blob/master/examples/mujoco)). In TQC, I set num_quantiles_to_drop to 0 for HalfCheetath-v3 and 2 for other environments. Note that I benchmarked with 3M agent steps, not 5M agent steps as in TQC's paper.
 
-<img src="https://user-images.githubusercontent.com/37267851/97110604-72a77680-171d-11eb-8220-3b66ba141deb.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110603-720ee000-171d-11eb-9a24-f3a3297c78b8.png" title="Walker2d-v3" width=400>
-<img src="https://user-images.githubusercontent.com/37267851/97110602-70ddb300-171d-11eb-9428-75d4334724ed.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97110606-73400d00-171d-11eb-8f23-f060b7a5721b.png" title="Ant-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97766058-2d89a700-1b58-11eb-9266-29c3605f7d6c.png" title="HalfCheetah-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97766061-2e223d80-1b58-11eb-94a0-44efb7e5d9b7.png" title="Walker2d-v3" width=400>
+<img src="https://user-images.githubusercontent.com/37267851/97766056-2c587a00-1b58-11eb-9844-d704657857f8.png" title="Swimmer-v3" width=400><img src="https://user-images.githubusercontent.com/37267851/97766062-2ebad400-1b58-11eb-8cf1-6d3bd338c414.png" title="Ant-v3" width=400>
 
 </details>
 
