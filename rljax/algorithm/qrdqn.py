@@ -35,6 +35,7 @@ class QRDQN(DQN):
         loss_type="huber",
         dueling_net=False,
         double_q=False,
+        setup_net=True,
         fn=None,
         lr=5e-5,
         units=(512,),
@@ -70,10 +71,12 @@ class QRDQN(DQN):
             loss_type=loss_type,
             dueling_net=dueling_net,
             double_q=double_q,
+            setup_net=setup_net,
             fn=fn,
             lr=lr,
         )
-        self.cum_p_prime = jnp.expand_dims((jnp.arange(0, num_quantiles, dtype=jnp.float32) + 0.5) / num_quantiles, 0)
+        if self.name == "QR-DQN":
+            self.cum_p_prime = jnp.expand_dims((jnp.arange(0, num_quantiles, dtype=jnp.float32) + 0.5) / num_quantiles, 0)
         self.num_quantiles = num_quantiles
 
     @partial(jax.jit, static_argnums=0)

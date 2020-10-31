@@ -35,6 +35,7 @@ class IQN(QRDQN):
         loss_type="huber",
         dueling_net=False,
         double_q=False,
+        setup_net=True,
         fn=None,
         lr=5e-5,
         units=(512,),
@@ -46,6 +47,7 @@ class IQN(QRDQN):
 
             def fn(s, cum_p):
                 return DiscreteImplicitQuantileFunction(
+                    num_cosines=num_cosines,
                     action_space=action_space,
                     hidden_units=units,
                     dueling_net=dueling_net,
@@ -78,12 +80,12 @@ class IQN(QRDQN):
             loss_type=loss_type,
             dueling_net=dueling_net,
             double_q=double_q,
+            setup_net=setup_net,
             fn=fn,
             lr=lr,
             num_quantiles=num_quantiles,
         )
         self.num_quantiles_eval = num_quantiles_eval
-        self.num_cosines = num_cosines
 
     @partial(jax.jit, static_argnums=0)
     def _forward(

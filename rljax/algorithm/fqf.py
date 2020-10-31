@@ -8,12 +8,12 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental import optix
 
-from rljax.algorithm.base_class import QLearning
+from rljax.algorithm.qrdqn import QRDQN
 from rljax.network import CumProbNetwork, DiscreteImplicitQuantileFunction, make_quantile_nerwork
-from rljax.util import get_quantile_at_action, load_params, optimize, quantile_loss, save_params
+from rljax.util import get_quantile_at_action, load_params, optimize, save_params
 
 
-class FQF(QLearning):
+class FQF(QRDQN):
     name = "FQF"
 
     def __init__(
@@ -37,6 +37,7 @@ class FQF(QLearning):
         loss_type="huber",
         dueling_net=False,
         double_q=False,
+        setup_net=True,
         fn=None,
         lr=5e-5,
         lr_cum_p=2.5e-9,
@@ -64,32 +65,30 @@ class FQF(QLearning):
             loss_type=loss_type,
             dueling_net=dueling_net,
             double_q=double_q,
+            setup_net=False,
+            num_quantiles=num_quantiles,
         )
-        if fn is None:
+        if setup_net:
+            if fn is None:
 
-            def fn(s, cum_p):
-                return DiscreteImplicitQuantileFunction(
-                    action_space=action_space,
-                    hidden_units=units,
-                    dueling_net=dueling_net,
-                )(s, cum_p)
+                def fn(s, cum_p):
+                    return DiscreteImplicitQuantileFunction(
+                        num_cosines=num_cosines,
+                        action_space=action_space,
+                        hidden_units=units,
+                        dueling_net=dueling_net,
+                    )(s, cum_p)
 
-        self.net, self.params, fake_feature = make_quantile_nerwork(self.rng, state_space, action_space, fn, num_quantiles)
-        self.params_target = self.params
-        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
-        self.opt_state = opt_init(self.params)
+            self.net, self.params, fake_feature = make_quantile_nerwork(self.rng, state_space, action_space, fn, num_quantiles)
+            self.params_target = self.params
+            opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
+            self.opt_state = opt_init(self.params)
 
         # Fraction proposal network.
         self.cum_p_net = hk.without_apply_rng(hk.transform(lambda s: CumProbNetwork(num_quantiles=num_quantiles)(s)))
         self.params_cum_p = self.cum_p_net.init(next(self.rng), fake_feature)
         opt_init, self.opt_cum_p = optix.rmsprop(lr_cum_p, decay=0.95, eps=1e-5, centered=True)
         self.opt_state_cum_p = opt_init(self.params_cum_p)
-
-        # Other parameters.
-        self.num_quantiles = num_quantiles
-        self.num_cosines = num_cosines
-        self.loss_type = loss_type
-        self.double_q = double_q
 
     def forward(self, state):
         return self._forward(self.params_cum_p, self.params, state)
@@ -192,18 +191,6 @@ class FQF(QLearning):
             next_quantile = jnp.max(next_quantile_s, axis=-1, keepdims=True)
         target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
         return jax.lax.stop_gradient(target).reshape(-1, 1, self.num_quantiles)
-
-    @partial(jax.jit, static_argnums=0)
-    def _calculate_loss_and_abs_td(
-        self,
-        quantile: jnp.ndarray,
-        target: jnp.ndarray,
-        cum_p: jnp.ndarray,
-        weight: np.ndarray,
-    ) -> jnp.ndarray:
-        td = target - quantile
-        loss = quantile_loss(td, cum_p, weight, self.loss_type)
-        return loss, jax.lax.stop_gradient(jnp.abs(td).sum(axis=1).mean(axis=1, keepdims=True))
 
     @partial(jax.jit, static_argnums=0)
     def _loss(

@@ -36,6 +36,7 @@ class DQN(QLearning):
         loss_type="huber",
         dueling_net=False,
         double_q=False,
+        setup_net=True,
         fn=None,
         lr=2.5e-4,
         units=(512,),
@@ -61,19 +62,20 @@ class DQN(QLearning):
             dueling_net=dueling_net,
             double_q=double_q,
         )
-        if fn is None:
+        if setup_net:
+            if fn is None:
 
-            def fn(s):
-                return DiscreteQFunction(
-                    action_space=action_space,
-                    hidden_units=units,
-                    dueling_net=dueling_net,
-                )(s)
+                def fn(s):
+                    return DiscreteQFunction(
+                        action_space=action_space,
+                        hidden_units=units,
+                        dueling_net=dueling_net,
+                    )(s)
 
-        self.net = hk.without_apply_rng(hk.transform(fn))
-        self.params = self.params_target = self.net.init(next(self.rng), *self.fake_args)
-        opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
-        self.opt_state = opt_init(self.params)
+            self.net = hk.without_apply_rng(hk.transform(fn))
+            self.params = self.params_target = self.net.init(next(self.rng), *self.fake_args)
+            opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
+            self.opt_state = opt_init(self.params)
 
     @partial(jax.jit, static_argnums=0)
     def _forward(
