@@ -1,19 +1,11 @@
-import os
-from functools import partial
-from typing import List, Tuple
-
-import haiku as hk
-import jax
 import jax.numpy as jnp
-import numpy as np
-from jax.experimental import optix
 
+from rljax.algorithm.misc import DisCorMixIn
 from rljax.algorithm.sac import SAC
-from rljax.network import ContinuousQFunction
-from rljax.util import load_params, optimize, save_params
+from rljax.util import optimize
 
 
-class SAC_DisCor(SAC):
+class SAC_DisCor(DisCorMixIn, SAC):
     name = "SAC+DisCor"
 
     def __init__(
@@ -47,7 +39,8 @@ class SAC_DisCor(SAC):
         init_error=10.0,
         adam_b1_alpha=0.9,
     ):
-        super(SAC_DisCor, self).__init__(
+        SAC.__init__(
+            self,
             num_agent_steps=num_agent_steps,
             state_space=state_space,
             action_space=action_space,
@@ -75,25 +68,14 @@ class SAC_DisCor(SAC):
             init_alpha=init_alpha,
             adam_b1_alpha=adam_b1_alpha,
         )
-
-        if fn_error is None:
-
-            def fn_error(s, a):
-                return ContinuousQFunction(
-                    num_critics=num_critics,
-                    hidden_units=units_error,
-                )(s, a)
-
-        # Error model.
-        self.error = hk.without_apply_rng(hk.transform(fn_error))
-        self.params_error = self.params_error_target = self.error.init(next(self.rng), *self.fake_args_critic)
-        opt_init, self.opt_error = optix.adam(lr_error)
-        self.opt_state_error = opt_init(self.params_error)
-        # Running mean of errors.
-        if num_critics == 1:
-            self.rm_error = jnp.array(init_error, dtype=jnp.float32)
-        else:
-            self.rm_error = [jnp.array(init_error, dtype=jnp.float32) for _ in range(num_critics)]
+        DisCorMixIn.__init__(
+            self,
+            num_critics=num_critics,
+            fn_error=fn_error,
+            units_error=units_error,
+            d2rl=d2rl,
+            init_error=init_error,
+        )
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -101,17 +83,17 @@ class SAC_DisCor(SAC):
         state, action, reward, done, next_state = batch
 
         # Calculate weights.
-        weight = self.calculate_weight(
+        weight_list = self._calculate_weight_list(
             params_actor=self.params_actor,
             params_error_target=self.params_error_target,
-            rm_error=self.rm_error,
+            rm_error_list=self.rm_error_list,
             done=done,
             next_state=next_state,
             key=next(self.rng),
         )
 
         # Update critic.
-        self.opt_state_critic, self.params_critic, loss_critic, abs_td = optimize(
+        self.opt_state_critic, self.params_critic, loss_critic, abs_td_list = optimize(
             self._loss_critic,
             self.opt_critic,
             self.opt_state_critic,
@@ -125,12 +107,12 @@ class SAC_DisCor(SAC):
             reward=reward,
             done=done,
             next_state=next_state,
-            weight=weight,
+            weight=weight_list,
             **self.kwargs_critic,
         )
 
         # Update error model.
-        self.opt_state_error, self.params_error, loss_error, mean_error = optimize(
+        self.opt_state_error, self.params_error, loss_error, mean_error_list = optimize(
             self._loss_error,
             self.opt_error,
             self.opt_state_error,
@@ -142,7 +124,7 @@ class SAC_DisCor(SAC):
             action=action,
             done=done,
             next_state=next_state,
-            abs_td=abs_td,
+            abs_td_list=abs_td_list,
             key=next(self.rng),
         )
 
@@ -172,7 +154,7 @@ class SAC_DisCor(SAC):
         # Update target networks.
         self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
         self.params_error_target = self._update_target(self.params_error_target, self.params_error)
-        self.rm_error = self._update_target(self.rm_error, mean_error)
+        self.rm_error_list = self._update_target(self.rm_error_list, mean_error_list)
 
         if writer and self.learning_step % 1000 == 0:
             writer.add_scalar("loss/critic", loss_critic, self.learning_step)
@@ -181,75 +163,3 @@ class SAC_DisCor(SAC):
             writer.add_scalar("loss/error", loss_error, self.learning_step)
             writer.add_scalar("stat/alpha", jnp.exp(self.log_alpha), self.learning_step)
             writer.add_scalar("stat/entropy", -mean_log_pi, self.learning_step)
-
-    @partial(jax.jit, static_argnums=0)
-    def _calculate_loss_critic_and_abs_td(
-        self,
-        q_list: List[jnp.ndarray],
-        target: jnp.ndarray,
-        weight_list: np.ndarray,
-    ) -> jnp.ndarray:
-        abs_td = jnp.abs(target - q_list[0])
-        loss_critic = (jnp.square(abs_td) * weight_list[0]).mean()
-        for q, weight in zip(q_list[1:], weight_list[1:]):
-            loss_critic += (jnp.square(target - q) * weight).mean()
-        return loss_critic, jax.lax.stop_gradient(abs_td)
-
-    @partial(jax.jit, static_argnums=0)
-    def sample_next_error(
-        self,
-        params_actor: hk.Params,
-        params_error_target: hk.Params,
-        next_state: np.ndarray,
-        key: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        next_action = self._explore(params_actor, next_state, key)
-        return self.error.apply(params_error_target, next_state, next_action)
-
-    @partial(jax.jit, static_argnums=0)
-    def calculate_weight(
-        self,
-        params_actor: hk.Params,
-        params_error_target: hk.Params,
-        rm_error: List[jnp.ndarray],
-        done: np.ndarray,
-        next_state: np.ndarray,
-        key: jnp.ndarray,
-    ) -> List[jnp.ndarray]:
-        next_error = self.sample_next_error(params_actor, params_error_target, next_state, key)
-        weight = []
-        for _next_error, _rm_error in zip(next_error, rm_error):
-            x = -(1.0 - done) * self.gamma * _next_error / _rm_error
-            weight.append(jax.lax.stop_gradient(jax.nn.softmax(x, axis=0) * x.shape[0]))
-        return weight
-
-    @partial(jax.jit, static_argnums=0)
-    def _loss_error(
-        self,
-        params_error: hk.Params,
-        params_error_target: hk.Params,
-        params_actor: hk.Params,
-        state: np.ndarray,
-        action: np.ndarray,
-        done: np.ndarray,
-        next_state: np.ndarray,
-        abs_td: jnp.ndarray or List[jnp.ndarray],
-        key: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, List[jnp.ndarray]]:
-        error = self.error.apply(params_error, state, action)
-        next_error = self.sample_next_error(params_actor, params_error_target, next_state, key)
-        loss_error = 0.0
-        mean_error = []
-        for _error, _next_error, _abs_td in zip(error, next_error, abs_td):
-            _target_error = jax.lax.stop_gradient(_abs_td + (1.0 - done) * self.gamma * _next_error)
-            loss_error += jnp.square(_error - _target_error).mean()
-            mean_error.append(_error.mean())
-        return loss_error, mean_error
-
-    def save_params(self, save_dir):
-        super(SAC_DisCor, self).save_params(save_dir)
-        save_params(self.params_error, os.path.join(save_dir, "params_error.npz"))
-
-    def load_params(self, save_dir):
-        super(SAC_DisCor, self).load_params(save_dir)
-        self.params_error = self.params_error_target = load_params(os.path.join(save_dir, "params_error.npz"))
