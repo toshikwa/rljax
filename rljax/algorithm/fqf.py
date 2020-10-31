@@ -101,10 +101,10 @@ class FQF(QRDQN):
         state: np.ndarray,
     ) -> jnp.ndarray:
         feature = self.net["feature"].apply(params["feature"], state)
-        return self._calculate_action(params_cum_p, params, feature)[0]
+        return self._forward_from_feature(params_cum_p, params, feature)
 
     @partial(jax.jit, static_argnums=0)
-    def _calculate_action(
+    def _forward_from_feature(
         self,
         params_cum_p: hk.Params,
         params: hk.Params,
@@ -113,7 +113,7 @@ class FQF(QRDQN):
         cum_p, cum_p_prime = self.cum_p_net.apply(params_cum_p, feature)
         quantile_s = self.net["quantile"].apply(params["quantile"], feature, cum_p_prime)
         q_s = ((cum_p[:, 1:, None] - cum_p[:, :-1, None]) * quantile_s).sum(axis=1)
-        return jnp.argmax(q_s, axis=1)[:, None]
+        return jnp.argmax(q_s, axis=1)
 
     def update(self, writer=None):
         self.learning_step += 1
@@ -184,7 +184,7 @@ class FQF(QRDQN):
         cum_p_prime: jnp.ndarray,
     ) -> jnp.ndarray:
         if self.double_q:
-            next_action = self._calculate_action(params_cum_p, params, next_feature)
+            next_action = self._forward_from_feature(params_cum_p, params, next_feature)[:, None]
             next_quantile = self._calculate_value(params_target, next_feature, next_action, cum_p_prime)
         else:
             next_quantile_s = self.net["quantile"].apply(params_target["quantile"], next_feature, cum_p_prime)
