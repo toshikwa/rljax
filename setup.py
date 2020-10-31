@@ -15,7 +15,7 @@ URL = "https://github.com/ku2482/rljax"
 EMAIL = "watanabe.toshiki@outlook.jp"
 AUTHOR = "Toshiki Watanabe"
 REQUIRES_PYTHON = ">=3.6.0"
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 
 here = os.path.abspath(os.path.dirname(__file__))
 REQUIRED = open(os.path.join(here, "requirements.txt")).read().splitlines()
