@@ -9,7 +9,7 @@ import numpy as np
 from jax.experimental import optix
 
 from rljax.network import ContinuousQFunction
-from rljax.util import load_params, optimize, save_params
+from rljax.util import load_params, save_params
 
 
 class DisCorMixIn:
@@ -42,93 +42,6 @@ class DisCorMixIn:
         self.opt_state_error = opt_init(self.params_error)
         # Running mean of error.
         self.rm_error_list = [jnp.array(init_error, dtype=jnp.float32) for _ in range(num_critics)]
-
-    def update(self, writer=None):
-        self.learning_step += 1
-        _, batch = self.buffer.sample(self.batch_size)
-        state, action, reward, done, next_state = batch
-
-        # Calculate weights.
-        weight = self.calculate_weight(
-            params_actor=self.params_actor,
-            params_error_target=self.params_error_target,
-            rm_error_list=self.rm_error_list,
-            done=done,
-            next_state=next_state,
-            key=next(self.rng),
-        )
-
-        # Update critic.
-        self.opt_state_critic, self.params_critic, loss_critic, abs_td = optimize(
-            self._loss_critic,
-            self.opt_critic,
-            self.opt_state_critic,
-            self.params_critic,
-            self.max_grad_norm,
-            params_critic_target=self.params_critic_target,
-            params_actor=self.params_actor,
-            log_alpha=self.log_alpha,
-            state=state,
-            action=action,
-            reward=reward,
-            done=done,
-            next_state=next_state,
-            weight=weight,
-            **self.kwargs_critic,
-        )
-
-        # Update error model.
-        self.opt_state_error, self.params_error, loss_error, mean_error = optimize(
-            self._loss_error,
-            self.opt_error,
-            self.opt_state_error,
-            self.params_error,
-            self.max_grad_norm,
-            params_error_target=self.params_error_target,
-            params_actor=self.params_actor,
-            state=state,
-            action=action,
-            done=done,
-            next_state=next_state,
-            abs_td=abs_td,
-            key=next(self.rng),
-        )
-
-        # Update actor.
-        self.opt_state_actor, self.params_actor, loss_actor, mean_log_pi = optimize(
-            self._loss_actor,
-            self.opt_actor,
-            self.opt_state_actor,
-            self.params_actor,
-            self.max_grad_norm,
-            params_critic=self.params_critic,
-            log_alpha=self.log_alpha,
-            state=state,
-            **self.kwargs_actor,
-        )
-
-        # Update alpha.
-        self.opt_state_alpha, self.log_alpha, loss_alpha, _ = optimize(
-            self._loss_alpha,
-            self.opt_alpha,
-            self.opt_state_alpha,
-            self.log_alpha,
-            None,
-            mean_log_pi=mean_log_pi,
-        )
-
-        # Update target networks.
-        self.params_critic_target = self._update_target(self.params_critic_target, self.params_critic)
-        self.params_error_target = self._update_target(self.params_error_target, self.params_error)
-        self.rm_error_list = self._update_target(self.rm_error_list, mean_error)
-
-        if writer and self.learning_step % 1000 == 0:
-            writer.add_scalar("loss/critic", loss_critic, self.learning_step)
-            writer.add_scalar("loss/actor", loss_actor, self.learning_step)
-            writer.add_scalar("loss/alpha", loss_alpha, self.learning_step)
-            writer.add_scalar("loss/error", loss_error, self.learning_step)
-            writer.add_scalar("stat/alpha", jnp.exp(self.log_alpha), self.learning_step)
-            writer.add_scalar("stat/entropy", -mean_log_pi, self.learning_step)
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_loss_critic_and_abs_td(

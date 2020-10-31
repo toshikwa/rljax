@@ -1,6 +1,5 @@
 from .ddpg import DDPG
 from .dqn import DQN
-from .dqn_discor import DQN_DisCor
 from .fqf import FQF
 from .iqn import IQN
 from .misc import SlacObservation

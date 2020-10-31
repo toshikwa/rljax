@@ -26,7 +26,7 @@ Currently, following algorithms have been implemented.
 
 |**Algorithm**|**Action**|**Vector State**|**Pixel State**|**PER**[[11]](#reference)|**D2RL**[[15]](#reference)|
 | :--         | :--      | :--:           | :--:          | :--:                    |:--:                      |
-| PPO[[1]](#reference)        | Continuous | :heavy_check_mark: | - |                  - | -                  |
+| PPO[[1]](#reference)        | Continuous | :heavy_check_mark: | - | -                  | -                  |
 | DDPG[[2]](#reference)       | Continuous | :heavy_check_mark: | - | :heavy_check_mark: | :heavy_check_mark: |
 | TD3[[3]](#reference)        | Continuous | :heavy_check_mark: | - | :heavy_check_mark: | :heavy_check_mark: |
 | SAC[[4,5]](#reference)      | Continuous | :heavy_check_mark: | - | :heavy_check_mark: | :heavy_check_mark: |
@@ -35,7 +35,6 @@ Currently, following algorithms have been implemented.
 | SAC+AE[[13]](#reference)    | Continuous | - | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 | SLAC[[14]](#reference)      | Continuous | - | :heavy_check_mark: | -                  | :heavy_check_mark: |
 | DQN[[6]](#reference)          | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
-| DQN+DisCor[[12]](#reference)  | Discrete   | :heavy_check_mark: | :heavy_check_mark: | -                  | - |
 | QR-DQN[[7]](#reference)       | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
 | IQN[[8]](#reference)          | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
 | FQF[[9]](#reference)          | Discrete   | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - |
