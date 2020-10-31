@@ -22,6 +22,7 @@ def test_fqf(use_per, dueling_net, double_q):
         action_space=env.action_space,
         seed=0,
         batch_size=4,
+        start_steps=2,
         use_per=use_per,
         dueling_net=dueling_net,
         double_q=double_q,

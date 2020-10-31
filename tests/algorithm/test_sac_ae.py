@@ -18,6 +18,7 @@ def test_sac_ae(d2rl):
         action_space=env.action_space,
         seed=0,
         batch_size=4,
+        start_steps=2,
         d2rl=d2rl,
     )
     _test_algorithm(env, algo)

@@ -45,6 +45,7 @@ def test_slac(d2rl):
         seed=0,
         batch_size_model=2,
         batch_size_sac=2,
+        start_steps=2,
         d2rl=d2rl,
     )
     _test_slac(env, algo)

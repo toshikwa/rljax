@@ -15,5 +15,6 @@ def test_sac_discor():
         action_space=env.action_space,
         seed=0,
         batch_size=4,
+        start_steps=2,
     )
     _test_algorithm(env, algo)

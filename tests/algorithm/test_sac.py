@@ -16,6 +16,7 @@ def test_sac(use_per, d2rl):
         action_space=env.action_space,
         seed=0,
         batch_size=4,
+        start_steps=2,
         use_per=use_per,
         d2rl=d2rl,
     )
