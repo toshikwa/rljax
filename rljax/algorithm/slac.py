@@ -158,7 +158,7 @@ class SLAC(SlacMixIn, SAC):
             params_model=self.params_model,
             state_=state_,
             action_=action_,
-            key_list=[next(self.rng) for _ in range(2 * (self.num_sequences + 1))],
+            key_list=self.get_key_list(2 * (self.num_sequences + 1)),
         )
         del state_, action_
 
