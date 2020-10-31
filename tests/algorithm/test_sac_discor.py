@@ -14,5 +14,6 @@ def test_sac_discor():
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
+        batch_size=4,
     )
     _test_algorithm(env, algo)

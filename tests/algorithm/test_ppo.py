@@ -14,5 +14,7 @@ def test_ppo():
         state_space=env.observation_space,
         action_space=env.action_space,
         seed=0,
+        batch_size=4,
+        buffer_size=4,
     )
     _test_algorithm(env, algo)

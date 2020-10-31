@@ -4,7 +4,7 @@ import numpy as np
 def _test_algorithm(env, algo):
     state = env.reset()
 
-    for _ in range(10):
+    for _ in range(4):
         # Test step() method.
         _state = algo.step(env, state)
         assert env.observation_space.contains(np.array(_state))
