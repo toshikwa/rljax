@@ -185,10 +185,9 @@ class FQF(QRDQN):
     ) -> jnp.ndarray:
         if self.double_q:
             next_action = self._forward_from_feature(params_cum_p, params, next_feature)[:, None]
-            next_quantile = self._calculate_value(params_target, next_feature, next_action, cum_p_prime)
         else:
-            next_quantile_s = self.net["quantile"].apply(params_target["quantile"], next_feature, cum_p_prime)
-            next_quantile = jnp.max(next_quantile_s, axis=-1, keepdims=True)
+            next_action = self._forward_from_feature(params_cum_p, params_target, next_feature)[:, None]
+        next_quantile = self._calculate_value(params_target, next_feature, next_action, cum_p_prime)
         target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
         return jax.lax.stop_gradient(target).reshape(-1, 1, self.num_quantiles)
 

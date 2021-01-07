@@ -2,12 +2,11 @@
 # https://github.com/hill-a/stable-baselines/blob/master/stable_baselines/common/atari_wrappers.py
 from collections import deque
 
+import cv2
 import gym
 import numpy as np
 from gym import spaces, wrappers
 from gym.wrappers.time_limit import TimeLimit
-
-import cv2
 
 cv2.ocl.setUseOpenCL(False)
 
