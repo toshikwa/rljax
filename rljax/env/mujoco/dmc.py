@@ -3,9 +3,9 @@
 import gym
 import numpy as np
 from dm_control import suite
+from dm_env import specs
 from gym import core, spaces
 
-from dm_env import specs
 from rljax.env.atari import FrameStack
 
 gym.logger.set_level(40)

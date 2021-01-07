@@ -7,7 +7,7 @@ python:
   - "3.8"
 install:
   - pip install --upgrade pip setuptools wheel black pytest-black
-  - pip install --upgrade jaxlib jax
+  - pip install --upgrade jaxlib==0.1.55 jax==0.2.0
   - pip install -r requirements.txt
 script:
   - pip install -e .

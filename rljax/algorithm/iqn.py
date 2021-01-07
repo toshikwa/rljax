@@ -110,9 +110,9 @@ class IQN(QRDQN):
     ) -> jnp.ndarray:
         if self.double_q:
             next_action = self._forward(params, next_state, key=key)[..., None]
-            next_quantile = self._calculate_value(params_target, next_state, next_action, cum_p=cum_p_prime)
         else:
-            next_quantile = jnp.max(self.net.apply(params_target, next_state, cum_p_prime), axis=-1, keepdims=True)
+            next_action = self._forward(params_target, next_state, key=key)[..., None]
+        next_quantile = self._calculate_value(params_target, next_state, next_action, cum_p=cum_p_prime)
         target = reward[:, None] + (1.0 - done[:, None]) * self.discount * next_quantile
         return jax.lax.stop_gradient(target).reshape(-1, 1, self.num_quantiles)
 
