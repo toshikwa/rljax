@@ -90,7 +90,7 @@ class TQC(SAC):
         )
         self.cum_p_prime = jnp.expand_dims((jnp.arange(0, num_quantiles, dtype=jnp.float32) + 0.5) / num_quantiles, 0)
         self.num_quantiles = num_quantiles
-        self.num_quantiles_target = num_quantiles * num_critics - num_quantiles_to_drop
+        self.num_quantiles_target = (num_quantiles - num_quantiles_to_drop) * num_critics
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_value(
