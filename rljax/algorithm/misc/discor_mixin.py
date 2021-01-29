@@ -6,7 +6,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental import optix
+import optax
 
 from rljax.network import ContinuousQFunction
 from rljax.util import load_params, save_params
@@ -38,7 +38,7 @@ class DisCorMixIn:
         # Error model.
         self.error = hk.without_apply_rng(hk.transform(fn_error))
         self.params_error = self.params_error_target = self.error.init(next(self.rng), *self.fake_args_critic)
-        opt_init, self.opt_error = optix.adam(lr_error)
+        opt_init, self.opt_error = optax.adam(lr_error)
         self.opt_state_error = opt_init(self.params_error)
         # Running mean of error.
         self.rm_error_list = [jnp.array(init_error, dtype=jnp.float32) for _ in range(num_critics)]

@@ -6,7 +6,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental import optix
+import optax
 
 from rljax.algorithm.sac import SAC
 from rljax.network import ContinuousQFunction, SACDecoder, SACEncoder, SACLinear, StateDependentGaussianPolicy
@@ -123,11 +123,11 @@ class SAC_AE(SAC):
         # Decoder.
         self.decoder = hk.without_apply_rng(hk.transform(lambda x: SACDecoder(state_space, num_filters=32, num_layers=4)(x)))
         self.params_decoder = self.decoder.init(next(self.rng), fake_feature)
-        opt_init, self.opt_ae = optix.adam(lr_ae)
+        opt_init, self.opt_ae = optax.adam(lr_ae)
         self.opt_state_ae = opt_init(self.params_ae)
 
         # Re-define the optimizer for critic.
-        opt_init, self.opt_critic = optix.adam(lr_critic)
+        opt_init, self.opt_critic = optax.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_entire_critic)
 
         # Other parameters.
