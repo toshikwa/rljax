@@ -4,7 +4,7 @@ from typing import Any, Tuple
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax.experimental import optix
+import optax
 from jax.tree_util import tree_flatten
 
 
@@ -26,7 +26,7 @@ def optimize(
     if max_grad_norm is not None:
         grad = clip_gradient_norm(grad, max_grad_norm)
     update, opt_state = opt(grad, opt_state)
-    params_to_update = optix.apply_updates(params_to_update, update)
+    params_to_update = optax.apply_updates(params_to_update, update)
     return opt_state, params_to_update, loss, aux
 
 

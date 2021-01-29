@@ -6,7 +6,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental import optix
+import optax
 
 from rljax.algorithm.qrdqn import QRDQN
 from rljax.network import CumProbNetwork, DiscreteImplicitQuantileFunction, make_quantile_nerwork
@@ -81,13 +81,13 @@ class FQF(QRDQN):
 
             self.net, self.params, fake_feature = make_quantile_nerwork(self.rng, state_space, action_space, fn, num_quantiles)
             self.params_target = self.params
-            opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
+            opt_init, self.opt = optax.adam(lr, eps=0.01 / batch_size)
             self.opt_state = opt_init(self.params)
 
         # Fraction proposal network.
         self.cum_p_net = hk.without_apply_rng(hk.transform(lambda s: CumProbNetwork(num_quantiles=num_quantiles)(s)))
         self.params_cum_p = self.cum_p_net.init(next(self.rng), fake_feature)
-        opt_init, self.opt_cum_p = optix.rmsprop(lr_cum_p, decay=0.95, eps=1e-5, centered=True)
+        opt_init, self.opt_cum_p = optax.rmsprop(lr_cum_p, decay=0.95, eps=1e-5, centered=True)
         self.opt_state_cum_p = opt_init(self.params_cum_p)
 
     def forward(self, state):
