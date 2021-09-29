@@ -12,7 +12,6 @@ pip install -e .
 
 If you don't have a GPU, please execute the following instead.
 ```bash
-pip install jaxlib==0.1.55 jax==0.2.0
 pip install -e .
 ```
 

@@ -5,7 +5,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental import optix
+import optax
 
 from rljax.algorithm.base_class import QLearning
 from rljax.network import DiscreteQFunction
@@ -74,7 +74,7 @@ class DQN(QLearning):
 
             self.net = hk.without_apply_rng(hk.transform(fn))
             self.params = self.params_target = self.net.init(next(self.rng), *self.fake_args)
-            opt_init, self.opt = optix.adam(lr, eps=0.01 / batch_size)
+            opt_init, self.opt = optax.adam(lr, eps=0.01 / batch_size)
             self.opt_state = opt_init(self.params)
 
     @partial(jax.jit, static_argnums=0)
