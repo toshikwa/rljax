@@ -4,7 +4,7 @@ numpy==1.19.2
 pandas==1.1.2
 jax>=0.2.21
 optax>=0.0.9
-dm-haiku==0.0.2
+dm-haiku==0.0.4
 gym[atari]==0.17.2
 dm_control==0.0.322773188
 tensorboardX==2.1
