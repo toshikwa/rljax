@@ -5,7 +5,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental import optix
+import optax
 
 from rljax.algorithm.base_class import OffPolicyActorCritic
 from rljax.network import ContinuousQFunction, StateDependentGaussianPolicy
@@ -95,18 +95,18 @@ class SAC(OffPolicyActorCritic):
         # Critic.
         self.critic = hk.without_apply_rng(hk.transform(fn_critic))
         self.params_critic = self.params_critic_target = self.critic.init(next(self.rng), *self.fake_args_critic)
-        opt_init, self.opt_critic = optix.adam(lr_critic)
+        opt_init, self.opt_critic = optax.adam(lr_critic)
         self.opt_state_critic = opt_init(self.params_critic)
         # Actor.
         self.actor = hk.without_apply_rng(hk.transform(fn_actor))
         self.params_actor = self.actor.init(next(self.rng), *self.fake_args_actor)
-        opt_init, self.opt_actor = optix.adam(lr_actor)
+        opt_init, self.opt_actor = optax.adam(lr_actor)
         self.opt_state_actor = opt_init(self.params_actor)
         # Entropy coefficient.
         if not hasattr(self, "target_entropy"):
             self.target_entropy = -float(self.action_space.shape[0])
         self.log_alpha = jnp.array(np.log(init_alpha), dtype=jnp.float32)
-        opt_init, self.opt_alpha = optix.adam(lr_alpha, b1=adam_b1_alpha)
+        opt_init, self.opt_alpha = optax.adam(lr_alpha, b1=adam_b1_alpha)
         self.opt_state_alpha = opt_init(self.log_alpha)
 
     @partial(jax.jit, static_argnums=0)

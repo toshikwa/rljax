@@ -5,7 +5,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental import optix
+import optax
 
 from rljax.algorithm.misc import SlacMixIn
 from rljax.algorithm.sac import SAC
@@ -123,7 +123,7 @@ class SLAC(SlacMixIn, SAC):
             z2_dim=z2_dim,
             feature_dim=feature_dim,
         )
-        opt_init, self.opt_model = optix.adam(lr_model)
+        opt_init, self.opt_model = optax.adam(lr_model)
         self.opt_state_model = opt_init(self.params_model)
 
     @partial(jax.jit, static_argnums=0)
