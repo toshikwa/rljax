@@ -2,7 +2,7 @@ import haiku as hk
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import optix
+import optax
 
 from rljax.util.optim import clip_gradient, clip_gradient_norm, optimize, soft_update, weight_decay
 
@@ -11,7 +11,7 @@ from rljax.util.optim import clip_gradient, clip_gradient_norm, optimize, soft_u
 def test_optimize(lr, w, x):
     net = hk.without_apply_rng(hk.transform(lambda x: hk.Linear(1, with_bias=False, w_init=hk.initializers.Constant(w))(x)))
     params = net.init(next(hk.PRNGSequence(0)), jnp.zeros((1, 1)))
-    opt_init, opt = optix.sgd(lr)
+    opt_init, opt = optax.sgd(lr)
     opt_state = opt_init(params)
 
     def _loss(params, x):
