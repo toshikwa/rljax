@@ -2,7 +2,8 @@ pyyaml==5.3.1
 tqdm==4.48.2
 numpy==1.19.2
 pandas==1.1.2
-jax>=0.2.21
+jax==0.2.21
+jaxlib==0.1.71
 optax>=0.0.9
 dm-haiku==0.0.4
 gym[atari]==0.17.2
