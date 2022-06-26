@@ -25,8 +25,6 @@ def test_prioritized_buffer(env_id, state_dtype, state_shape, action_dtype, acti
         alpha=0.6,
         beta=0.4,
         beta_steps=4,
-        min_pa=0.0,
-        max_pa=1.0,
         eps=0.01,
     )
     state = np.stack([env.observation_space.sample() for _ in range(6)], axis=0).astype(state_dtype)
@@ -42,8 +40,8 @@ def test_prioritized_buffer(env_id, state_dtype, state_shape, action_dtype, acti
         assert np.isclose(float(buffer.done[i]), done[i]).all()
         assert np.isclose(np.array(buffer.next_state[i]), state[i + 1]).all()
         assert np.isclose(np.array(buffer.next_state[i]), state[i + 1]).all()
-        assert np.isclose(buffer.tree_sum[i], 1.0)
-        assert np.isclose(buffer.tree_min[i], 1.0)
+        assert np.isclose(buffer.tree_sum[i], 0.01)
+        assert np.isclose(buffer.tree_max[i], 0.01)
 
     for i in range(3):
         w, (s, a, r, d, n_s) = buffer.sample(1)
@@ -57,12 +55,12 @@ def test_prioritized_buffer(env_id, state_dtype, state_shape, action_dtype, acti
         assert np.isclose(buffer.beta, min(1.0, 0.4 + 0.6 / 4 * (i + 1)))
 
         abs_td = np.random.rand(1, 1).astype(np.float32)
-        abs_td_target = np.clip((abs_td + 0.01) ** 0.6, 0.0, 1.0)
+        abs_td_target = (abs_td + 0.01) ** 0.6
         buffer.update_priority(abs_td)
 
         for i, idx in enumerate(idxes):
             assert np.isclose(buffer.tree_sum[idx], abs_td_target[i, 0])
-            assert np.isclose(buffer.tree_min[idx], abs_td_target[i, 0])
+            assert np.isclose(buffer.tree_max[idx], abs_td_target[i, 0])
 
 
 def test_calculate_pa():
@@ -76,12 +74,10 @@ def test_calculate_pa():
         alpha=0.6,
         beta=0.4,
         beta_steps=4,
-        min_pa=0.0,
-        max_pa=1.0,
         eps=0.01,
     )
 
     for _ in range(3):
         abs_td = np.random.rand(3, 1).astype(np.float32)
-        abs_td_target = np.clip((abs_td + 0.01) ** 0.6, 0.0, 1.0)
+        abs_td_target = (abs_td + 0.01) ** 0.6
         assert np.isclose(abs_td_target, buffer._calculate_pa(abs_td)).all()

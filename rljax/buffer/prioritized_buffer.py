@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from rljax.buffer.replay_buffer import ReplayBuffer
-from rljax.buffer.segment_tree import MinTree, SumTree
+from rljax.buffer.segment_tree import MaxTree, SumTree
 
 
 class PrioritizedReplayBuffer(ReplayBuffer):
@@ -23,8 +23,6 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         alpha=0.6,
         beta=0.4,
         beta_steps=10 ** 5,
-        min_pa=0.0,
-        max_pa=1.0,
         eps=0.01,
     ):
         super(PrioritizedReplayBuffer, self).__init__(
@@ -38,8 +36,6 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self.alpha = alpha
         self.beta = beta
         self.beta_diff = (1.0 - beta) / beta_steps
-        self.min_pa = min_pa
-        self.max_pa = max_pa
         self.eps = eps
         self._cached_idxes = None
 
@@ -47,12 +43,14 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         while tree_size < buffer_size:
             tree_size *= 2
         self.tree_sum = SumTree(tree_size)
-        self.tree_min = MinTree(tree_size)
+        self.tree_max = MaxTree(tree_size)
 
     def _append(self, state, action, reward, next_state, done):
         # Assign max priority when stored for the first time.
-        self.tree_min[self._p] = self.max_pa
-        self.tree_sum[self._p] = self.max_pa
+        max_pa = self.tree_max.reduce(0, self._n)
+        max_pa = max(max_pa, self.eps)
+        self.tree_max[self._p] = max_pa
+        self.tree_sum[self._p] = max_pa
         super()._append(state, action, reward, next_state, done)
 
     def _sample_idx(self, batch_size):
@@ -60,20 +58,20 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         rand = np.random.rand(batch_size) * total_pa
         idxes = [self.tree_sum.find_prefixsum_idx(r) for r in rand]
         self.beta = min(1.0, self.beta + self.beta_diff)
-        return idxes
+        return idxes, total_pa
 
     def sample(self, batch_size):
         assert self._cached_idxes is None, "Update priorities before sampling."
 
-        self._cached_idxes = self._sample_idx(batch_size)
-        weight = self._calculate_weight(self._cached_idxes)
+        self._cached_idxes, total_pa = self._sample_idx(batch_size)
+        weight = self._calculate_weight(self._cached_idxes, total_pa)
         batch = self._sample(self._cached_idxes)
         return weight, batch
 
-    def _calculate_weight(self, idxes):
-        min_pa = self.tree_min.reduce(0, self._n)
-        weight = [(self.tree_sum[i] / min_pa) ** -self.beta for i in idxes]
+    def _calculate_weight(self, idxes, total_pa):
+        weight = [((self.tree_sum[i]/total_pa) * self._n) ** -self.beta for i in idxes]
         weight = np.array(weight, dtype=np.float32)
+        weight = weight/np.max(weight)
         return np.expand_dims(weight, axis=1)
 
     def update_priority(self, abs_td):
@@ -82,9 +80,9 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         pa = np.array(self._calculate_pa(abs_td), dtype=np.float32).flatten()
         for i, idx in enumerate(self._cached_idxes):
             self.tree_sum[idx] = pa[i]
-            self.tree_min[idx] = pa[i]
+            self.tree_max[idx] = pa[i]
         self._cached_idxes = None
 
     @partial(jax.jit, static_argnums=0)
     def _calculate_pa(self, abs_td: jnp.ndarray) -> jnp.ndarray:
-        return jnp.clip((abs_td + self.eps) ** self.alpha, self.min_pa, self.max_pa)
+        return (abs_td + self.eps) ** self.alpha
