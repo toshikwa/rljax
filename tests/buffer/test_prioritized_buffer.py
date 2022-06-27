@@ -40,8 +40,7 @@ def test_prioritized_buffer(env_id, state_dtype, state_shape, action_dtype, acti
         assert np.isclose(float(buffer.done[i]), done[i]).all()
         assert np.isclose(np.array(buffer.next_state[i]), state[i + 1]).all()
         assert np.isclose(np.array(buffer.next_state[i]), state[i + 1]).all()
-        assert np.isclose(buffer.tree_sum[i], 0.01)
-        assert np.isclose(buffer.tree_max[i], 0.01)
+        assert np.isclose(buffer.tree_sum[i], 1.0)
 
     for i in range(3):
         w, (s, a, r, d, n_s) = buffer.sample(1)
@@ -60,7 +59,6 @@ def test_prioritized_buffer(env_id, state_dtype, state_shape, action_dtype, acti
 
         for i, idx in enumerate(idxes):
             assert np.isclose(buffer.tree_sum[idx], abs_td_target[i, 0])
-            assert np.isclose(buffer.tree_max[idx], abs_td_target[i, 0])
 
 
 def test_calculate_pa():

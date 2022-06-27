@@ -84,11 +84,3 @@ class MinTree(SegmentTree):
 
     def __init__(self, size):
         super().__init__(size, min, float("inf"))
-
-class MaxTree(SegmentTree):
-    """
-    Max tree.
-    """
-
-    def __init__(self, size):
-        super().__init__(size, max, -float("inf"))

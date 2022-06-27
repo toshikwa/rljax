@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from rljax.buffer.replay_buffer import ReplayBuffer
-from rljax.buffer.segment_tree import MaxTree, SumTree
+from rljax.buffer.segment_tree import SumTree
 
 
 class PrioritizedReplayBuffer(ReplayBuffer):
@@ -38,19 +38,16 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self.beta_diff = (1.0 - beta) / beta_steps
         self.eps = eps
         self._cached_idxes = None
+        self.max_pa = 1.0
 
         tree_size = 1
         while tree_size < buffer_size:
             tree_size *= 2
         self.tree_sum = SumTree(tree_size)
-        self.tree_max = MaxTree(tree_size)
 
     def _append(self, state, action, reward, next_state, done):
         # Assign max priority when stored for the first time.
-        max_pa = self.tree_max.reduce(0, self._n)
-        max_pa = max(max_pa, self.eps)
-        self.tree_max[self._p] = max_pa
-        self.tree_sum[self._p] = max_pa
+        self.tree_sum[self._p] = self.max_pa
         super()._append(state, action, reward, next_state, done)
 
     def _sample_idx(self, batch_size):
@@ -80,7 +77,8 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         pa = np.array(self._calculate_pa(abs_td), dtype=np.float32).flatten()
         for i, idx in enumerate(self._cached_idxes):
             self.tree_sum[idx] = pa[i]
-            self.tree_max[idx] = pa[i]
+            if pa[i] > self.max_pa:
+                self.max_pa = pa[i]
         self._cached_idxes = None
 
     @partial(jax.jit, static_argnums=0)
