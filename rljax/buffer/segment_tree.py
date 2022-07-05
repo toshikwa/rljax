@@ -76,6 +76,9 @@ class SumTree(SegmentTree):
                 idx = left + 1
         return idx - self._size
 
+    def get_total_sum(self):
+        return self._values[1]
+
 
 class MinTree(SegmentTree):
     """

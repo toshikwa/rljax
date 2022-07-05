@@ -51,16 +51,17 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         super()._append(state, action, reward, next_state, done)
 
     def _sample_idx(self, batch_size):
-        total_pa = self.tree_sum.reduce(0, self._n)
+        total_pa = self.tree_sum.get_total_sum()
         rand = np.random.rand(batch_size) * total_pa
         idxes = [self.tree_sum.find_prefixsum_idx(r) for r in rand]
         self.beta = min(1.0, self.beta + self.beta_diff)
-        return idxes, total_pa
+        return idxes
 
     def sample(self, batch_size):
         assert self._cached_idxes is None, "Update priorities before sampling."
 
-        self._cached_idxes, total_pa = self._sample_idx(batch_size)
+        self._cached_idxes = self._sample_idx(batch_size)
+        total_pa = self.tree_sum.get_total_sum()
         weight = self._calculate_weight(self._cached_idxes, total_pa)
         batch = self._sample(self._cached_idxes)
         return weight, batch
